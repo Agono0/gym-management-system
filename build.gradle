@@ -1,0 +1,35 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+}
+
+group = 'com.gym'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(27)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+javafx {
+    version = '21.0.4'
+    modules = ['javafx.controls', 'javafx.fxml']
+}
+
+dependencies {
+    // Material Design 3 components / theme (pick one in Week 1, remove the other)
+    // implementation 'io.github.mkpaz:atlantafx:2.0.1'
+    // implementation 'io.github.palexdev:materialfx:11.17.0'
+
+    implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
+}
+
+application {
+    // mainClass = 'com.gym.MainApp' // uncomment once MainApp exists
+}

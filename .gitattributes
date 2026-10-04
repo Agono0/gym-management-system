@@ -1,0 +1,24 @@
+# Line endings: LF for code, let Git handle checkout
+* text=auto eol=lf
+
+*.java text diff=java
+*.gradle text
+*.xml text
+*.md text
+*.json text
+*.yml text
+*.yaml text
+*.properties text
+
+# Binaries — don't diff, keep as-is
+*.jar binary
+*.class binary
+*.exe binary
+*.msi binary
+*.dmg binary
+*.pkg binary
+*.deb binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.icns binary
