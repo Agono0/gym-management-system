@@ -9,11 +9,12 @@ files live in `src/main/resources/fxml/` with matching names.
 | Controller (↔ FXML) | Screen | Owner |
 |---------------------|--------|-------|
 | `DashboardController` | Main dashboard + navigation | Abdel Raouf |
-| `CustomerListController`, `CustomerProfileController` | Customers + full profile | Abdelrhman |
-| `TrainerListController`, `TrainerProfileController` | Trainers + profiles | Ziad |
+| `CustomerListController`, `CustomerProfileController` | Customers + full profile (editable medical section) | Abdelrhman |
+| `TrainerListController`, `TrainerProfileController` | Trainers + profiles (read-only medical section) | Ziad |
+| `AvailabilityController` | Trainer calendar, daily caps, hourly slots management | Ziad |
 | `MembershipController` | Plans, sell/renew/freeze | Ziad |
 | `WorkoutController` | Program builder + assignment | Yousef |
-| `ScheduleController` | Agenda, booking dialog | Yousef |
+| `ScheduleController` | Agenda, booking dialog, subscribe-to-trainer flow | Yousef |
 | `EquipmentController` | Inventory + maintenance | Yousef |
 | `AttendanceController` | Check-in/out + daily report | Abdel Raouf |
 | `PaymentController` | Payments + receipts | Abdel Raouf |

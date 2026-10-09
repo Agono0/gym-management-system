@@ -35,6 +35,7 @@ classDiagram
         -String certifications
         -String availability
         -String hireDate
+        -double defaultRate
     }
     class Membership {
         -int id
@@ -61,6 +62,8 @@ classDiagram
         -String dateTime
         -int durationMin
         -String status
+        -int subscriptionId
+        -double price
     }
     class Equipment {
         -int id
@@ -102,16 +105,69 @@ classDiagram
     Trainer "1" --> "0..*" WorkoutProgram : creates
     Customer "1" --> "0..*" Session : books
     Trainer "1" --> "0..*" Session : coaches
+    Customer "1" *-- "1" MedicalProfile : has
+    Trainer --> MedicalProfile : views
+    Customer "1" --> "0..*" TrainerSubscription : subscribes
+    Trainer "1" --> "0..*" TrainerSubscription : offers
+    TrainerSubscription "1" o-- "0..*" Session : covers
+    Trainer "1" --> "0..*" TrainerAvailability : publishes
+    Administrator ..> MainApp : administers
     note for MainApp "Entry point, window, nav shell, theme"
     note for Customer "Member: info, contact, status, links"
     note for Trainer "Coach: info, specialization, availability"
     note for Membership "Plan with start and end dates"
     note for WorkoutProgram "Exercise list with version, creator"
+    class TrainerSubscription {
+        -int id
+        -int customerId
+        -int trainerId
+        -String startDate
+        -String endDate
+        -double rate
+        -String status
+    }
+    class TrainerAvailability {
+        -int id
+        -int trainerId
+        -String date
+        -String startTime
+        -String endTime
+        -int maxCustomers
+        -String status
+    }
     note for Session "Booked slot, customer plus trainer"
+    note for TrainerSubscription "Period engagement at flat trainer rate"
+    note for TrainerAvailability "Open days, caps, hourly slots"
     note for Equipment "Inventory item, condition, status"
     note for Attendance "Daily check-in and check-out record"
     note for Payment "Amount, method and date per membership"
+    class MedicalProfile {
+        -int id
+        -int customerId
+        -String bloodType
+        -String conditions
+        -String allergies
+        -String medications
+        -String injuries
+        -String doctorName
+        -String doctorPhone
+        -String notes
+        -String updatedDate
+    }
+    class Administrator {
+        -int id
+        -String fullName
+        -String username
+        -String passwordHash
+        -String role
+        -String phone
+        -String email
+        -Boolean active
+        -String createdDate
+    }
     note for ProgressRecord "Dated body metrics and benchmarks"
+    note for MedicalProfile "Blood type, conditions, meds, doctor"
+    note for Administrator "Login identity, role, active flag"
 ```
 
 
@@ -130,6 +186,10 @@ classDiagram
 | `Attendance` | One check-in/out record per customer per day |
 | `Payment` | fields: id, customerId, membershipId, amount, method, date, receiptNo; linked to a membership |
 | `ProgressRecord` | fields: id, customerId, date, weightKg, bodyFatPct, measurements, notes |
+| `MedicalProfile` | Blood type, conditions, allergies, medications, injuries, doctor, notes; one per customer |
+| `Administrator` | Login identity with role (ADMIN/MANAGER/STAFF); foundation for future login |
+| `TrainerSubscription` | Period engagement at flat trainer-set rate; ad-hoc or subscription sessions |
+| `TrainerAvailability` | Open days, daily caps, hourly slots set by trainer |
 
 ### Data access
 
@@ -146,20 +206,26 @@ classDiagram
 | `AttendanceDao` / `AttendanceDaoImpl` | Persist check-ins; daily attendance lists |
 | `PaymentDao` / `PaymentDaoImpl` | Persist payments; revenue sums over date ranges |
 | `ProgressDao` / `ProgressDaoImpl` | Persist metric records; history per customer |
+| `MedicalProfileDao` / `MedicalProfileDaoImpl` | Persist profiles; lookup per customer |
+| `AdminDao` / `AdminDaoImpl` | Persist operators; lookup by username |
+| `TrainerSubscriptionDao` / `TrainerSubscriptionDaoImpl` | Persist engagements; active lookup |
+| `TrainerAvailabilityDao` / `TrainerAvailabilityDaoImpl` | Persist slots, caps, open days |
 
 ### Services (validation + business rules, no JavaFX, no SQL)
 
 | Class | Description |
 |---|---|
 | `CustomerService` | Customer validation, search/filter, status rules |
-| `TrainerService` | Availability rules, assign/reassign customers |
+| `TrainerService` | Availability, rates, assign, medical view |
 | `MembershipService` | Sell, renew, freeze, cancel, expiry reminders |
 | `WorkoutService` | Program building rules, per-customer versioning |
-| `SchedulingService` | Booking plus trainer conflict detection |
+| `SchedulingService` | Booking rules (slot, cap, conflicts), subscribe, subscription pricing; subscription (trainer) vs membership (gym access) |
 | `EquipmentService` | Status transitions and maintenance-log rules |
 | `PaymentService` | Balances, receipt data, revenue summary |
 | `AttendanceService` | Check-in/out rules, daily report data |
 | `ProgressService` | Metric aggregation for charts |
+| `MedicalProfileService` | Medical CRUD, lookup by customer |
+| `AdminService` | Auth, staff, edit-any/reassign/adjust/void overrides; bypasses ownership |
 
 ### UI (each controller backed by a matching FXML file)
 
@@ -173,7 +239,8 @@ classDiagram
 | `TrainerProfileController` | Trainer details, assigned customers, schedule |
 | `MembershipController` | Plans; sell, renew, freeze, cancel |
 | `WorkoutController` | Program builder and assignment to customers |
-| `ScheduleController` | Agenda views and session booking with conflict checks |
+| `ScheduleController` | Agenda, booking dialog, subscribe-to-trainer flow |
+| `AvailabilityController` | Trainer calendar, daily caps, hourly slots |
 | `EquipmentController` | Inventory list, status changes, maintenance log |
 | `AttendanceController` | Check-in/out screen and daily report |
 | `PaymentController` | Payment recording, receipts, balances |
@@ -236,6 +303,7 @@ classDiagram
         -String certifications
         -String availability
         -String hireDate
+        -double defaultRate
     }
     class Membership {
         -int id
@@ -262,6 +330,8 @@ classDiagram
         -String dateTime
         -int durationMin
         -String status
+        -int subscriptionId
+        -double price
     }
     class Equipment {
         -int id
@@ -305,15 +375,67 @@ classDiagram
     Trainer "1" --> "0..*" WorkoutProgram : creates
     Customer "1" --> "0..*" Session : books
     Trainer "1" --> "0..*" Session : coaches
+    Customer "1" *-- "1" MedicalProfile : has
+    Trainer --> MedicalProfile : views
+    Customer "1" --> "0..*" TrainerSubscription : subscribes
+    Trainer "1" --> "0..*" TrainerSubscription : offers
+    TrainerSubscription "1" o-- "0..*" Session : covers
+    Trainer "1" --> "0..*" TrainerAvailability : publishes
     note for Customer "Member: info, contact, status, links"
     note for Trainer "Coach: info, specialization, availability"
     note for Membership "Plan with start and end dates"
     note for WorkoutProgram "Exercise list with version, creator"
+    class TrainerSubscription {
+        -int id
+        -int customerId
+        -int trainerId
+        -String startDate
+        -String endDate
+        -double rate
+        -String status
+    }
+    class TrainerAvailability {
+        -int id
+        -int trainerId
+        -String date
+        -String startTime
+        -String endTime
+        -int maxCustomers
+        -String status
+    }
     note for Session "Booked slot, customer plus trainer"
+    note for TrainerSubscription "Period engagement at flat trainer rate"
+    note for TrainerAvailability "Open days, caps, hourly slots"
     note for Equipment "Inventory item, condition, status"
     note for Attendance "Daily check-in and check-out record"
     note for Payment "Amount, method and date per membership"
+    class MedicalProfile {
+        -int id
+        -int customerId
+        -String bloodType
+        -String conditions
+        -String allergies
+        -String medications
+        -String injuries
+        -String doctorName
+        -String doctorPhone
+        -String notes
+        -String updatedDate
+    }
+    class Administrator {
+        -int id
+        -String fullName
+        -String username
+        -String passwordHash
+        -String role
+        -String phone
+        -String email
+        -Boolean active
+        -String createdDate
+    }
     note for ProgressRecord "Dated body metrics and benchmarks"
+    note for MedicalProfile "Blood type, conditions, meds, doctor"
+    note for Administrator "Login identity, role, active flag"
 ```
 
 ### C. DAO layer zoom-in
@@ -406,6 +528,42 @@ classDiagram
     class ProgressDaoImpl {
         +save(ProgressRecord) int
     }
+    class MedicalProfileDao {
+        <<interface>>
+        +save(MedicalProfile) int
+        +findByCustomer(int) MedicalProfile
+    }
+    class MedicalProfileDaoImpl {
+        +save(MedicalProfile) int
+        +findByCustomer(int) MedicalProfile
+    }
+    class AdminDao {
+        <<interface>>
+        +save(Administrator) int
+        +findByUsername(String) Administrator
+    }
+    class AdminDaoImpl {
+        +save(Administrator) int
+        +findByUsername(String) Administrator
+    }
+    class TrainerSubscriptionDao {
+        <<interface>>
+        +save(TrainerSubscription) int
+        +findActive(int, String) TrainerSubscription
+    }
+    class TrainerSubscriptionDaoImpl {
+        +save(TrainerSubscription) int
+        +findActive(int, String) TrainerSubscription
+    }
+    class TrainerAvailabilityDao {
+        <<interface>>
+        +save(TrainerAvailability) int
+        +openSlots(int, String) List~TrainerAvailability~
+    }
+    class TrainerAvailabilityDaoImpl {
+        +save(TrainerAvailability) int
+        +openSlots(int, String) List~TrainerAvailability~
+    }
     CustomerDao <|.. CustomerDaoImpl : implements
     TrainerDao <|.. TrainerDaoImpl : implements
     MembershipDao <|.. MembershipDaoImpl : implements
@@ -415,6 +573,8 @@ classDiagram
     AttendanceDao <|.. AttendanceDaoImpl : implements
     PaymentDao <|.. PaymentDaoImpl : implements
     ProgressDao <|.. ProgressDaoImpl : implements
+    MedicalProfileDao <|.. MedicalProfileDaoImpl : implements
+    AdminDao <|.. AdminDaoImpl : implements
     CustomerDaoImpl ..> DbConnection : uses
     TrainerDaoImpl ..> DbConnection : uses
     MembershipDaoImpl ..> DbConnection : uses
@@ -424,6 +584,12 @@ classDiagram
     AttendanceDaoImpl ..> DbConnection : uses
     PaymentDaoImpl ..> DbConnection : uses
     ProgressDaoImpl ..> DbConnection : uses
+    MedicalProfileDaoImpl ..> DbConnection : uses
+    AdminDaoImpl ..> DbConnection : uses
+    TrainerSubscriptionDao <|.. TrainerSubscriptionDaoImpl : implements
+    TrainerAvailabilityDao <|.. TrainerAvailabilityDaoImpl : implements
+    TrainerSubscriptionDaoImpl ..> DbConnection : uses
+    TrainerAvailabilityDaoImpl ..> DbConnection : uses
     note for DbConnection "SQLite factory, creates gym.db, schema"
     note for DaoException "Unchecked SQLException wrapper"
     note for CustomerDao "Contract to save, find, search customers"
@@ -444,6 +610,14 @@ classDiagram
     note for PaymentDaoImpl "SQLite implementation, payments"
     note for ProgressDao "Contract, history per customer"
     note for ProgressDaoImpl "SQLite implementation, progress"
+    note for MedicalProfileDao "Contract, profile per customer"
+    note for MedicalProfileDaoImpl "SQLite implementation, medical"
+    note for AdminDao "Contract, lookup by username"
+    note for AdminDaoImpl "SQLite implementation, admins"
+    note for TrainerSubscriptionDao "Contract, engagements and active lookup"
+    note for TrainerSubscriptionDaoImpl "SQLite implementation, subscriptions"
+    note for TrainerAvailabilityDao "Contract, slots, caps, open days"
+    note for TrainerAvailabilityDaoImpl "SQLite implementation, availability"
 ```
 
 ### D. Service layer zoom-in
@@ -458,6 +632,9 @@ classDiagram
     class TrainerService {
         +checkAvailability(int, String) Boolean
         +assignCustomer(int, int) void
+        +viewMedicalProfile(int, int) MedicalProfile
+        +setAvailability(int, String) void
+        +setRate(int, double) void
     }
     class MembershipService {
         +sell(int, String) Membership
@@ -473,6 +650,8 @@ classDiagram
     class SchedulingService {
         +book(int, int, String) Session
         +detectConflicts(int, String) List~Session~
+        +subscribe(int, int, String, String, double) TrainerSubscription
+        +subscriptionPrice(int) double
     }
     class EquipmentService {
         +changeStatus(int, String) void
@@ -491,8 +670,20 @@ classDiagram
     class ProgressService {
         +aggregate(int) List~ProgressRecord~
     }
+    class MedicalProfileService {
+        +save(MedicalProfile) int
+        +getByCustomer(int) MedicalProfile
+    }
+    class AdminService {
+        +authenticate(String, String) Administrator
+        +saveStaff(Administrator) int
+        +editAny(String, int) void
+        +reassignTrainer(int, int) void
+        +adjustPayment(int, double) void
+        +voidRecord(String, int) void
+    }
     note for CustomerService "Validation, search, status rules"
-    note for TrainerService "Availability, assign customers"
+    note for TrainerService "Availability, assign, medical view"
     note for MembershipService "Sell, renew, freeze, cancel, reminders"
     note for WorkoutService "Build programs, versioning"
     note for SchedulingService "Booking, conflict detection"
@@ -500,6 +691,8 @@ classDiagram
     note for AttendanceService "Check-in and out, daily report"
     note for PaymentService "Record, balances, revenue summary"
     note for ProgressService "Metric aggregation for charts"
+    note for MedicalProfileService "Medical CRUD, lookup by customer"
+    note for AdminService "Authenticate, manage staff"
 ```
 
 ### E. Controllers zoom-in
@@ -536,6 +729,11 @@ classDiagram
     class ScheduleController {
         +onBook() void
     }
+    class AvailabilityController {
+        +setCalendar(int, String) void
+        +setDailyCap(int, String, int) void
+        +setSlots(int, String, String) void
+    }
     class EquipmentController {
         +onStatusChange() void
     }
@@ -560,6 +758,7 @@ classDiagram
     note for MembershipController "Plans, sell, renew, freeze"
     note for WorkoutController "Program builder, assignment"
     note for ScheduleController "Agenda, booking with conflicts"
+    note for AvailabilityController "Calendar, caps, slots UI"
     note for EquipmentController "Inventory, status, maintenance"
     note for AttendanceController "Check-in screen, daily report"
     note for PaymentController "Record payments, receipts"
