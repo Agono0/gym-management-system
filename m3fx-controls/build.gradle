@@ -1,0 +1,40 @@
+plugins {
+    id 'java'
+    id 'org.openjfx.javafxplugin'
+}
+
+group = 'io.m3fx'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(27)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+javafx {
+    version = '21.0.4'
+    modules = ['javafx.base', 'javafx.graphics', 'javafx.controls']
+}
+
+dependencies {
+    implementation(project(':m3fx-core'))
+    // No other runtime dependencies in controls without asking (per AGENTS.md).
+    // Ikonli is documented as the icon choice but is NOT added until you approve it;
+    // M3Icon renders bundled Material Symbols SVG paths with zero extra deps.
+    testImplementation('org.junit.jupiter:junit-jupiter:5.11.3')
+    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}

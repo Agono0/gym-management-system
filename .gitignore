@@ -29,6 +29,7 @@ gradle-app.setting
 !gradle-wrapper.jar
 !gradle-wrapper.properties
 gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.jar
 
 # IntelliJ IDEA — keep project SDK (misc.xml), ignore the rest
 .idea/*
@@ -98,3 +99,19 @@ surefire-reports/
 *.pem
 *.p12
 local.properties
+
+# App database (created on first run — never commit)
+gym.db
+gym.db-*
+*.db
+
+# Testing-only sample (never commit)
+src/main/java/com/gym/M3Samples.java
+
+# m3fx module build outputs (explicit; root build/ rule already covers these)
+m3fx-core/build/
+m3fx-controls/build/
+
+# Read-only reference dumps (AGENTS.md: do not ship; local only, ~17 MB)
+material-color-utilities-main/
+material-web-2.5.0/

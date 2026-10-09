@@ -1,0 +1,12 @@
+m3fx
+====
+
+This product includes software developed by Google as part of
+material-color-utilities (https://github.com/material-foundation/material-color-utilities),
+licensed under the Apache License, Version 2.0. The Java sources under
+io.m3fx.core.color are a port of that project; all original copyright and
+license headers are preserved.
+
+Material Symbols / Material Icons paths bundled in io.m3fx.controls.icon.M3Icons
+are by Google, licensed under the Apache License, Version 2.0
+(https://github.com/google/material-design-icons).

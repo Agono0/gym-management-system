@@ -20,6 +20,21 @@ trainers, and managers running the app on a Windows/Linux/macOS desktop.
 > ⚠️ **AI usage warning:** AI was used to generate the documentation and to
 > assist with GUI design.
 
+## 2b. m3fx — reusable Material Design 3 library (this repo builds it)
+
+The `m3fx-core` + `m3fx-controls` Gradle modules are a **separate, reusable M3 library**
+(version `0.1.0`, group `io.m3fx`) — usable in any JavaFX project, not just this gym app:
+
+- `m3fx-core`: dynamic color engine (ported material-color-utilities, Apache 2.0 — see `NOTICE`),
+  `M3Theme.fromSeed(...)`, all color roles, and shape/type/elevation/state/motion tokens.
+- `m3fx-controls`: 25+ `M3*` components (buttons → search, see `docs/COVERAGE.md`) + one
+  `m3fx.css` that references only `-md-sys-color-*` theme lookups.
+- Use it elsewhere: copy the two module folders (or their jars) into another Gradle project and add
+  `implementation(project(':m3fx-core'))` / `implementation(project(':m3fx-controls'))`, then call
+  `M3Stylesheets.applyTo(scene, M3Theme.baseline(false))` once. Full docs: `docs/SPEC_NOTES/`.
+
+Run the gallery demo: `gradlew run` (seed picker + light/dark toggle + all components).
+
 ## 2. Features
 
 ### Customer management (owner: Abdelrhman)

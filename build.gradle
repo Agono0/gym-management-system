@@ -28,8 +28,20 @@ dependencies {
     // implementation 'io.github.palexdev:materialfx:11.17.0'
 
     implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
+
+    // Local reusable M3 library (separated so it can be reused in many projects).
+    implementation(project(':m3fx-core'))
+    implementation(project(':m3fx-controls'))
 }
 
 application {
-    // mainClass = 'com.gym.MainApp' // uncomment once MainApp exists
+    mainClass = 'com.gym.MainApp'
+}
+
+// Testing only: standalone window rendering EVERY m3fx component (M3Samples.java is git-ignored).
+tasks.register('runSamples', JavaExec) {
+    group = 'application'
+    description = 'Runs the M3Samples all-components test window.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.gym.M3Samples'
 }

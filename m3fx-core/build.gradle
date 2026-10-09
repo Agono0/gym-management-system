@@ -1,0 +1,38 @@
+plugins {
+    id 'java'
+    id 'org.openjfx.javafxplugin'
+}
+
+group = 'io.m3fx'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(27)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+javafx {
+    version = '21.0.4'
+    modules = ['javafx.base', 'javafx.graphics']
+}
+
+dependencies {
+    // m3fx-core: pure logic + tokens. JavaFX base/graphics only (for javafx.scene.paint.Color).
+    // No other runtime dependencies (per AGENTS.md rule).
+    testImplementation('org.junit.jupiter:junit-jupiter:5.11.3')
+    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
