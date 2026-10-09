@@ -1,8 +1,10 @@
 # UML — Team version (INTERNAL, not for submission)
 
 > Same diagrams as `docs/UML.md`, color-coded per owner. Legend:
-> <span>Abdelrhman</span> · <span>Ziad</span> · <span>Yousef</span> · <span>Abdel Raouf</span>
-> (blue / green / amber / violet in the rendered diagram).
+> blue = Abdelrhman · green = Ziad · amber = Yousef · violet = Abdel Raouf
+> (applied via `classDef` fills in the rendered diagram).
+> Notation: `-` private, `+` public, `o--` shared aggregation, `..>` dependency,
+> `..|>` realization. Every class carries its description inside the diagram.
 
 ## 1. Layered architecture
 
@@ -20,85 +22,191 @@ flowchart TD
     style M3FX fill:#e5e7eb
 ```
 
-## 2. Domain model
+## 2. Main diagram (domain story on one screen)
 
 ```mermaid
 classDiagram
+    direction TB
+    class MainApp {
+        <<Abdelrhman>>
+        +start(Stage) void
+        +main(String[]) void
+    }
     class Customer {
         <<Abdelrhman>>
-        +int id
-        +String fullName
-        +String phone
-        +String email
-        +String status
+        -int id
+        -String fullName
+        -String status
     }
     class Trainer {
         <<Ziad>>
-        +int id
-        +String fullName
-        +String specialization
-        +int experienceYears
-        +String availability
+        -int id
+        -String fullName
+        -String specialization
     }
     class Membership {
         <<Ziad>>
-        +int id
-        +String plan
-        +String startDate
-        +String endDate
-        +String status
+        -int id
+        -String plan
+        -String status
     }
     class WorkoutProgram {
         <<Yousef>>
-        +int id
-        +String exercises
-        +int version
+        -int id
+        -String exercises
+        -int version
     }
     class Session {
         <<Yousef>>
-        +int id
-        +String dateTime
-        +int durationMin
+        -int id
+        -String dateTime
     }
     class Equipment {
         <<Yousef>>
-        +int id
-        +String name
-        +String category
-        +String condition
-        +String status
+        -int id
+        -String name
+        -String status
     }
     class Attendance {
         <<Abdel Raouf>>
-        +int id
-        +String date
-        +String checkIn
-        +String checkOut
+        -int id
+        -String date
     }
     class Payment {
         <<Abdel Raouf>>
-        +int id
-        +double amount
-        +String method
-        +String date
+        -int id
+        -double amount
     }
     class ProgressRecord {
         <<Abdel Raouf>>
-        +int id
-        +String date
-        +double weightKg
-        +double bodyFatPct
-        +String notes
+        -int id
+        -String date
+        -double weightKg
     }
-    Customer "1" --> "0..*" Membership : holds
+    Customer "1" o-- "0..*" Membership : holds
+    Customer "1" o-- "0..*" WorkoutProgram : follows
+    Customer "1" o-- "0..*" Attendance : records
+    Customer "1" o-- "0..*" ProgressRecord : tracks
     Customer "*" --> "0..1" Trainer : assigned to
     Membership "1" --> "0..*" Payment : paid by
-    Customer "1" --> "0..*" WorkoutProgram : follows
     Trainer "1" --> "0..*" WorkoutProgram : creates
     Customer "1" --> "0..*" Session : books
     Trainer "1" --> "0..*" Session : coaches
-    Customer "1" --> "0..*" Attendance : records
-    Customer "1" --> "0..*" ProgressRecord : tracks
+    note for MainApp "Entry point, window, nav shell, theme"
+    note for Customer "Member: info, contact, status, links"
+    note for Trainer "Coach: info, specialization, availability"
+    note for Membership "Plan with start and end dates"
+    note for WorkoutProgram "Exercise list with version, creator"
+    note for Session "Booked slot, customer plus trainer"
+    note for Equipment "Inventory item, condition, status"
+    note for Attendance "Daily check-in and check-out record"
+    note for Payment "Amount, method and date per membership"
+    note for ProgressRecord "Dated body metrics and benchmarks"
+    classDef abdel fill:#dbeafe
+    classDef ziad fill:#dcfce7
+    classDef yousef fill:#fef3c7
+    classDef raouf fill:#ede9fe
+    class MainApp:::abdel
+    class Customer:::abdel
+    class Trainer:::ziad
+    class Membership:::ziad
+    class WorkoutProgram:::yousef
+    class Session:::yousef
+    class Equipment:::yousef
+    class Attendance:::raouf
+    class Payment:::raouf
+    class ProgressRecord:::raouf
+```
+
+## 3. Domain model
+
+```mermaid
+classDiagram
+    direction TB
+    class Customer {
+        <<Abdelrhman>>
+        -int id
+        -String fullName
+        -String phone
+        -String email
+        -String status
+    }
+    class Trainer {
+        <<Ziad>>
+        -int id
+        -String fullName
+        -String specialization
+        -int experienceYears
+        -String availability
+    }
+    class Membership {
+        <<Ziad>>
+        -int id
+        -String plan
+        -String startDate
+        -String endDate
+        -String status
+    }
+    class WorkoutProgram {
+        <<Yousef>>
+        -int id
+        -String exercises
+        -int version
+    }
+    class Session {
+        <<Yousef>>
+        -int id
+        -String dateTime
+        -int durationMin
+    }
+    class Equipment {
+        <<Yousef>>
+        -int id
+        -String name
+        -String category
+        -String condition
+        -String status
+    }
+    class Attendance {
+        <<Abdel Raouf>>
+        -int id
+        -String date
+        -String checkIn
+        -String checkOut
+    }
+    class Payment {
+        <<Abdel Raouf>>
+        -int id
+        -double amount
+        -String method
+        -String date
+    }
+    class ProgressRecord {
+        <<Abdel Raouf>>
+        -int id
+        -String date
+        -double weightKg
+        -double bodyFatPct
+        -String notes
+    }
+    Customer "1" o-- "0..*" Membership : holds
+    Customer "1" o-- "0..*" WorkoutProgram : follows
+    Customer "1" o-- "0..*" Attendance : records
+    Customer "1" o-- "0..*" ProgressRecord : tracks
+    Customer "*" --> "0..1" Trainer : assigned to
+    Membership "1" --> "0..*" Payment : paid by
+    Trainer "1" --> "0..*" WorkoutProgram : creates
+    Customer "1" --> "0..*" Session : books
+    Trainer "1" --> "0..*" Session : coaches
+    note for Customer "Member: info, contact, status, links"
+    note for Trainer "Coach: info, specialization, availability"
+    note for Membership "Plan with start and end dates"
+    note for WorkoutProgram "Exercise list with version, creator"
+    note for Session "Booked slot, customer plus trainer"
+    note for Equipment "Inventory item, condition, status"
+    note for Attendance "Daily check-in and check-out record"
+    note for Payment "Amount, method and date per membership"
+    note for ProgressRecord "Dated body metrics and benchmarks"
     classDef abdel fill:#dbeafe
     classDef ziad fill:#dcfce7
     classDef yousef fill:#fef3c7
@@ -114,14 +222,14 @@ classDiagram
     class ProgressRecord:::raouf
 ```
 
-## 3. DAO layer
+## 4. DAO layer
 
 ```mermaid
 classDiagram
+    direction TB
     class DbConnection {
         <<Abdelrhman>>
         +getConnection() Connection
-        +initSchema() void
     }
     class DaoException {
         <<Abdelrhman>>
@@ -132,85 +240,77 @@ classDiagram
         <<interface>>
         +save(Customer) int
         +findById(int) Customer
-        +findAll() List
-        +search(String) List
+        +search(String) List~Customer~
     }
     class CustomerDaoImpl {
         <<Abdelrhman>>
         +save(Customer) int
         +findById(int) Customer
-        +findAll() List
-        +search(String) List
+        +search(String) List~Customer~
     }
     class TrainerDao {
         <<Ziad>>
         <<interface>>
         +save(Trainer) int
         +findById(int) Trainer
-        +findAll() List
+        +findAll() List~Trainer~
     }
     class TrainerDaoImpl {
         <<Ziad>>
         +save(Trainer) int
         +findById(int) Trainer
-        +findAll() List
+        +findAll() List~Trainer~
     }
     class MembershipDao {
         <<Ziad>>
         <<interface>>
         +save(Membership) int
-        +findExpiring(int) List
+        +findExpiring(int) List~Membership~
     }
     class MembershipDaoImpl {
         <<Ziad>>
         +save(Membership) int
-        +findExpiring(int) List
+        +findExpiring(int) List~Membership~
     }
     class WorkoutProgramDao {
         <<Yousef>>
         <<interface>>
         +save(WorkoutProgram) int
-        +findByCustomer(int) List
     }
     class WorkoutProgramDaoImpl {
         <<Yousef>>
         +save(WorkoutProgram) int
-        +findByCustomer(int) List
     }
     class SessionDao {
         <<Yousef>>
         <<interface>>
         +save(Session) int
-        +findByTrainer(int) List
-        +findByDay(String) List
+        +findByDay(String) List~Session~
     }
     class SessionDaoImpl {
         <<Yousef>>
         +save(Session) int
-        +findByTrainer(int) List
-        +findByDay(String) List
+        +findByDay(String) List~Session~
     }
     class EquipmentDao {
         <<Yousef>>
         <<interface>>
         +save(Equipment) int
-        +findAll() List
     }
     class EquipmentDaoImpl {
         <<Yousef>>
         +save(Equipment) int
-        +findAll() List
     }
     class AttendanceDao {
         <<Abdel Raouf>>
         <<interface>>
         +save(Attendance) int
-        +findByDay(String) List
+        +findByDay(String) List~Attendance~
     }
     class AttendanceDaoImpl {
         <<Abdel Raouf>>
         +save(Attendance) int
-        +findByDay(String) List
+        +findByDay(String) List~Attendance~
     }
     class PaymentDao {
         <<Abdel Raouf>>
@@ -227,12 +327,10 @@ classDiagram
         <<Abdel Raouf>>
         <<interface>>
         +save(ProgressRecord) int
-        +findByCustomer(int) List
     }
     class ProgressDaoImpl {
         <<Abdel Raouf>>
         +save(ProgressRecord) int
-        +findByCustomer(int) List
     }
     CustomerDao <|.. CustomerDaoImpl : implements
     TrainerDao <|.. TrainerDaoImpl : implements
@@ -243,15 +341,35 @@ classDiagram
     AttendanceDao <|.. AttendanceDaoImpl : implements
     PaymentDao <|.. PaymentDaoImpl : implements
     ProgressDao <|.. ProgressDaoImpl : implements
-    CustomerDaoImpl --> DbConnection : uses
-    TrainerDaoImpl --> DbConnection : uses
-    MembershipDaoImpl --> DbConnection : uses
-    WorkoutProgramDaoImpl --> DbConnection : uses
-    SessionDaoImpl --> DbConnection : uses
-    EquipmentDaoImpl --> DbConnection : uses
-    AttendanceDaoImpl --> DbConnection : uses
-    PaymentDaoImpl --> DbConnection : uses
-    ProgressDaoImpl --> DbConnection : uses
+    CustomerDaoImpl ..> DbConnection : uses
+    TrainerDaoImpl ..> DbConnection : uses
+    MembershipDaoImpl ..> DbConnection : uses
+    WorkoutProgramDaoImpl ..> DbConnection : uses
+    SessionDaoImpl ..> DbConnection : uses
+    EquipmentDaoImpl ..> DbConnection : uses
+    AttendanceDaoImpl ..> DbConnection : uses
+    PaymentDaoImpl ..> DbConnection : uses
+    ProgressDaoImpl ..> DbConnection : uses
+    note for DbConnection "SQLite factory, creates gym.db, schema"
+    note for DaoException "Unchecked SQLException wrapper"
+    note for CustomerDao "Contract to save, find, search customers"
+    note for CustomerDaoImpl "SQLite implementation, customers"
+    note for TrainerDao "Contract to save, find trainers"
+    note for TrainerDaoImpl "SQLite implementation, trainers"
+    note for MembershipDao "Contract, expiring memberships query"
+    note for MembershipDaoImpl "SQLite implementation, memberships"
+    note for WorkoutProgramDao "Contract, programs per customer"
+    note for WorkoutProgramDaoImpl "SQLite implementation, programs"
+    note for SessionDao "Contract, sessions by trainer, day"
+    note for SessionDaoImpl "SQLite implementation, sessions"
+    note for EquipmentDao "Contract to save, list equipment"
+    note for EquipmentDaoImpl "SQLite implementation, equipment"
+    note for AttendanceDao "Contract, daily attendance lists"
+    note for AttendanceDaoImpl "SQLite implementation, attendance"
+    note for PaymentDao "Contract, revenue over date ranges"
+    note for PaymentDaoImpl "SQLite implementation, payments"
+    note for ProgressDao "Contract, history per customer"
+    note for ProgressDaoImpl "SQLite implementation, progress"
     classDef abdel fill:#dbeafe
     classDef ziad fill:#dcfce7
     classDef yousef fill:#fef3c7
@@ -278,19 +396,19 @@ classDiagram
     class ProgressDaoImpl:::raouf
 ```
 
-## 4. Service layer
+## 5. Service layer
 
 ```mermaid
 classDiagram
+    direction TB
     class CustomerService {
         <<Abdelrhman>>
-        +validate(Customer) List
-        +search(String) List
-        +setStatus(int, String) void
+        +validate(Customer) List~String~
+        +search(String) List~Customer~
     }
     class TrainerService {
         <<Ziad>>
-        +checkAvailability(int, String) bool
+        +checkAvailability(int, String) Boolean
         +assignCustomer(int, int) void
     }
     class MembershipService {
@@ -299,7 +417,7 @@ classDiagram
         +renew(int) void
         +freeze(int) void
         +cancel(int) void
-        +expiryReminders() List
+        +expiryReminders() List~Membership~
     }
     class WorkoutService {
         <<Yousef>>
@@ -309,7 +427,7 @@ classDiagram
     class SchedulingService {
         <<Yousef>>
         +book(int, int, String) Session
-        +detectConflicts(int, String) List
+        +detectConflicts(int, String) List~Session~
     }
     class EquipmentService {
         <<Yousef>>
@@ -320,7 +438,7 @@ classDiagram
         <<Abdel Raouf>>
         +checkIn(int) Attendance
         +checkOut(int) void
-        +dailyReport(String) List
+        +dailyReport(String) List~Attendance~
     }
     class PaymentService {
         <<Abdel Raouf>>
@@ -330,20 +448,17 @@ classDiagram
     }
     class ProgressService {
         <<Abdel Raouf>>
-        +aggregate(int) List
-        +chartData(int) List
+        +aggregate(int) List~ProgressRecord~
     }
-    CustomerService --> CustomerDao : uses
-    TrainerService --> TrainerDao : uses
-    MembershipService --> MembershipDao : uses
-    WorkoutService --> WorkoutProgramDao : uses
-    SchedulingService --> SessionDao : uses
-    EquipmentService --> EquipmentDao : uses
-    AttendanceService --> AttendanceDao : uses
-    PaymentService --> PaymentDao : uses
-    ProgressService --> ProgressDao : uses
-    MembershipService --> PaymentDao : uses
-    SchedulingService --> TrainerDao : uses
+    note for CustomerService "Validation, search, status rules"
+    note for TrainerService "Availability, assign customers"
+    note for MembershipService "Sell, renew, freeze, cancel, reminders"
+    note for WorkoutService "Build programs, versioning"
+    note for SchedulingService "Booking, conflict detection"
+    note for EquipmentService "Status changes, maintenance log"
+    note for AttendanceService "Check-in and out, daily report"
+    note for PaymentService "Record, balances, revenue summary"
+    note for ProgressService "Metric aggregation for charts"
     classDef abdel fill:#dbeafe
     classDef ziad fill:#dcfce7
     classDef yousef fill:#fef3c7
@@ -359,10 +474,11 @@ classDiagram
     class ProgressService:::raouf
 ```
 
-## 5. Controllers
+## 6. Controllers
 
 ```mermaid
 classDiagram
+    direction TB
     class MainApp {
         <<Abdelrhman>>
         +start(Stage) void
@@ -423,23 +539,22 @@ classDiagram
         <<Abdel Raouf>>
         +showProgress(int) void
     }
-    MainApp --> DashboardController : opens
-    DashboardController --> CustomerListController : navigates
-    DashboardController --> ScheduleController : navigates
-    CustomerListController --> CustomerProfileController : opens
-    TrainerListController --> TrainerProfileController : opens
-    CustomerProfileController --> CustomerService : uses
-    CustomerProfileController --> MembershipService : uses
-    TrainerProfileController --> TrainerService : uses
-    MembershipController --> MembershipService : uses
-    WorkoutController --> WorkoutService : uses
-    ScheduleController --> SchedulingService : uses
-    EquipmentController --> EquipmentService : uses
-    AttendanceController --> AttendanceService : uses
-    PaymentController --> PaymentService : uses
-    ProgressController --> ProgressService : uses
-    DashboardController --> AttendanceService : uses
-    DashboardController --> PaymentService : uses
+    MainApp ..> DashboardController : opens
+    CustomerListController ..> CustomerProfileController : opens
+    TrainerListController ..> TrainerProfileController : opens
+    note for MainApp "Entry point, window, nav shell, theme"
+    note for DashboardController "Members, sessions, revenue snapshot"
+    note for CustomerListController "Searchable customer list"
+    note for CustomerProfileController "Full member profile screen"
+    note for TrainerListController "Trainer roster, availability"
+    note for TrainerProfileController "Trainer details and customers"
+    note for MembershipController "Plans, sell, renew, freeze"
+    note for WorkoutController "Program builder, assignment"
+    note for ScheduleController "Agenda, booking with conflicts"
+    note for EquipmentController "Inventory, status, maintenance"
+    note for AttendanceController "Check-in screen, daily report"
+    note for PaymentController "Record payments, receipts"
+    note for ProgressController "Body-metric charts screen"
     classDef abdel fill:#dbeafe
     classDef ziad fill:#dcfce7
     classDef yousef fill:#fef3c7
@@ -459,7 +574,7 @@ classDiagram
     class ProgressController:::raouf
 ```
 
-## 6. Who does what (checklist)
+## 7. Who does what (checklist)
 
 | Area | Owner | Status |
 |---|---|---|
