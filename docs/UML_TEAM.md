@@ -36,36 +36,66 @@ classDiagram
         <<Abdelrhman>>
         -int id
         -String fullName
+        -String phone
+        -String email
+        -String address
+        -String dateOfBirth
+        -String gender
+        -String emergencyName
+        -String emergencyPhone
         -String status
+        -String joinDate
     }
     class Trainer {
         <<Ziad>>
         -int id
         -String fullName
+        -String phone
+        -String email
         -String specialization
+        -int experienceYears
+        -String certifications
+        -String availability
+        -String hireDate
     }
     class Membership {
         <<Ziad>>
         -int id
+        -int customerId
         -String plan
+        -double price
+        -String startDate
+        -String endDate
         -String status
     }
     class WorkoutProgram {
         <<Yousef>>
         -int id
+        -int customerId
+        -int creatorTrainerId
+        -String name
         -String exercises
         -int version
+        -String createdDate
     }
     class Session {
         <<Yousef>>
         -int id
+        -int customerId
+        -int trainerId
         -String dateTime
+        -int durationMin
+        -String status
     }
     class Equipment {
         <<Yousef>>
         -int id
         -String name
+        -String category
+        -String purchaseDate
+        -String condition
         -String status
+        -String lastMaintenance
     }
     class Attendance {
         <<Abdel Raouf>>
@@ -75,13 +105,22 @@ classDiagram
     class Payment {
         <<Abdel Raouf>>
         -int id
+        -int customerId
+        -int membershipId
         -double amount
+        -String method
+        -String date
+        -String receiptNo
     }
     class ProgressRecord {
         <<Abdel Raouf>>
         -int id
+        -int customerId
         -String date
         -double weightKg
+        -double bodyFatPct
+        -String measurements
+        -String notes
     }
     Customer "1" o-- "0..*" Membership : holds
     Customer "1" o-- "0..*" WorkoutProgram : follows
@@ -129,20 +168,32 @@ classDiagram
         -String fullName
         -String phone
         -String email
+        -String address
+        -String dateOfBirth
+        -String gender
+        -String emergencyName
+        -String emergencyPhone
         -String status
+        -String joinDate
     }
     class Trainer {
         <<Ziad>>
         -int id
         -String fullName
+        -String phone
+        -String email
         -String specialization
         -int experienceYears
+        -String certifications
         -String availability
+        -String hireDate
     }
     class Membership {
         <<Ziad>>
         -int id
+        -int customerId
         -String plan
+        -double price
         -String startDate
         -String endDate
         -String status
@@ -150,22 +201,31 @@ classDiagram
     class WorkoutProgram {
         <<Yousef>>
         -int id
+        -int customerId
+        -int creatorTrainerId
+        -String name
         -String exercises
         -int version
+        -String createdDate
     }
     class Session {
         <<Yousef>>
         -int id
+        -int customerId
+        -int trainerId
         -String dateTime
         -int durationMin
+        -String status
     }
     class Equipment {
         <<Yousef>>
         -int id
         -String name
         -String category
+        -String purchaseDate
         -String condition
         -String status
+        -String lastMaintenance
     }
     class Attendance {
         <<Abdel Raouf>>
@@ -177,16 +237,21 @@ classDiagram
     class Payment {
         <<Abdel Raouf>>
         -int id
+        -int customerId
+        -int membershipId
         -double amount
         -String method
         -String date
+        -String receiptNo
     }
     class ProgressRecord {
         <<Abdel Raouf>>
         -int id
+        -int customerId
         -String date
         -double weightKg
         -double bodyFatPct
+        -String measurements
         -String notes
     }
     Customer "1" o-- "0..*" Membership : holds

@@ -15,31 +15,61 @@ classDiagram
     class Customer {
         -int id
         -String fullName
+        -String phone
+        -String email
+        -String address
+        -String dateOfBirth
+        -String gender
+        -String emergencyName
+        -String emergencyPhone
         -String status
+        -String joinDate
     }
     class Trainer {
         -int id
         -String fullName
+        -String phone
+        -String email
         -String specialization
+        -int experienceYears
+        -String certifications
+        -String availability
+        -String hireDate
     }
     class Membership {
         -int id
+        -int customerId
         -String plan
+        -double price
+        -String startDate
+        -String endDate
         -String status
     }
     class WorkoutProgram {
         -int id
+        -int customerId
+        -int creatorTrainerId
+        -String name
         -String exercises
         -int version
+        -String createdDate
     }
     class Session {
         -int id
+        -int customerId
+        -int trainerId
         -String dateTime
+        -int durationMin
+        -String status
     }
     class Equipment {
         -int id
         -String name
+        -String category
+        -String purchaseDate
+        -String condition
         -String status
+        -String lastMaintenance
     }
     class Attendance {
         -int id
@@ -47,12 +77,21 @@ classDiagram
     }
     class Payment {
         -int id
+        -int customerId
+        -int membershipId
         -double amount
+        -String method
+        -String date
+        -String receiptNo
     }
     class ProgressRecord {
         -int id
+        -int customerId
         -String date
         -double weightKg
+        -double bodyFatPct
+        -String measurements
+        -String notes
     }
     Customer "1" o-- "0..*" Membership : holds
     Customer "1" o-- "0..*" WorkoutProgram : follows
@@ -82,15 +121,15 @@ classDiagram
 
 | Class | Description |
 |---|---|
-| `Customer` | Gym member: personal info, contact, status; links to membership, trainer, program |
-| `Trainer` | Coach: personal + professional info, specialization, experience, availability |
-| `Membership` | Plan with start/end dates; status active, frozen or expired |
-| `WorkoutProgram` | Exercise list (sets/reps/rest) with version and creator trainer |
-| `Session` | Scheduled training slot linking one customer with one trainer |
-| `Equipment` | Inventory item with category, condition and availability status |
+| `Customer` | Gym member; fields: id, fullName, phone, email, address, dateOfBirth, gender, emergencyName, emergencyPhone, status, joinDate; links to membership, trainer, program |
+| `Trainer` | Coach; fields: id, fullName, phone, email, specialization, experienceYears, certifications, availability, hireDate |
+| `Membership` | Plan; fields: id, customerId, plan, price, startDate, endDate, status (active, frozen, expired) |
+| `WorkoutProgram` | Exercise list; fields: id, customerId, creatorTrainerId, name, exercises, version, createdDate |
+| `Session` | Training slot; fields: id, customerId, trainerId, dateTime, durationMin, status |
+| `Equipment` | Inventory item; fields: id, name, category, purchaseDate, condition, status, lastMaintenance |
 | `Attendance` | One check-in/out record per customer per day |
-| `Payment` | Amount, method and date, linked to a membership |
-| `ProgressRecord` | Dated body metrics and strength benchmarks |
+| `Payment` | fields: id, customerId, membershipId, amount, method, date, receiptNo; linked to a membership |
+| `ProgressRecord` | fields: id, customerId, date, weightKg, bodyFatPct, measurements, notes |
 
 ### Data access
 
@@ -179,38 +218,59 @@ classDiagram
         -String fullName
         -String phone
         -String email
+        -String address
+        -String dateOfBirth
+        -String gender
+        -String emergencyName
+        -String emergencyPhone
         -String status
+        -String joinDate
     }
     class Trainer {
         -int id
         -String fullName
+        -String phone
+        -String email
         -String specialization
         -int experienceYears
+        -String certifications
         -String availability
+        -String hireDate
     }
     class Membership {
         -int id
+        -int customerId
         -String plan
+        -double price
         -String startDate
         -String endDate
         -String status
     }
     class WorkoutProgram {
         -int id
+        -int customerId
+        -int creatorTrainerId
+        -String name
         -String exercises
         -int version
+        -String createdDate
     }
     class Session {
         -int id
+        -int customerId
+        -int trainerId
         -String dateTime
         -int durationMin
+        -String status
     }
     class Equipment {
         -int id
         -String name
         -String category
+        -String purchaseDate
         -String condition
         -String status
+        -String lastMaintenance
     }
     class Attendance {
         -int id
@@ -220,15 +280,20 @@ classDiagram
     }
     class Payment {
         -int id
+        -int customerId
+        -int membershipId
         -double amount
         -String method
         -String date
+        -String receiptNo
     }
     class ProgressRecord {
         -int id
+        -int customerId
         -String date
         -double weightKg
         -double bodyFatPct
+        -String measurements
         -String notes
     }
     Customer "1" o-- "0..*" Membership : holds
