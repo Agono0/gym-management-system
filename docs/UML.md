@@ -54,7 +54,6 @@ classDiagram
         -String date
         -double weightKg
     }
-    MainApp ..> Customer : manages
     Customer "1" o-- "0..*" Membership : holds
     Customer "1" o-- "0..*" WorkoutProgram : follows
     Customer "1" o-- "0..*" Attendance : records
@@ -266,19 +265,23 @@ classDiagram
     class CustomerDao {
         <<interface>>
         +save(Customer) int
+        +findById(int) Customer
         +search(String) List~Customer~
     }
     class CustomerDaoImpl {
         +save(Customer) int
+        +findById(int) Customer
         +search(String) List~Customer~
     }
     class TrainerDao {
         <<interface>>
         +save(Trainer) int
+        +findById(int) Trainer
         +findAll() List~Trainer~
     }
     class TrainerDaoImpl {
         +save(Trainer) int
+        +findById(int) Trainer
         +findAll() List~Trainer~
     }
     class MembershipDao {
@@ -395,9 +398,12 @@ classDiagram
         +sell(int, String) Membership
         +renew(int) void
         +freeze(int) void
+        +cancel(int) void
+        +expiryReminders() List~Membership~
     }
     class WorkoutService {
         +buildProgram(int, String) WorkoutProgram
+        +newVersion(int) WorkoutProgram
     }
     class SchedulingService {
         +book(int, int, String) Session
@@ -405,32 +411,21 @@ classDiagram
     }
     class EquipmentService {
         +changeStatus(int, String) void
+        +logMaintenance(int, String) void
     }
     class AttendanceService {
         +checkIn(int) Attendance
+        +checkOut(int) void
         +dailyReport(String) List~Attendance~
     }
     class PaymentService {
         +record(Payment) int
         +balance(int) double
+        +revenueSummary() String
     }
     class ProgressService {
         +aggregate(int) List~ProgressRecord~
     }
-    CustomerService --> CustomerDao : uses
-    TrainerService --> TrainerDao : uses
-    MembershipService --> MembershipDao : uses
-    WorkoutService --> WorkoutProgramDao : uses
-    SchedulingService --> SessionDao : uses
-    EquipmentService --> EquipmentDao : uses
-    AttendanceService --> AttendanceDao : uses
-    PaymentService --> PaymentDao : uses
-    ProgressService --> ProgressDao : uses
-    MembershipService --> PaymentDao : uses
-    SchedulingService --> TrainerDao : uses
-    CustomerService ..> Validators : validates with
-    SchedulingService ..> DateUtils : dates with
-    ProgressService ..> ChartUtils : charts with
     note for CustomerService "Validation, search, status rules"
     note for TrainerService "Availability, assign customers"
     note for MembershipService "Sell, renew, freeze, cancel, reminders"
@@ -491,19 +486,6 @@ classDiagram
     MainApp ..> DashboardController : opens
     CustomerListController ..> CustomerProfileController : opens
     TrainerListController ..> TrainerProfileController : opens
-    CustomerProfileController --> CustomerService : uses
-    CustomerProfileController --> MembershipService : uses
-    TrainerProfileController --> TrainerService : uses
-    MembershipController --> MembershipService : uses
-    WorkoutController --> WorkoutService : uses
-    ScheduleController --> SchedulingService : uses
-    EquipmentController --> EquipmentService : uses
-    AttendanceController --> AttendanceService : uses
-    PaymentController --> PaymentService : uses
-    ProgressController --> ProgressService : uses
-    DashboardController --> AttendanceService : uses
-    DashboardController --> PaymentService : uses
-    AttendanceController ..> FxUtils : dialogs with
     note for MainApp "Entry point, window, nav shell, theme"
     note for DashboardController "Members, sessions, revenue snapshot"
     note for CustomerListController "Searchable customer list"
