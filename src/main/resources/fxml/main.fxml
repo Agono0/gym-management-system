@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.appbar.M3TopAppBar?>
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chip.M3Chip?>
+<?import io.m3fx.controls.common.M3Badge?>
+<?import io.m3fx.controls.common.M3Divider?>
+<?import io.m3fx.controls.fab.M3Fab?>
+<?import io.m3fx.controls.fab.M3FabMenu?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.list.M3ListItem?>
+<?import io.m3fx.controls.menu.M3Select?>
+<?import io.m3fx.controls.picker.M3Calendar?>
+<?import io.m3fx.controls.picker.M3DatePicker?>
+<?import io.m3fx.controls.picker.M3TimePicker?>
+<?import io.m3fx.controls.progress.M3LinearProgress?>
+<?import io.m3fx.controls.progress.M3WavyProgress?>
+<?import io.m3fx.controls.search.M3SearchBar?>
+<?import io.m3fx.controls.segmented.M3SegmentedButton?>
+<?import io.m3fx.controls.selection.M3CheckBox?>
+<?import io.m3fx.controls.selection.M3RadioButton?>
+<?import io.m3fx.controls.selection.M3Switch?>
+<?import io.m3fx.controls.slider.M3RangeSlider?>
+<?import io.m3fx.controls.slider.M3Slider?>
+<?import io.m3fx.controls.tabs.M3Tabs?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+<?import java.lang.String?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.ToggleGroup?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<!-- Testing only: no fx:controller, no onAction handlers. Load it with plain
+     FXMLLoader.load(...) to eyeball every component. -->
+<M3Tabs xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" variant="PRIMARY">
+  <tabs>
+    <Tab text="Members" closable="false">
+      <content>
+        <VBox spacing="16">
+          <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+
+          <M3TopAppBar title="Members" variant="SMALL">
+            <navigationIcon><M3Icon symbolName="menu"/></navigationIcon>
+          </M3TopAppBar>
+
+          <M3SearchBar>
+            <suggestions>
+              <String fx:value="Abdelrhman"/>
+              <String fx:value="Ziad"/>
+            </suggestions>
+          </M3SearchBar>
+
+          <M3TextField labelText="Full name" supportingText="Required" />
+          <M3TextField labelText="Phone" variant="OUTLINED" supportingText="01xxxxxxxxx" />
+          <M3TextField labelText="Bio" variant="FILLED" maxLength="60" />
+
+          <M3Select promptText="Membership plan">
+            <items>
+              <String fx:value="Monthly"/>
+              <String fx:value="Quarterly"/>
+              <String fx:value="Yearly"/>
+            </items>
+          </M3Select>
+
+          <HBox spacing="8">
+            <M3Button text="Save member" variant="FILLED">
+              <graphic><M3Icon symbolName="check"/></graphic>
+            </M3Button>
+            <M3Button text="Reset" variant="TEXT"/>
+            <M3Button text="Dark" variant="TONAL" toggleable="true"/>
+          </HBox>
+
+          <M3ListItem headline="Yousef" supporting="Premium, expires 12 Jun">
+            <leading><M3Icon symbolName="person"/></leading>
+            <trailing><M3CheckBox selected="true"/></trailing>
+          </M3ListItem>
+          <M3Divider/>
+
+          <FlowPane hgap="8" vgap="8">
+            <M3Chip text="Assist" variant="ASSIST"/>
+            <M3Chip text="Filter" variant="FILTER" selected="true"/>
+            <M3Chip text="Input" variant="INPUT" closable="true"/>
+            <M3Chip text="Suggestion" variant="SUGGESTION"/>
+          </FlowPane>
+
+          <HBox spacing="8">
+            <M3IconButton variant="FILLED">
+              <graphic><M3Icon symbolName="favorite"/></graphic>
+            </M3IconButton>
+            <M3IconButton variant="OUTLINED">
+              <graphic><M3Icon symbolName="search"/></graphic>
+            </M3IconButton>
+            <M3Badge count="7"/>
+          </HBox>
+
+          <fx:define>
+            <ToggleGroup fx:id="planGroup"/>
+          </fx:define>
+          <HBox spacing="16">
+            <M3CheckBox text="Active"/>
+            <M3RadioButton text="Monthly" toggleGroup="$planGroup" selected="true"/>
+            <M3RadioButton text="Yearly" toggleGroup="$planGroup"/>
+            <M3Switch selected="true" showIcon="true"/>
+          </HBox>
+
+          <M3Card variant="ELEVATED" clickable="true">
+            <content>
+              <M3ListItem headline="Today" supporting="3 sessions, 42 check-ins"/>
+            </content>
+          </M3Card>
+        </VBox>
+      </content>
+    </Tab>
+
+    <Tab text="Schedule" closable="false">
+      <content>
+        <VBox spacing="16">
+          <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+
+          <M3SegmentedButton selectedIndex="1">
+            <segments>
+              <String fx:value="Day"/>
+              <String fx:value="Week"/>
+              <String fx:value="Month"/>
+            </segments>
+          </M3SegmentedButton>
+
+          <HBox spacing="8">
+            <M3DatePicker/>
+            <M3TimePicker twentyFourHour="false"/>
+          </HBox>
+          <M3Calendar/>
+
+          <M3Slider min="0" max="100" value="60"/>
+          <M3Slider min="0" max="10" value="4" discrete="true" majorTickUnit="1" minorTickCount="0" showTickMarks="true"/>
+          <M3RangeSlider min="0" max="100" lowValue="25" highValue="75"/>
+
+          <M3LinearProgress progress="0.6"/>
+          <M3LinearProgress progress="-1"/>
+          <M3WavyProgress progress="0.6"/>
+
+          <HBox spacing="8">
+            <M3Fab size="SMALL"><graphic><M3Icon symbolName="add"/></graphic></M3Fab>
+            <M3Fab size="MEDIUM"><graphic><M3Icon symbolName="add"/></graphic></M3Fab>
+            <M3FabMenu/>
+          </HBox>
+        </VBox>
+      </content>
+    </Tab>
+  </tabs>
+</M3Tabs>

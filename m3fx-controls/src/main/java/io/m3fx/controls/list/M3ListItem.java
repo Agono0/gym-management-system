@@ -1,5 +1,7 @@
 package io.m3fx.controls.list;
 
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.geometry.Pos;
@@ -162,13 +164,39 @@ public class M3ListItem extends HBox {
         setMinHeight(clamped == 1 ? 56 : clamped == 2 ? 72 : 88);
     }
 
+    /** Leading content property (FXML-settable). */
+    private final ObjectProperty<Node> leading = new SimpleObjectProperty<>(this, "leading");
+    /** Trailing content property (FXML-settable). */
+    private final ObjectProperty<Node> trailing = new SimpleObjectProperty<>(this, "trailing");
+
+    /** Returns the leading content property. */
+    public ObjectProperty<Node> leadingProperty() {
+        return leading;
+    }
+
+    /** Returns the leading content, may be {@code null}. */
+    public Node getLeading() {
+        return leading.get();
+    }
+
     /**
      * Sets the leading content (icon, avatar, image).
      *
      * @param leading leading node, may be {@code null}
      */
     public void setLeading(Node leading) {
+        this.leading.set(leading);
         leadingBox.getChildren().setAll(leading == null ? new Region() : leading);
+    }
+
+    /** Returns the trailing content property. */
+    public ObjectProperty<Node> trailingProperty() {
+        return trailing;
+    }
+
+    /** Returns the trailing content, may be {@code null}. */
+    public Node getTrailing() {
+        return trailing.get();
     }
 
     /**
@@ -177,6 +205,7 @@ public class M3ListItem extends HBox {
      * @param trailing trailing node, may be {@code null}
      */
     public void setTrailing(Node trailing) {
+        this.trailing.set(trailing);
         trailingBox.getChildren().setAll(trailing == null ? new Region() : trailing);
     }
 }

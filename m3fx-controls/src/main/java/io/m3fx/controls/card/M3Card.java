@@ -104,12 +104,26 @@ public class M3Card extends Control {
         this.clickable.set(clickable);
     }
 
+    /** Content node property (FXML-settable). */
+    private final ObjectProperty<Node> content = new SimpleObjectProperty<>(this, "content");
+
+    /** Returns the content property. */
+    public ObjectProperty<Node> contentProperty() {
+        return content;
+    }
+
+    /** Returns the card content, may be {@code null}. */
+    public Node getContent() {
+        return content.get();
+    }
+
     /**
      * Sets the card content.
      *
      * @param content content node
      */
     public void setContent(Node content) {
+        this.content.set(content);
         contentHolder.getChildren().setAll(content);
     }
 

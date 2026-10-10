@@ -95,12 +95,27 @@ public class M3TopAppBar extends VBox {
         rebuild(old, this.variant.get());
     }
 
+    /** Navigation icon property (FXML-settable). */
+    private final ObjectProperty<Node> navigationIcon =
+            new SimpleObjectProperty<>(this, "navigationIcon");
+
+    /** Returns the navigation icon property. */
+    public ObjectProperty<Node> navigationIconProperty() {
+        return navigationIcon;
+    }
+
+    /** Returns the navigation icon, may be {@code null}. */
+    public Node getNavigationIcon() {
+        return navigationIcon.get();
+    }
+
     /**
      * Sets the navigation icon (menu/back).
      *
      * @param icon navigation icon node
      */
     public void setNavigationIcon(Node icon) {
+        navigationIcon.set(icon);
         row.getChildren().removeIf(n -> "m3-appbar-nav".equals(n.getId()));
         if (icon != null) {
             icon.setId("m3-appbar-nav");

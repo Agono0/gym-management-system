@@ -114,12 +114,26 @@ public class M3SearchBar extends VBox {
         return suggestions;
     }
 
+    /** Trailing node property (FXML-settable). */
+    private final ObjectProperty<Node> trailing = new SimpleObjectProperty<>(this, "trailing");
+
+    /** Returns the trailing node property. */
+    public ObjectProperty<Node> trailingProperty() {
+        return trailing;
+    }
+
+    /** Returns the trailing node, may be {@code null}. */
+    public Node getTrailing() {
+        return trailing.get();
+    }
+
     /**
      * Sets the trailing node (avatar, close button, filter icon).
      *
      * @param trailing trailing node, may be {@code null}
      */
     public void setTrailing(Node trailing) {
+        this.trailing.set(trailing);
         bar.getChildren().removeIf(n -> "m3-search-trailing".equals(n.getId()));
         if (trailing != null) {
             trailing.setId("m3-search-trailing");

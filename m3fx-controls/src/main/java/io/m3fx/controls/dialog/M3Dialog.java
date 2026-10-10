@@ -2,6 +2,8 @@ package io.m3fx.controls.dialog;
 
 import io.m3fx.controls.button.M3Button;
 import io.m3fx.controls.internal.OverlayLayer;
+import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
@@ -86,12 +88,26 @@ public class M3Dialog extends VBox {
         iconLabel.setManaged(icon != null);
     }
 
+    /** Content node property (FXML-settable). */
+    private final ObjectProperty<Node> content = new SimpleObjectProperty<>(this, "content");
+
+    /** Returns the content property. */
+    public ObjectProperty<Node> contentProperty() {
+        return content;
+    }
+
+    /** Returns the dialog content, may be {@code null}. */
+    public Node getContent() {
+        return content.get();
+    }
+
     /**
      * Sets the dialog content.
      *
      * @param content content node
      */
     public void setContent(Node content) {
+        this.content.set(content);
         contentBox.getChildren().setAll(content);
     }
 

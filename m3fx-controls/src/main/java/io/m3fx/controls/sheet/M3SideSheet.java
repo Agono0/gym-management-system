@@ -1,7 +1,9 @@
 package io.m3fx.controls.sheet;
 
 import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleObjectProperty;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.layout.VBox;
@@ -50,12 +52,26 @@ public class M3SideSheet extends VBox {
         this.modal.set(modal);
     }
 
+    /** Content node property (FXML-settable). */
+    private final ObjectProperty<Node> content = new SimpleObjectProperty<>(this, "content");
+
+    /** Returns the content property. */
+    public ObjectProperty<Node> contentProperty() {
+        return content;
+    }
+
+    /** Returns the sheet content, may be {@code null}. */
+    public Node getContent() {
+        return content.get();
+    }
+
     /**
      * Sets the sheet content.
      *
      * @param content content node
      */
     public void setContent(Node content) {
+        this.content.set(content);
         contentBox.getChildren().setAll(content);
     }
 }
