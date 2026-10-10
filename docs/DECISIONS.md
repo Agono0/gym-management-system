@@ -94,3 +94,33 @@
 27. **Date/time inputs match filled text fields.** `M3DatePicker` gets the same 1px indicator
     (2px primary via an `input-focused` pseudo driven from editor focus) and the time spinners
     become 48px filled fields with themed editors/arrows instead of stock boxes.
+28. **One copy of each UML diagram, not four.** `docs/UML_TEAM.md` used to repeat every class body
+    verbatim with colour added. That duplication is what let `PlanType`'s accessors drift to
+    `String` and dropped six enum notes. The master diagrams now live only in `docs/UML.md`; the
+    team file keeps ownership plus a members-free colour overlay. Diagrams are documentation that
+    rots silently, so there is now exactly one place to change a field list.
+29. **Diagrams are validated by rendering, not by eye.** All mermaid blocks are parsed and rendered
+    with mermaid 11 before being committed, because a broken fence renders as nothing and an
+    unnoticed syntax error looks identical to "no diagram here".
+30. **`Equipment` is a root aggregate with no relationships.** Its DAO takes no foreign key, so it
+    is drawn as a declared, unconnected class rather than being wired to something for appearance.
+    Per-item maintenance history would need a `MaintenanceRecord` entity — out of scope for T1.
+31. **Money is `BigDecimal`; dates and times are ISO-8601 strings.** `double` cannot represent 0.1
+    and drifts when summing payments, so all money fields and `revenueBetween`/`balance` use
+    `BigDecimal`. Dates stay `String` (SQLite has no date type) but are locked to `yyyy-MM-dd` /
+    `HH:mm`, which sort chronologically as text — that is what makes `findByDay`, `findExpiring`
+    and `revenueBetween` work without a date type. `DateUtils` owns every parse.
+32. **Association, not aggregation, for every child entity.** The earlier diagram gave
+    `Customer o-- Membership`-style diamonds to four children and plain associations to three
+    identical ones. No child in this model is lifetime-bound to its parent (every `delete` is
+    public and admin-only), so the diamonds were removed rather than invented for the rest.
+33. **`DbConnection` is an interface.** DAO impls depend on the interface, not the SQLite factory,
+    so a database change touches one file instead of 26.
+34. **`SessionContext` is documented static mutable state.** `AGENTS.md` §5.12 forbids static
+    mutable state except the font loader; the signed-in account needs to be reachable from every
+    controller, so it is kept FX-thread confined, cleared on logout and on exit, and named as the
+    single deliberate exception.
+35. **`MainApp` needs a public m3fx overlay entry point.** The overlay layer that dialogs,
+    snackbars and sheets use lives in `io.m3fx.controls.internal`, which `module-info.java` does
+    not export. The shell cannot install it until m3fx exposes a public facade.
+
