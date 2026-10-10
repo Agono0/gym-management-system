@@ -49,3 +49,17 @@
 
 - [ ] Split button / toolbar / carousel
 - [ ] Shape morphing
+
+## Gym Management System (the `com.gym` app)
+
+The graded deliverable, built on m3fx. Current state: **3 of ~85 planned classes exist.**
+
+- [x] `MainApp` skeleton (placeholder: hardcoded title, fixed 600x400 scene, no theme call)
+- [x] `fxml/main.fxml` — m3fx component showcase (no controller; testing only)
+- [ ] Everything in `docs/UML.md` §1 and §3–§6 (13 entities, 10 enums, 13 DAO pairs, 11 services,
+      16 controllers, 9 utilities)
+- [ ] Nav shell + M3 theme wired into `MainApp` (blocked on a public m3fx overlay entry point —
+      see `DECISIONS.md` 35)
+- [ ] `schema.sql` + seed data
+
+Track per-owner progress in `docs/UML_TEAM.md` → "Who does what".
