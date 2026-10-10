@@ -3,6 +3,14 @@
 You are helping build **m3fx**, an open-source Material Design 3 component library for JavaFX.
 Read this whole file before every task. Also read `PLAN.md` to see the current phase.
 
+> **Reality note (repo state):** this repo currently hosts the Gym Management System app
+> (`src/`, `com.gym`) together with the m3fx library as Gradle subprojects
+> (`m3fx-core`, `m3fx-controls`). Deviations from the sections below, all decided in
+> `docs/DECISIONS.md`: build is **Gradle**, not Maven; reference repos sit at the repo root
+> (`material-color-utilities-main/`, `material-web-2.5.0/`) instead of `refs/`; there is no
+> separate `m3fx-demo` module (the gym app + `main.fxml` act as the gallery); Java language
+> level is 21 on JDK 27. Follow those files over the details here where they conflict.
+
 ---
 
 ## 1. Goal

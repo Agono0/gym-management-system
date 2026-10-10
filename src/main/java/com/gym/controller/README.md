@@ -8,14 +8,16 @@ files live in `src/main/resources/fxml/` with matching names.
 ## Contents (to be written)
 | Controller (↔ FXML) | Screen | Owner |
 |---------------------|--------|-------|
-| `DashboardController` | Main dashboard + navigation | Abdel Raouf |
+| `LoginController` | Login screen (authenticates via `AdminService`, stores user in `SessionContext`) | Abdelrhman |
+| `MedicalProfileController` | Medical profile view/edit per customer | Abdelrhman |
+| `DashboardController` | Main dashboard + navigation + logout | Abdel Raouf |
 | `CustomerListController`, `CustomerProfileController` | Customers + full profile (editable medical section) | Abdelrhman |
 | `TrainerListController`, `TrainerProfileController` | Trainers + profiles (read-only medical section) | Ziad |
 | `AvailabilityController` | Trainer calendar, daily caps, hourly slots management | Ziad |
-| `MembershipController` | Plans, sell/renew/freeze | Ziad |
+| `MembershipController` | Plans, sell/renew/freeze/unfreeze | Ziad |
 | `WorkoutController` | Program builder + assignment | Yousef |
 | `ScheduleController` | Agenda, booking dialog, subscribe-to-trainer flow | Yousef |
-| `EquipmentController` | Inventory + maintenance | Yousef |
+| `EquipmentController` | Inventory add/edit + status + maintenance date | Yousef |
 | `AttendanceController` | Check-in/out + daily report | Abdel Raouf |
 | `PaymentController` | Payments + receipts | Abdel Raouf |
 | `ProgressController` | Metrics + charts | Abdel Raouf |
@@ -28,6 +30,8 @@ files live in `src/main/resources/fxml/` with matching names.
 | Controllers per owned screens (see table, M3-styled) | Each owner | To Do |
 | Error handling per screen: validation + friendly DB-error dialogs (no stack traces) | Each owner | To Do |
 
-Styling rule: use tokens from `resources/theme/material-theme.css` only —
-no hardcoded colors. Port each finished screen to `swing`/`view/` promptly
+Styling rule: theme is applied dynamically — call
+`M3Stylesheets.applyTo(scene, M3Theme...)` (m3fx) and reference only
+`-md-sys-color-*` looked-up colors in FXML/CSS — no hardcoded colors.
+Port each finished screen to `swing`/`view/` promptly
 (Week 5) instead of batching everything at the end.

@@ -82,13 +82,29 @@ Run the gallery demo: `gradlew run` (seed picker + light/dark toggle + all compo
 - Progress charts per customer; gym-wide dashboard (active members,
   today's sessions, revenue snapshot).
 
+### Login & administration (owner: Abdelrhman)
+- Role-based login (ADMIN / MANAGER / STAFF) with PBKDF2-hashed passwords.
+- Admin overrides that bypass ownership checks: reassign trainer, adjust
+  payment, void records; staff management and password reset.
+
+### Medical profiles (owner: Abdelrhman)
+- One medical profile per customer (blood type, conditions, allergies,
+  medications, injuries, doctor contact).
+- Editable on the customer profile; read-only view for the assigned trainer.
+
+### Trainer subscriptions & availability (owner: Yousef)
+- Customers subscribe to a trainer for a period at a flat trainer-set rate
+  (distinct from a gym-access membership).
+- Trainers publish bookable days, hourly slots and daily customer caps;
+  booking checks slot openness, caps and trainer conflicts.
+
 ## 3. Tech Stack
 
 | Layer      | Technology |
 |------------|------------|
 | Language   | Java 27 (OpenJDK 27) |
 | UI         | JavaFX 21+ (FXML + CSS) |
-| Design     | Material Design 3 via MaterialFX (components) / AtlantaFX (theme); M3 expressive motion where supported |
+| Design     | Material Design 3 via the in-repo **m3fx** library (`m3fx-core` + `m3fx-controls`, see §2b); M3 expressive motion where supported |
 | Build      | Gradle 8+ (application plugin + JavaFX Gradle plugin) |
 | Database   | SQLite (file `gym.db`, via SQLite-JDBC); schema in `src/main/resources/db/` (Week 1) |
 | Error handling | input validation + `DaoException` → user-friendly messages (no stack traces to users) |
@@ -178,8 +194,9 @@ end-to-end (model → DAO → service → UI) in both branches.
 - SQLite = single-machine only; multi-branch gyms need a client-server DB later.
 - Offline QR/barcode check-in and payment-gateway integration are out of scope (manual entry only).
 - True M3 expressive animations depend on library support; complex motion may be simplified.
-- No role-based login yet (single operator mode) — planned improvement.
-- Future: reports export (PDF), dark/light theme toggle, reminder notifications.
+- Role-based login (ADMIN/MANAGER/STAFF) is designed (`Administrator`, `LoginController`,
+  `AdminService`); finer-grained permissions per role are a planned improvement.
+- Future: reports export (PDF), reminder notifications.
 
 ## 10. Docs & Folders
 

@@ -46,8 +46,9 @@ classDiagram
         -String emergencyPhone
         -CustomerStatus status
         -String joinDate
+        -Integer trainerId
         +Customer()
-        +Customer(int, String, String, String, String, String, String, String, String, CustomerStatus, String)
+        +Customer(int, String, String, String, String, String, String, String, String, CustomerStatus, String, Integer)
         +getId() int
         +setId(int) void
         +getFullName() String
@@ -70,6 +71,8 @@ classDiagram
         +setStatus(CustomerStatus) void
         +getJoinDate() String
         +setJoinDate(String) void
+        +getTrainerId() Integer
+        +setTrainerId(Integer) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
@@ -83,11 +86,10 @@ classDiagram
         -String specialization
         -int experienceYears
         -String certifications
-        -String availability
         -String hireDate
         -double defaultRate
         +Trainer()
-        +Trainer(int, String, String, String, String, int, String, String, String, double)
+        +Trainer(int, String, String, String, String, int, String, String, double)
         +getId() int
         +setId(int) void
         +getFullName() String
@@ -102,8 +104,6 @@ classDiagram
         +setExperienceYears(int) void
         +getCertifications() String
         +setCertifications(String) void
-        +getAvailability() String
-        +setAvailability(String) void
         +getHireDate() String
         +setHireDate(String) void
         +getDefaultRate() double
@@ -116,13 +116,13 @@ classDiagram
         <<Ziad>>
         -int id
         -int customerId
-        -String plan
+        -PlanType plan
         -double price
         -String startDate
         -String endDate
         -MembershipStatus status
         +Membership()
-        +Membership(int, int, String, double, String, String, MembershipStatus)
+        +Membership(int, int, PlanType, double, String, String, MembershipStatus)
         +getId() int
         +setId(int) void
         +getCustomerId() int
@@ -264,19 +264,26 @@ classDiagram
         <<Abdel Raouf>>
         -int id
         -int customerId
-        -int membershipId
+        -Integer membershipId
+        -Integer subscriptionId
+        -Integer sessionId
         -double amount
         -PaymentMethod method
         -String date
         -String receiptNo
+        -boolean voided
         +Payment()
-        +Payment(int, int, int, double, PaymentMethod, String, String)
+        +Payment(int, int, Integer, Integer, Integer, double, PaymentMethod, String, String, boolean)
         +getId() int
         +setId(int) void
         +getCustomerId() int
         +setCustomerId(int) void
-        +getMembershipId() int
-        +setMembershipId(int) void
+        +getMembershipId() Integer
+        +setMembershipId(Integer) void
+        +getSubscriptionId() Integer
+        +setSubscriptionId(Integer) void
+        +getSessionId() Integer
+        +setSessionId(Integer) void
         +getAmount() double
         +setAmount(double) void
         +getMethod() PaymentMethod
@@ -285,6 +292,8 @@ classDiagram
         +setDate(String) void
         +getReceiptNo() String
         +setReceiptNo(String) void
+        +isVoided() boolean
+        +setVoided(boolean) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
@@ -469,6 +478,14 @@ classDiagram
         +values() MembershipStatus[]
         +valueOf(String) MembershipStatus
     }
+    class PlanType {
+        <<enumeration>>
+        MONTHLY
+        QUARTERLY
+        YEARLY
+        +values() PlanType[]
+        +valueOf(String) PlanType
+    }
     class SessionStatus {
         <<enumeration>>
         REQUESTED
@@ -542,7 +559,9 @@ classDiagram
     Trainer "1" --> "0..*" TrainerSubscription : offers
     Trainer "1" --> "0..*" TrainerAvailability : publishes
     TrainerSubscription "1" o-- "0..*" Session : covers
-    Payment "*" --> "1" Membership : pays for
+    Payment "*" --> "0..1" Membership : pays for
+    Payment "*" --> "0..1" TrainerSubscription : pays for
+    Payment "*" --> "0..1" Session : pays for
     Administrator ..> Customer : manages
     Administrator ..> Trainer : manages
     Administrator ..> Payment : adjusts
@@ -556,12 +575,13 @@ classDiagram
     note for TrainerAvailability "Open days, caps, hourly slots"
     note for Equipment "Inventory item, condition, status"
     note for Attendance "Daily check-in/out record with customerId"
-    note for Payment "Amount, method, date per membership"
+    note for Payment "Amount, method, date; at most one of membership, subscription, session; voided flag"
     note for ProgressRecord "Dated body metrics and benchmarks"
     note for MedicalProfile "Blood type, conditions, meds, doctor"
     note for Administrator "Login identity, role, active flag"
     note for CustomerStatus "Active, inactive, suspended"
     note for MembershipStatus "Active, frozen, expired, cancelled"
+    note for PlanType "Monthly, quarterly, yearly"
     note for SessionStatus "Requested, confirmed, completed, cancelled"
     note for SubscriptionStatus "Active, expired, cancelled"
     note for AvailabilityStatus "Open, full, closed"
@@ -607,8 +627,9 @@ classDiagram
         -String emergencyPhone
         -CustomerStatus status
         -String joinDate
+        -Integer trainerId
         +Customer()
-        +Customer(int, String, String, String, String, String, String, String, String, CustomerStatus, String)
+        +Customer(int, String, String, String, String, String, String, String, String, CustomerStatus, String, Integer)
         +getId() int
         +setId(int) void
         +getFullName() String
@@ -631,6 +652,8 @@ classDiagram
         +setStatus(CustomerStatus) void
         +getJoinDate() String
         +setJoinDate(String) void
+        +getTrainerId() Integer
+        +setTrainerId(Integer) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
@@ -644,11 +667,10 @@ classDiagram
         -String specialization
         -int experienceYears
         -String certifications
-        -String availability
         -String hireDate
         -double defaultRate
         +Trainer()
-        +Trainer(int, String, String, String, String, int, String, String, String, double)
+        +Trainer(int, String, String, String, String, int, String, String, double)
         +getId() int
         +setId(int) void
         +getFullName() String
@@ -663,8 +685,6 @@ classDiagram
         +setExperienceYears(int) void
         +getCertifications() String
         +setCertifications(String) void
-        +getAvailability() String
-        +setAvailability(String) void
         +getHireDate() String
         +setHireDate(String) void
         +getDefaultRate() double
@@ -677,13 +697,13 @@ classDiagram
         <<Ziad>>
         -int id
         -int customerId
-        -String plan
+        -PlanType plan
         -double price
         -String startDate
         -String endDate
         -MembershipStatus status
         +Membership()
-        +Membership(int, int, String, double, String, String, MembershipStatus)
+        +Membership(int, int, PlanType, double, String, String, MembershipStatus)
         +getId() int
         +setId(int) void
         +getCustomerId() int
@@ -825,19 +845,26 @@ classDiagram
         <<Abdel Raouf>>
         -int id
         -int customerId
-        -int membershipId
+        -Integer membershipId
+        -Integer subscriptionId
+        -Integer sessionId
         -double amount
         -PaymentMethod method
         -String date
         -String receiptNo
+        -boolean voided
         +Payment()
-        +Payment(int, int, int, double, PaymentMethod, String, String)
+        +Payment(int, int, Integer, Integer, Integer, double, PaymentMethod, String, String, boolean)
         +getId() int
         +setId(int) void
         +getCustomerId() int
         +setCustomerId(int) void
-        +getMembershipId() int
-        +setMembershipId(int) void
+        +getMembershipId() Integer
+        +setMembershipId(Integer) void
+        +getSubscriptionId() Integer
+        +setSubscriptionId(Integer) void
+        +getSessionId() Integer
+        +setSessionId(Integer) void
         +getAmount() double
         +setAmount(double) void
         +getMethod() PaymentMethod
@@ -846,6 +873,8 @@ classDiagram
         +setDate(String) void
         +getReceiptNo() String
         +setReceiptNo(String) void
+        +isVoided() boolean
+        +setVoided(boolean) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
@@ -1030,6 +1059,14 @@ classDiagram
         +values() MembershipStatus[]
         +valueOf(String) MembershipStatus
     }
+    class PlanType {
+        <<enumeration>>
+        MONTHLY
+        QUARTERLY
+        YEARLY
+        +values() PlanType[]
+        +valueOf(String) PlanType
+    }
     class SessionStatus {
         <<enumeration>>
         REQUESTED
@@ -1103,7 +1140,9 @@ classDiagram
     Trainer "1" --> "0..*" TrainerSubscription : offers
     Trainer "1" --> "0..*" TrainerAvailability : publishes
     TrainerSubscription "1" o-- "0..*" Session : covers
-    Payment "*" --> "1" Membership : pays for
+    Payment "*" --> "0..1" Membership : pays for
+    Payment "*" --> "0..1" TrainerSubscription : pays for
+    Payment "*" --> "0..1" Session : pays for
     note for Customer "Member: info, contact, status, links"
     note for Trainer "Coach: info, specialization, availability"
     note for Membership "Plan with start and end dates"
@@ -1113,7 +1152,7 @@ classDiagram
     note for TrainerAvailability "Open days, caps, hourly slots"
     note for Equipment "Inventory item, condition, status"
     note for Attendance "Daily check-in/out record with customerId"
-    note for Payment "Amount, method, date per membership"
+    note for Payment "Amount, method, date; at most one of membership, subscription, session; voided flag"
     note for ProgressRecord "Dated body metrics and benchmarks"
     note for MedicalProfile "Blood type, conditions, meds, doctor"
     note for Administrator "Login identity, role, active flag"
@@ -1168,6 +1207,7 @@ classDiagram
         +update(Customer) void
         +delete(int) void
         +findByStatus(CustomerStatus) List~Customer~
+        +findByTrainer(int) List~Customer~
     }
     class CustomerDaoImpl {
         <<Abdelrhman>>
@@ -1178,6 +1218,7 @@ classDiagram
         +update(Customer) void
         +delete(int) void
         +findByStatus(CustomerStatus) List~Customer~
+        +findByTrainer(int) List~Customer~
     }
     class TrainerDao {
         <<Ziad>>
@@ -1526,14 +1567,17 @@ classDiagram
         +update(Customer) void
         +delete(int) void
         +changeStatus(int, CustomerStatus) void
+        +findByTrainer(int) List~Customer~
     }
     class TrainerService {
         <<Ziad>>
-        +checkAvailability(int, String) Boolean
         +assignCustomer(int, int) void
         +viewMedicalProfile(int, int) MedicalProfile
-        +setAvailability(int, String) void
         +setRate(int, double) void
+        +publishSlot(int, String, String, String, int) void
+        +closeSlot(int) void
+        +setDailyCap(int, String, int) void
+        +openSlots(int, String) List~TrainerAvailability~
         +findAll() List~Trainer~
         +findById(int) Trainer
         +save(Trainer) int
@@ -1542,16 +1586,19 @@ classDiagram
     }
     class MembershipService {
         <<Ziad>>
-        +sell(int, String) Membership
+        +sell(int, PlanType) Membership
         +renew(int) void
         +freeze(int) void
+        +unfreeze(int) void
         +cancel(int) void
         +expiryReminders() List~Membership~
+        +findAll() List~Membership~
         +findByCustomer(int) List~Membership~
     }
     class WorkoutService {
         <<Yousef>>
-        +buildProgram(int, String) WorkoutProgram
+        +buildProgram(int, int, String, String) WorkoutProgram
+        +assign(int, int) void
         +newVersion(int) WorkoutProgram
         +findByCustomer(int) List~WorkoutProgram~
     }
@@ -1563,7 +1610,7 @@ classDiagram
         +subscriptionPrice(int) double
         +requestSession(int, int, String) Session
         +confirmSession(int) void
-        +cancelSession(int) void
+        +cancelSession(int, String) void
         +completeSession(int) void
         +reserveSession(int, int, String) Session
         +getAvailableSlots(int, String) List~TrainerAvailability~
@@ -1572,6 +1619,8 @@ classDiagram
     }
     class EquipmentService {
         <<Yousef>>
+        +save(Equipment) int
+        +update(Equipment) void
         +changeStatus(int, EquipmentStatus) void
         +logMaintenance(int, String) void
         +findAll() List~Equipment~
@@ -1605,8 +1654,8 @@ classDiagram
     class AdminService {
         <<Abdelrhman>>
         +authenticate(String, String) Administrator
+        +resetPassword(String) void
         +saveStaff(Administrator) int
-        +editAny(String, int) void
         +reassignTrainer(int, int) void
         +adjustPayment(int, double) void
         +voidRecord(String, int) void
@@ -1616,6 +1665,10 @@ classDiagram
         +validEmail(String) Boolean
         +validDate(String) Boolean
         +validNumber(String) Boolean
+    }
+    class PasswordUtils {
+        +hash(String) String
+        +verify(String, String) boolean
     }
     class DateUtils {
         +addMonths(String, int) String
@@ -1631,7 +1684,7 @@ classDiagram
     CustomerService ..> Validators : validates with
     TrainerService ..> TrainerDao : persists via
     TrainerService ..> MedicalProfileDao : reads profiles from
-    TrainerService ..> TrainerAvailabilityDao : reads slots from
+    TrainerService ..> TrainerAvailabilityDao : persists slots via
     MembershipService ..> MembershipDao : persists via
     MembershipService ..> DateUtils : dates with
     WorkoutService ..> WorkoutProgramDao : persists via
@@ -1646,18 +1699,20 @@ classDiagram
     ProgressService ..> ChartUtils : charts with
     MedicalProfileService ..> MedicalProfileDao : persists via
     AdminService ..> AdminDao : persists via
+    AdminService ..> PasswordUtils : hashes with
     note for CustomerService "Validation, search, status rules"
     note for TrainerService "Availability, assign, medical view"
-    note for MembershipService "Sell, renew, freeze, cancel, reminders"
-    note for WorkoutService "Build programs, versioning"
-    note for SchedulingService "Booking, conflicts, reservation, subscribe"
-    note for EquipmentService "Status changes, maintenance log"
+    note for MembershipService "Sell, renew, freeze, unfreeze, cancel, reminders"
+    note for WorkoutService "Build programs, assign, versioning"
+    note for SchedulingService "Booking, conflicts, reservation, cancel with reason, subscribe"
+    note for EquipmentService "Add/edit equipment, status changes, maintenance date"
     note for AttendanceService "Check-in and out, daily report"
     note for PaymentService "Record, balances, revenue summary"
     note for ProgressService "Metric aggregation for charts"
     note for MedicalProfileService "Medical CRUD, lookup by customer"
     note for AdminService "Authenticate, manage staff, overrides"
     note for Validators "Phone, email, date, number checks"
+    note for PasswordUtils "PBKDF2 hash and verify, no external deps"
     note for DateUtils "Periods, slots, overlap, formatting"
     note for ChartUtils "Weight and revenue series"
     class Validators:::abdel
@@ -1700,6 +1755,7 @@ classDiagram
         <<Abdel Raouf>>
         +initialize() void
         +refreshData() void
+        +onLogout() void
     }
     class CustomerListController {
         <<Abdelrhman>>
@@ -1792,10 +1848,19 @@ classDiagram
         +switchScene(String) void
         +snackbar(String) void
     }
+    class SessionContext {
+        <<Abdelrhman>>
+        -Administrator current
+        +set(Administrator) void
+        +get() Administrator
+        +clear() void
+    }
     MainApp ..> LoginController : opens
     LoginController ..> AdminService : authenticates via
+    LoginController ..> SessionContext : stores user
     LoginController ..> DashboardController : opens on success
     MainApp ..> DashboardController : opens
+    DashboardController ..> SessionContext : clears on logout
     DashboardController ..> CustomerService : reads from
     DashboardController ..> PaymentService : reads from
     DashboardController ..> SchedulingService : reads from
@@ -1833,6 +1898,7 @@ classDiagram
     note for ProgressController "Body-metric charts screen"
     note for MedicalProfileController "Medical profile view and edit"
     note for FxUtils "Dialogs, confirms, error alerts, scene switch"
+    note for SessionContext "Holds logged-in admin; role checks read it"
     class FxUtils:::abdel
     class LoginController:::abdel
     class MedicalProfileController:::abdel
@@ -1859,15 +1925,34 @@ classDiagram
 
 | Area | Owner | Status |
 |---|---|---|
-| Foundation: `DbConnection`, `DaoException`, `Validators`, `FxUtils`, `MainApp` shell, m3fx already built | Abdelrhman | In progress |
-| `Customer` + DAO + service + list/profile screens | Abdelrhman | To do |
-| `Trainer`, `Membership` + DAOs + services + screens | Ziad | To do |
+| Foundation: `DbConnection`, `DaoException`, `Validators`, `FxUtils`, `SessionContext`, `PasswordUtils`, `MainApp` shell, m3fx already built | Abdelrhman | In progress |
+| `Customer` (+ trainerId) + DAO + service + list/profile screens | Abdelrhman | To do |
+| `Trainer`, `Membership` (+ `PlanType` enum) + DAOs + services + screens | Ziad | To do |
 | `WorkoutProgram`, `Session`, `Equipment` + DAOs + services + screens; `DateUtils` | Yousef | To do |
-| `Attendance`, `Payment`, `ProgressRecord` + DAOs + services + screens; dashboard; `ChartUtils` | Abdel Raouf | To do |
+| `Attendance`, `Payment` (nullable links + voided) + DAOs + services + screens; dashboard; `ChartUtils` | Abdel Raouf | To do |
 | `TrainerSubscription` + availability stack (entities, DAOs, booking rules) | Yousef | To Do |
 | `AvailabilityController` screen + admin override methods | Ziad (screen), Abdelrhman (overrides) | To Do |
 | `MedicalProfile` stack (entity, DAO, service, controller) + trainer medical view support | Abdelrhman (+ Ziad view method) | To do |
 | `Administrator` stack (entity, DAO, `AdminService`, `LoginController`) | Abdelrhman | To do |
-| Session reservation flow (reserve, availability check, cancel) | Yousef (SchedulingService + ScheduleController) | To do |
+| Session reservation flow (reserve, availability check, cancel with reason) | Yousef (SchedulingService + ScheduleController) | To do |
 
 Rules: JavaFX-first per vertical slice, then each owner ports their own modules to the `swing` branch. Update the Status column as work moves.
+
+## 8. Open business-rule decisions (decide before coding)
+
+These are rules the class diagram deliberately leaves open. Agree on them as a team
+and write the answers here so all four owners implement the same behavior.
+
+| # | Question | Default we suggest |
+|---|---|---|
+| 1 | `book` vs `requestSession` vs `reserveSession` — same signature `(int, int, String)`. Which does what? | `book` = customer books an OPEN slot → CONFIRMED; `requestSession` = outside published slots → REQUESTED (trainer confirms); `reserveSession` = admin override ignoring slot rules. Default `durationMin` = 60. |
+| 2 | Should `SessionStatus` get `NO_SHOW` (customer did not arrive)? | Yes — add it; completed vs no-show matters for trainer stats. |
+| 3 | `Customer "1" *-- "1" MedicalProfile` — must every customer have a medical profile at registration? | Make it `0..1` — profile created later on demand; keep composition. |
+| 4 | What does "delete" mean for `Customer`/`Trainer` when sessions, payments and attendance reference them? | "Delete" = set status INACTIVE / end active records; hard `delete(int)` stays admin-only and refuses when references exist. `schema.sql` uses no FK cascades. |
+| 5 | Does `checkIn(int)` require an ACTIVE membership? | Yes — AttendanceService rejects check-in for INACTIVE / SUSPENDED customers and expired memberships. |
+| 6 | `PaymentService.balance(int)` — balance against what? | Sum of unpaid items: memberships sold without a matching non-voided payment, plus subscription and ad-hoc session prices without payments. |
+| 7 | Does `freeze(int)` pause the membership `endDate`? | Yes — freeze stores remaining days; unfreeze shifts endDate forward by the frozen period. |
+| 8 | Can a trainer publish several `TrainerAvailability` slots per day, or one window? | Several hourly slots per day (`findByTrainerAndDate` returns one row per slot; the single-result signature should become a list). |
+| 9 | Date/time format standard across entities and queries? | Store `yyyy-MM-dd` for dates, `yyyy-MM-dd HH:mm` for `Session.dateTime`; `DateUtils` owns parsing so `findByDay` and `overlappingSlots` agree. |
+| 10 | Session cancellation window or fee? | Cancel up to 2h before start for free; later cancels still marked CANCELLED with the reason recorded. |
+

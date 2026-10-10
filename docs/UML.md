@@ -4,7 +4,9 @@
 > code follows this design. `m3fx` is an external library dependency, not project code.
 > Notation: `-` private, `+` public, `#` protected, `o--` shared aggregation, `..>` dependency,
 > `..|>` realization. Every class carries its description inside the diagram.
-> All entity methods (getters, setters, constructors, toString, equals, hashCode) are shown.
+> Entity getters and setters are omitted to keep the diagram small — every data member
+> marked «get/set» has a public getter and setter. Constructors, toString, equals, and
+> hashCode are shown.
 
 ```mermaid
 classDiagram
@@ -14,407 +16,200 @@ classDiagram
         +main(String[]) void
     }
     class Customer {
-        -int id
-        -String fullName
-        -String phone
-        -String email
-        -String address
-        -String dateOfBirth
-        -String gender
-        -String emergencyName
-        -String emergencyPhone
-        -CustomerStatus status
-        -String joinDate
+        -int id «get/set»
+        -String fullName «get/set»
+        -String phone «get/set»
+        -String email «get/set»
+        -String address «get/set»
+        -String dateOfBirth «get/set»
+        -String gender «get/set»
+        -String emergencyName «get/set»
+        -String emergencyPhone «get/set»
+        -CustomerStatus status «get/set»
+        -String joinDate «get/set»
+        -Integer trainerId «get/set»
         +Customer()
-        +Customer(int, String, String, String, String, String, String, String, String, CustomerStatus, String)
-        +getId() int
-        +setId(int) void
-        +getFullName() String
-        +setFullName(String) void
-        +getPhone() String
-        +setPhone(String) void
-        +getEmail() String
-        +setEmail(String) void
-        +getAddress() String
-        +setAddress(String) void
-        +getDateOfBirth() String
-        +setDateOfBirth(String) void
-        +getGender() String
-        +setGender(String) void
-        +getEmergencyName() String
-        +setEmergencyName(String) void
-        +getEmergencyPhone() String
-        +setEmergencyPhone(String) void
-        +getStatus() CustomerStatus
-        +setStatus(CustomerStatus) void
-        +getJoinDate() String
-        +setJoinDate(String) void
+        +Customer(int, String, String, String, String, String, String, String, String, CustomerStatus, String, Integer)
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Trainer {
-        -int id
-        -String fullName
-        -String phone
-        -String email
-        -String specialization
-        -int experienceYears
-        -String certifications
-        -String availability
-        -String hireDate
-        -double defaultRate
+        -int id «get/set»
+        -String fullName «get/set»
+        -String phone «get/set»
+        -String email «get/set»
+        -String specialization «get/set»
+        -int experienceYears «get/set»
+        -String certifications «get/set»
+        -String hireDate «get/set»
+        -double defaultRate «get/set»
         +Trainer()
-        +Trainer(int, String, String, String, String, int, String, String, String, double)
-        +getId() int
-        +setId(int) void
-        +getFullName() String
-        +setFullName(String) void
-        +getPhone() String
-        +setPhone(String) void
-        +getEmail() String
-        +setEmail(String) void
-        +getSpecialization() String
-        +setSpecialization(String) void
-        +getExperienceYears() int
-        +setExperienceYears(int) void
-        +getCertifications() String
-        +setCertifications(String) void
-        +getAvailability() String
-        +setAvailability(String) void
-        +getHireDate() String
-        +setHireDate(String) void
-        +getDefaultRate() double
-        +setDefaultRate(double) void
+        +Trainer(int, String, String, String, String, int, String, String, double)
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Membership {
-        -int id
-        -int customerId
-        -String plan
-        -double price
-        -String startDate
-        -String endDate
-        -MembershipStatus status
+        -int id «get/set»
+        -int customerId «get/set»
+        -PlanType plan «get/set»
+        -double price «get/set»
+        -String startDate «get/set»
+        -String endDate «get/set»
+        -MembershipStatus status «get/set»
         +Membership()
-        +Membership(int, int, String, double, String, String, MembershipStatus)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getPlan() String
-        +setPlan(String) void
-        +getPrice() double
-        +setPrice(double) void
-        +getStartDate() String
-        +setStartDate(String) void
-        +getEndDate() String
-        +setEndDate(String) void
-        +getStatus() MembershipStatus
-        +setStatus(MembershipStatus) void
+        +Membership(int, int, PlanType, double, String, String, MembershipStatus)
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class WorkoutProgram {
-        -int id
-        -int customerId
-        -int creatorTrainerId
-        -String name
-        -String exercises
-        -int version
-        -String createdDate
+        -int id «get/set»
+        -int customerId «get/set»
+        -int creatorTrainerId «get/set»
+        -String name «get/set»
+        -String exercises «get/set»
+        -int version «get/set»
+        -String createdDate «get/set»
         +WorkoutProgram()
         +WorkoutProgram(int, int, int, String, String, int, String)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getCreatorTrainerId() int
-        +setCreatorTrainerId(int) void
-        +getName() String
-        +setName(String) void
-        +getExercises() String
-        +setExercises(String) void
-        +getVersion() int
-        +setVersion(int) void
-        +getCreatedDate() String
-        +setCreatedDate(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Session {
-        -int id
-        -int customerId
-        -int trainerId
-        -String dateTime
-        -int durationMin
-        -SessionStatus status
-        -Integer subscriptionId
-        -double price
-        -String cancelReason
-        -String sessionNotes
+        -int id «get/set»
+        -int customerId «get/set»
+        -int trainerId «get/set»
+        -String dateTime «get/set»
+        -int durationMin «get/set»
+        -SessionStatus status «get/set»
+        -Integer subscriptionId «get/set»
+        -double price «get/set»
+        -String cancelReason «get/set»
+        -String sessionNotes «get/set»
         +Session()
         +Session(int, int, int, String, int, SessionStatus, Integer, double, String, String)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getTrainerId() int
-        +setTrainerId(int) void
-        +getDateTime() String
-        +setDateTime(String) void
-        +getDurationMin() int
-        +setDurationMin(int) void
-        +getStatus() SessionStatus
-        +setStatus(SessionStatus) void
-        +getSubscriptionId() Integer
-        +setSubscriptionId(Integer) void
-        +getPrice() double
-        +setPrice(double) void
-        +getCancelReason() String
-        +setCancelReason(String) void
-        +getSessionNotes() String
-        +setSessionNotes(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Equipment {
-        -int id
-        -String name
-        -String category
-        -String purchaseDate
-        -EquipmentCondition condition
-        -EquipmentStatus status
-        -String lastMaintenance
+        -int id «get/set»
+        -String name «get/set»
+        -String category «get/set»
+        -String purchaseDate «get/set»
+        -EquipmentCondition condition «get/set»
+        -EquipmentStatus status «get/set»
+        -String lastMaintenance «get/set»
         +Equipment()
         +Equipment(int, String, String, String, EquipmentCondition, EquipmentStatus, String)
-        +getId() int
-        +setId(int) void
-        +getName() String
-        +setName(String) void
-        +getCategory() String
-        +setCategory(String) void
-        +getPurchaseDate() String
-        +setPurchaseDate(String) void
-        +getCondition() EquipmentCondition
-        +setCondition(EquipmentCondition) void
-        +getStatus() EquipmentStatus
-        +setStatus(EquipmentStatus) void
-        +getLastMaintenance() String
-        +setLastMaintenance(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Attendance {
-        -int id
-        -int customerId
-        -String date
-        -String checkIn
-        -String checkOut
+        -int id «get/set»
+        -int customerId «get/set»
+        -String date «get/set»
+        -String checkIn «get/set»
+        -String checkOut «get/set»
         +Attendance()
         +Attendance(int, int, String, String, String)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getDate() String
-        +setDate(String) void
-        +getCheckIn() String
-        +setCheckIn(String) void
-        +getCheckOut() String
-        +setCheckOut(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Payment {
-        -int id
-        -int customerId
-        -int membershipId
-        -double amount
-        -PaymentMethod method
-        -String date
-        -String receiptNo
+        -int id «get/set»
+        -int customerId «get/set»
+        -Integer membershipId «get/set»
+        -Integer subscriptionId «get/set»
+        -Integer sessionId «get/set»
+        -double amount «get/set»
+        -PaymentMethod method «get/set»
+        -String date «get/set»
+        -String receiptNo «get/set»
+        -boolean voided «get/set»
         +Payment()
-        +Payment(int, int, int, double, PaymentMethod, String, String)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getMembershipId() int
-        +setMembershipId(int) void
-        +getAmount() double
-        +setAmount(double) void
-        +getMethod() PaymentMethod
-        +setMethod(PaymentMethod) void
-        +getDate() String
-        +setDate(String) void
-        +getReceiptNo() String
-        +setReceiptNo(String) void
+        +Payment(int, int, Integer, Integer, Integer, double, PaymentMethod, String, String, boolean)
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class ProgressRecord {
-        -int id
-        -int customerId
-        -String date
-        -double weightKg
-        -double bodyFatPct
-        -String measurements
-        -String notes
+        -int id «get/set»
+        -int customerId «get/set»
+        -String date «get/set»
+        -double weightKg «get/set»
+        -double bodyFatPct «get/set»
+        -String measurements «get/set»
+        -String notes «get/set»
         +ProgressRecord()
         +ProgressRecord(int, int, String, double, double, String, String)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getDate() String
-        +setDate(String) void
-        +getWeightKg() double
-        +setWeightKg(double) void
-        +getBodyFatPct() double
-        +setBodyFatPct(double) void
-        +getMeasurements() String
-        +setMeasurements(String) void
-        +getNotes() String
-        +setNotes(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class MedicalProfile {
-        -int id
-        -int customerId
-        -String bloodType
-        -String conditions
-        -String allergies
-        -String medications
-        -String injuries
-        -String doctorName
-        -String doctorPhone
-        -String notes
-        -String updatedDate
+        -int id «get/set»
+        -int customerId «get/set»
+        -String bloodType «get/set»
+        -String conditions «get/set»
+        -String allergies «get/set»
+        -String medications «get/set»
+        -String injuries «get/set»
+        -String doctorName «get/set»
+        -String doctorPhone «get/set»
+        -String notes «get/set»
+        -String updatedDate «get/set»
         +MedicalProfile()
         +MedicalProfile(int, int, String, String, String, String, String, String, String, String, String)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getBloodType() String
-        +setBloodType(String) void
-        +getConditions() String
-        +setConditions(String) void
-        +getAllergies() String
-        +setAllergies(String) void
-        +getMedications() String
-        +setMedications(String) void
-        +getInjuries() String
-        +setInjuries(String) void
-        +getDoctorName() String
-        +setDoctorName(String) void
-        +getDoctorPhone() String
-        +setDoctorPhone(String) void
-        +getNotes() String
-        +setNotes(String) void
-        +getUpdatedDate() String
-        +setUpdatedDate(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Administrator {
-        -int id
-        -String fullName
-        -String username
-        -String passwordHash
-        -StaffRole role
-        -String phone
-        -String email
-        -Boolean active
-        -String createdDate
+        -int id «get/set»
+        -String fullName «get/set»
+        -String username «get/set»
+        -String passwordHash «get/set»
+        -StaffRole role «get/set»
+        -String phone «get/set»
+        -String email «get/set»
+        -Boolean active «get/set»
+        -String createdDate «get/set»
         +Administrator()
         +Administrator(int, String, String, String, StaffRole, String, String, Boolean, String)
-        +getId() int
-        +setId(int) void
-        +getFullName() String
-        +setFullName(String) void
-        +getUsername() String
-        +setUsername(String) void
-        +getPasswordHash() String
-        +setPasswordHash(String) void
-        +getRole() StaffRole
-        +setRole(StaffRole) void
-        +getPhone() String
-        +setPhone(String) void
-        +getEmail() String
-        +setEmail(String) void
-        +getActive() Boolean
-        +setActive(Boolean) void
-        +getCreatedDate() String
-        +setCreatedDate(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class TrainerSubscription {
-        -int id
-        -int customerId
-        -int trainerId
-        -String startDate
-        -String endDate
-        -double rate
-        -SubscriptionStatus status
+        -int id «get/set»
+        -int customerId «get/set»
+        -int trainerId «get/set»
+        -String startDate «get/set»
+        -String endDate «get/set»
+        -double rate «get/set»
+        -SubscriptionStatus status «get/set»
         +TrainerSubscription()
         +TrainerSubscription(int, int, int, String, String, double, SubscriptionStatus)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getTrainerId() int
-        +setTrainerId(int) void
-        +getStartDate() String
-        +setStartDate(String) void
-        +getEndDate() String
-        +setEndDate(String) void
-        +getRate() double
-        +setRate(double) void
-        +getStatus() SubscriptionStatus
-        +setStatus(SubscriptionStatus) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class TrainerAvailability {
-        -int id
-        -int trainerId
-        -String date
-        -String startTime
-        -String endTime
-        -int maxCustomers
-        -AvailabilityStatus status
+        -int id «get/set»
+        -int trainerId «get/set»
+        -String date «get/set»
+        -String startTime «get/set»
+        -String endTime «get/set»
+        -int maxCustomers «get/set»
+        -AvailabilityStatus status «get/set»
         +TrainerAvailability()
         +TrainerAvailability(int, int, String, String, String, int, AvailabilityStatus)
-        +getId() int
-        +setId(int) void
-        +getTrainerId() int
-        +setTrainerId(int) void
-        +getDate() String
-        +setDate(String) void
-        +getStartTime() String
-        +setStartTime(String) void
-        +getEndTime() String
-        +setEndTime(String) void
-        +getMaxCustomers() int
-        +setMaxCustomers(int) void
-        +getStatus() AvailabilityStatus
-        +setStatus(AvailabilityStatus) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
@@ -435,6 +230,14 @@ classDiagram
         CANCELLED
         +values() MembershipStatus[]
         +valueOf(String) MembershipStatus
+    }
+    class PlanType {
+        <<enumeration>>
+        MONTHLY
+        QUARTERLY
+        YEARLY
+        +values() PlanType[]
+        +valueOf(String) PlanType
     }
     class SessionStatus {
         <<enumeration>>
@@ -509,8 +312,9 @@ classDiagram
     Trainer "1" --> "0..*" TrainerSubscription : offers
     Trainer "1" --> "0..*" TrainerAvailability : publishes
     TrainerSubscription "1" o-- "0..*" Session : covers
-    Payment "*" --> "1" Membership : pays for
-    Administrator ..> MainApp : administers
+    Payment "*" --> "0..1" Membership : pays for
+    Payment "*" --> "0..1" TrainerSubscription : pays for
+    Payment "*" --> "0..1" Session : pays for
     Administrator ..> Customer : manages
     Administrator ..> Trainer : manages
     Administrator ..> Payment : adjusts
@@ -524,12 +328,13 @@ classDiagram
     note for TrainerAvailability "Open days, caps, hourly slots"
     note for Equipment "Inventory item, condition, status"
     note for Attendance "Daily check-in and check-out record with customerId"
-    note for Payment "Amount, method and date; linked to membership and customer"
+    note for Payment "Amount, method and date; at most one of membership, subscription, session; voided flag"
     note for ProgressRecord "Dated body metrics and benchmarks"
     note for MedicalProfile "Blood type, conditions, meds, doctor"
     note for Administrator "Login identity, role, active flag; manages all entities"
     note for CustomerStatus "Active, inactive, suspended"
     note for MembershipStatus "Active, frozen, expired, cancelled"
+    note for PlanType "Monthly, quarterly, yearly"
     note for SessionStatus "Requested, confirmed, completed, cancelled"
     note for SubscriptionStatus "Active, expired, cancelled"
     note for AvailabilityStatus "Open, full, closed"
@@ -546,14 +351,14 @@ classDiagram
 
 | Class | Description |
 |---|---|
-| `Customer` | Gym member; fields: id, fullName, phone, email, address, dateOfBirth, gender, emergencyName, emergencyPhone, status (enum), joinDate; links to membership, trainer, program |
-| `Trainer` | Coach; fields: id, fullName, phone, email, specialization, experienceYears, certifications, availability, hireDate, defaultRate |
-| `Membership` | Plan; fields: id, customerId, plan, price, startDate, endDate, status (active, frozen, expired, cancelled) |
+| `Customer` | Gym member; fields: id, fullName, phone, email, address, dateOfBirth, gender, emergencyName, emergencyPhone, status (enum), joinDate, trainerId (nullable, assigned trainer); links to membership, trainer, program |
+| `Trainer` | Coach; fields: id, fullName, phone, email, specialization, experienceYears, certifications, hireDate, defaultRate; bookable slots live in TrainerAvailability |
+| `Membership` | Plan; fields: id, customerId, plan (PlanType: monthly, quarterly, yearly), price, startDate, endDate, status (active, frozen, expired, cancelled) |
 | `WorkoutProgram` | Exercise list; fields: id, customerId, creatorTrainerId, name, exercises, version, createdDate |
 | `Session` | Training slot; fields: id, customerId, trainerId, dateTime, durationMin, status, subscriptionId (nullable), price, cancelReason, sessionNotes |
 | `Equipment` | Inventory item; fields: id, name, category, purchaseDate, condition (enum), status (enum), lastMaintenance |
 | `Attendance` | One check-in/out record per customer per day; fields: id, customerId, date, checkIn, checkOut |
-| `Payment` | fields: id, customerId, membershipId, amount, method, date, receiptNo; linked to a membership |
+| `Payment` | fields: id, customerId, membershipId (nullable), subscriptionId (nullable), sessionId (nullable), amount, method, date, receiptNo, voided; linked to at most one of membership, trainer subscription, session |
 | `ProgressRecord` | fields: id, customerId, date, weightKg, bodyFatPct, measurements, notes |
 | `MedicalProfile` | Blood type, conditions, allergies, medications, injuries, doctor, notes; one per customer |
 | `Administrator` | Login identity with role (ADMIN/MANAGER/STAFF); manages all entities via overrides |
@@ -566,6 +371,7 @@ classDiagram
 |---|---|
 | `CustomerStatus` | ACTIVE, INACTIVE, SUSPENDED |
 | `MembershipStatus` | ACTIVE, FROZEN, EXPIRED, CANCELLED |
+| `PlanType` | MONTHLY, QUARTERLY, YEARLY |
 | `SessionStatus` | REQUESTED, CONFIRMED, COMPLETED, CANCELLED |
 | `SubscriptionStatus` | ACTIVE, EXPIRED, CANCELLED |
 | `AvailabilityStatus` | OPEN, FULL, CLOSED |
@@ -580,7 +386,7 @@ classDiagram
 |---|---|
 | `DbConnection` | SQLite connection factory; creates `gym.db` and initializes the schema |
 | `DaoException` | Unchecked wrapper for `SQLException`; translated to friendly messages upstream |
-| `CustomerDao` / `CustomerDaoImpl` | Persist, load and search customers |
+| `CustomerDao` / `CustomerDaoImpl` | Persist, load and search customers; list by assigned trainer |
 | `TrainerDao` / `TrainerDaoImpl` | Persist and load trainers |
 | `MembershipDao` / `MembershipDaoImpl` | Persist memberships; query expiring ones for reminders |
 | `WorkoutProgramDao` / `WorkoutProgramDaoImpl` | Persist programs; list per customer |
@@ -599,33 +405,33 @@ classDiagram
 | Class | Description |
 |---|---|
 | `CustomerService` | Customer validation, search/filter, status rules |
-| `TrainerService` | Availability, rates, assign, medical view |
-| `MembershipService` | Sell, renew, freeze, cancel, expiry reminders |
-| `WorkoutService` | Program building rules, per-customer versioning |
-| `SchedulingService` | Booking rules (slot, cap, conflicts), session reservation, subscribe, subscription pricing; distinguishes subscription (trainer) vs membership (gym access) |
-| `EquipmentService` | Status transitions and maintenance-log rules |
+| `TrainerService` | Availability slots and caps (publish, close, cap), rates, assign, medical view |
+| `MembershipService` | Sell, renew, freeze, unfreeze, cancel, expiry reminders |
+| `WorkoutService` | Program building rules, assignment, per-customer versioning |
+| `SchedulingService` | Booking rules (slot, cap, conflicts), session reservation and cancel-with-reason, subscribe, subscription pricing; distinguishes subscription (trainer) vs membership (gym access) |
+| `EquipmentService` | Add/edit inventory, status transitions, last-maintenance date |
 | `PaymentService` | Balances, receipt data, revenue summary |
 | `AttendanceService` | Check-in/out rules, daily report data |
 | `ProgressService` | Metric aggregation for charts |
 | `MedicalProfileService` | Medical CRUD, lookup by customer |
-| `AdminService` | Auth, staff, edit-any/reassign/adjust/void overrides; bypasses ownership |
+| `AdminService` | Auth, password reset, staff, reassign/adjust/void overrides; bypasses ownership |
 
 ### UI (each controller backed by a matching FXML file)
 
 | Class | Description |
 |---|---|
 | `MainApp` | Entry point: builds the window, nav shell, theme and overlay layer |
-| `LoginController` | Login screen: authenticates admin via AdminService |
-| `DashboardController` | Main dashboard: active members, today's sessions, revenue snapshot |
+| `LoginController` | Login screen: authenticates admin via AdminService, stores user in SessionContext |
+| `DashboardController` | Main dashboard: active members, today's sessions, revenue snapshot, logout |
 | `CustomerListController` | Searchable/filterable customer list |
 | `CustomerProfileController` | Full profile: info, membership, trainer, program, schedule, progress |
 | `TrainerListController` | Trainer roster with availability |
 | `TrainerProfileController` | Trainer details, assigned customers, schedule |
-| `MembershipController` | Plans; sell, renew, freeze, cancel |
+| `MembershipController` | Plans; sell, renew, freeze, unfreeze, cancel |
 | `WorkoutController` | Program builder and assignment to customers |
 | `ScheduleController` | Agenda, booking dialog, session reservation, subscribe-to-trainer flow |
 | `AvailabilityController` | Trainer calendar, daily caps, hourly slots |
-| `EquipmentController` | Inventory list, status changes, maintenance log |
+| `EquipmentController` | Inventory list, add/edit, status changes, maintenance date |
 | `AttendanceController` | Check-in/out screen and daily report |
 | `PaymentController` | Payment recording, receipts, balances |
 | `ProgressController` | Body-metric charts per customer |
@@ -639,6 +445,8 @@ classDiagram
 | `DateUtils` | Membership periods, session slot math, date formatting |
 | `FxUtils` | Friendly dialogs, alerts, scene switching, snackbar helper |
 | `ChartUtils` | Progress-chart dataset builders |
+| `SessionContext` | Holds the logged-in Administrator for role checks; set/get/clear |
+| `PasswordUtils` | PBKDF2 password hashing and verification (Java built-in, no new deps) |
 
 ---
 
@@ -648,7 +456,7 @@ classDiagram
 
 ```mermaid
 flowchart TD
-    APP[MainApp<br/>entry point, nav shell] --> CTRL[Controllers<br/>14 FXML screens]
+    APP[MainApp<br/>entry point, nav shell] --> CTRL[Controllers<br/>15 FXML screens]
     CTRL --> SRV[Services<br/>validation + business rules]
     SRV --> DAO[DAOs<br/>SQLite persistence]
     DAO --> DB[(SQLite<br/>gym.db)]
@@ -666,407 +474,200 @@ Layer rules: controllers never contain SQL; services and DAOs never import JavaF
 classDiagram
     direction TB
     class Customer {
-        -int id
-        -String fullName
-        -String phone
-        -String email
-        -String address
-        -String dateOfBirth
-        -String gender
-        -String emergencyName
-        -String emergencyPhone
-        -CustomerStatus status
-        -String joinDate
+        -int id «get/set»
+        -String fullName «get/set»
+        -String phone «get/set»
+        -String email «get/set»
+        -String address «get/set»
+        -String dateOfBirth «get/set»
+        -String gender «get/set»
+        -String emergencyName «get/set»
+        -String emergencyPhone «get/set»
+        -CustomerStatus status «get/set»
+        -String joinDate «get/set»
+        -Integer trainerId «get/set»
         +Customer()
-        +Customer(int, String, String, String, String, String, String, String, String, CustomerStatus, String)
-        +getId() int
-        +setId(int) void
-        +getFullName() String
-        +setFullName(String) void
-        +getPhone() String
-        +setPhone(String) void
-        +getEmail() String
-        +setEmail(String) void
-        +getAddress() String
-        +setAddress(String) void
-        +getDateOfBirth() String
-        +setDateOfBirth(String) void
-        +getGender() String
-        +setGender(String) void
-        +getEmergencyName() String
-        +setEmergencyName(String) void
-        +getEmergencyPhone() String
-        +setEmergencyPhone(String) void
-        +getStatus() CustomerStatus
-        +setStatus(CustomerStatus) void
-        +getJoinDate() String
-        +setJoinDate(String) void
+        +Customer(int, String, String, String, String, String, String, String, String, CustomerStatus, String, Integer)
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Trainer {
-        -int id
-        -String fullName
-        -String phone
-        -String email
-        -String specialization
-        -int experienceYears
-        -String certifications
-        -String availability
-        -String hireDate
-        -double defaultRate
+        -int id «get/set»
+        -String fullName «get/set»
+        -String phone «get/set»
+        -String email «get/set»
+        -String specialization «get/set»
+        -int experienceYears «get/set»
+        -String certifications «get/set»
+        -String hireDate «get/set»
+        -double defaultRate «get/set»
         +Trainer()
-        +Trainer(int, String, String, String, String, int, String, String, String, double)
-        +getId() int
-        +setId(int) void
-        +getFullName() String
-        +setFullName(String) void
-        +getPhone() String
-        +setPhone(String) void
-        +getEmail() String
-        +setEmail(String) void
-        +getSpecialization() String
-        +setSpecialization(String) void
-        +getExperienceYears() int
-        +setExperienceYears(int) void
-        +getCertifications() String
-        +setCertifications(String) void
-        +getAvailability() String
-        +setAvailability(String) void
-        +getHireDate() String
-        +setHireDate(String) void
-        +getDefaultRate() double
-        +setDefaultRate(double) void
+        +Trainer(int, String, String, String, String, int, String, String, double)
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Membership {
-        -int id
-        -int customerId
-        -String plan
-        -double price
-        -String startDate
-        -String endDate
-        -MembershipStatus status
+        -int id «get/set»
+        -int customerId «get/set»
+        -PlanType plan «get/set»
+        -double price «get/set»
+        -String startDate «get/set»
+        -String endDate «get/set»
+        -MembershipStatus status «get/set»
         +Membership()
-        +Membership(int, int, String, double, String, String, MembershipStatus)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getPlan() String
-        +setPlan(String) void
-        +getPrice() double
-        +setPrice(double) void
-        +getStartDate() String
-        +setStartDate(String) void
-        +getEndDate() String
-        +setEndDate(String) void
-        +getStatus() MembershipStatus
-        +setStatus(MembershipStatus) void
+        +Membership(int, int, PlanType, double, String, String, MembershipStatus)
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class WorkoutProgram {
-        -int id
-        -int customerId
-        -int creatorTrainerId
-        -String name
-        -String exercises
-        -int version
-        -String createdDate
+        -int id «get/set»
+        -int customerId «get/set»
+        -int creatorTrainerId «get/set»
+        -String name «get/set»
+        -String exercises «get/set»
+        -int version «get/set»
+        -String createdDate «get/set»
         +WorkoutProgram()
         +WorkoutProgram(int, int, int, String, String, int, String)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getCreatorTrainerId() int
-        +setCreatorTrainerId(int) void
-        +getName() String
-        +setName(String) void
-        +getExercises() String
-        +setExercises(String) void
-        +getVersion() int
-        +setVersion(int) void
-        +getCreatedDate() String
-        +setCreatedDate(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Session {
-        -int id
-        -int customerId
-        -int trainerId
-        -String dateTime
-        -int durationMin
-        -SessionStatus status
-        -Integer subscriptionId
-        -double price
-        -String cancelReason
-        -String sessionNotes
+        -int id «get/set»
+        -int customerId «get/set»
+        -int trainerId «get/set»
+        -String dateTime «get/set»
+        -int durationMin «get/set»
+        -SessionStatus status «get/set»
+        -Integer subscriptionId «get/set»
+        -double price «get/set»
+        -String cancelReason «get/set»
+        -String sessionNotes «get/set»
         +Session()
         +Session(int, int, int, String, int, SessionStatus, Integer, double, String, String)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getTrainerId() int
-        +setTrainerId(int) void
-        +getDateTime() String
-        +setDateTime(String) void
-        +getDurationMin() int
-        +setDurationMin(int) void
-        +getStatus() SessionStatus
-        +setStatus(SessionStatus) void
-        +getSubscriptionId() Integer
-        +setSubscriptionId(Integer) void
-        +getPrice() double
-        +setPrice(double) void
-        +getCancelReason() String
-        +setCancelReason(String) void
-        +getSessionNotes() String
-        +setSessionNotes(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Equipment {
-        -int id
-        -String name
-        -String category
-        -String purchaseDate
-        -EquipmentCondition condition
-        -EquipmentStatus status
-        -String lastMaintenance
+        -int id «get/set»
+        -String name «get/set»
+        -String category «get/set»
+        -String purchaseDate «get/set»
+        -EquipmentCondition condition «get/set»
+        -EquipmentStatus status «get/set»
+        -String lastMaintenance «get/set»
         +Equipment()
         +Equipment(int, String, String, String, EquipmentCondition, EquipmentStatus, String)
-        +getId() int
-        +setId(int) void
-        +getName() String
-        +setName(String) void
-        +getCategory() String
-        +setCategory(String) void
-        +getPurchaseDate() String
-        +setPurchaseDate(String) void
-        +getCondition() EquipmentCondition
-        +setCondition(EquipmentCondition) void
-        +getStatus() EquipmentStatus
-        +setStatus(EquipmentStatus) void
-        +getLastMaintenance() String
-        +setLastMaintenance(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Attendance {
-        -int id
-        -int customerId
-        -String date
-        -String checkIn
-        -String checkOut
+        -int id «get/set»
+        -int customerId «get/set»
+        -String date «get/set»
+        -String checkIn «get/set»
+        -String checkOut «get/set»
         +Attendance()
         +Attendance(int, int, String, String, String)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getDate() String
-        +setDate(String) void
-        +getCheckIn() String
-        +setCheckIn(String) void
-        +getCheckOut() String
-        +setCheckOut(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Payment {
-        -int id
-        -int customerId
-        -int membershipId
-        -double amount
-        -PaymentMethod method
-        -String date
-        -String receiptNo
+        -int id «get/set»
+        -int customerId «get/set»
+        -Integer membershipId «get/set»
+        -Integer subscriptionId «get/set»
+        -Integer sessionId «get/set»
+        -double amount «get/set»
+        -PaymentMethod method «get/set»
+        -String date «get/set»
+        -String receiptNo «get/set»
+        -boolean voided «get/set»
         +Payment()
-        +Payment(int, int, int, double, PaymentMethod, String, String)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getMembershipId() int
-        +setMembershipId(int) void
-        +getAmount() double
-        +setAmount(double) void
-        +getMethod() PaymentMethod
-        +setMethod(PaymentMethod) void
-        +getDate() String
-        +setDate(String) void
-        +getReceiptNo() String
-        +setReceiptNo(String) void
+        +Payment(int, int, Integer, Integer, Integer, double, PaymentMethod, String, String, boolean)
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class ProgressRecord {
-        -int id
-        -int customerId
-        -String date
-        -double weightKg
-        -double bodyFatPct
-        -String measurements
-        -String notes
+        -int id «get/set»
+        -int customerId «get/set»
+        -String date «get/set»
+        -double weightKg «get/set»
+        -double bodyFatPct «get/set»
+        -String measurements «get/set»
+        -String notes «get/set»
         +ProgressRecord()
         +ProgressRecord(int, int, String, double, double, String, String)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getDate() String
-        +setDate(String) void
-        +getWeightKg() double
-        +setWeightKg(double) void
-        +getBodyFatPct() double
-        +setBodyFatPct(double) void
-        +getMeasurements() String
-        +setMeasurements(String) void
-        +getNotes() String
-        +setNotes(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class MedicalProfile {
-        -int id
-        -int customerId
-        -String bloodType
-        -String conditions
-        -String allergies
-        -String medications
-        -String injuries
-        -String doctorName
-        -String doctorPhone
-        -String notes
-        -String updatedDate
+        -int id «get/set»
+        -int customerId «get/set»
+        -String bloodType «get/set»
+        -String conditions «get/set»
+        -String allergies «get/set»
+        -String medications «get/set»
+        -String injuries «get/set»
+        -String doctorName «get/set»
+        -String doctorPhone «get/set»
+        -String notes «get/set»
+        -String updatedDate «get/set»
         +MedicalProfile()
         +MedicalProfile(int, int, String, String, String, String, String, String, String, String, String)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getBloodType() String
-        +setBloodType(String) void
-        +getConditions() String
-        +setConditions(String) void
-        +getAllergies() String
-        +setAllergies(String) void
-        +getMedications() String
-        +setMedications(String) void
-        +getInjuries() String
-        +setInjuries(String) void
-        +getDoctorName() String
-        +setDoctorName(String) void
-        +getDoctorPhone() String
-        +setDoctorPhone(String) void
-        +getNotes() String
-        +setNotes(String) void
-        +getUpdatedDate() String
-        +setUpdatedDate(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class Administrator {
-        -int id
-        -String fullName
-        -String username
-        -String passwordHash
-        -StaffRole role
-        -String phone
-        -String email
-        -Boolean active
-        -String createdDate
+        -int id «get/set»
+        -String fullName «get/set»
+        -String username «get/set»
+        -String passwordHash «get/set»
+        -StaffRole role «get/set»
+        -String phone «get/set»
+        -String email «get/set»
+        -Boolean active «get/set»
+        -String createdDate «get/set»
         +Administrator()
         +Administrator(int, String, String, String, StaffRole, String, String, Boolean, String)
-        +getId() int
-        +setId(int) void
-        +getFullName() String
-        +setFullName(String) void
-        +getUsername() String
-        +setUsername(String) void
-        +getPasswordHash() String
-        +setPasswordHash(String) void
-        +getRole() StaffRole
-        +setRole(StaffRole) void
-        +getPhone() String
-        +setPhone(String) void
-        +getEmail() String
-        +setEmail(String) void
-        +getActive() Boolean
-        +setActive(Boolean) void
-        +getCreatedDate() String
-        +setCreatedDate(String) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class TrainerSubscription {
-        -int id
-        -int customerId
-        -int trainerId
-        -String startDate
-        -String endDate
-        -double rate
-        -SubscriptionStatus status
+        -int id «get/set»
+        -int customerId «get/set»
+        -int trainerId «get/set»
+        -String startDate «get/set»
+        -String endDate «get/set»
+        -double rate «get/set»
+        -SubscriptionStatus status «get/set»
         +TrainerSubscription()
         +TrainerSubscription(int, int, int, String, String, double, SubscriptionStatus)
-        +getId() int
-        +setId(int) void
-        +getCustomerId() int
-        +setCustomerId(int) void
-        +getTrainerId() int
-        +setTrainerId(int) void
-        +getStartDate() String
-        +setStartDate(String) void
-        +getEndDate() String
-        +setEndDate(String) void
-        +getRate() double
-        +setRate(double) void
-        +getStatus() SubscriptionStatus
-        +setStatus(SubscriptionStatus) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
     }
     class TrainerAvailability {
-        -int id
-        -int trainerId
-        -String date
-        -String startTime
-        -String endTime
-        -int maxCustomers
-        -AvailabilityStatus status
+        -int id «get/set»
+        -int trainerId «get/set»
+        -String date «get/set»
+        -String startTime «get/set»
+        -String endTime «get/set»
+        -int maxCustomers «get/set»
+        -AvailabilityStatus status «get/set»
         +TrainerAvailability()
         +TrainerAvailability(int, int, String, String, String, int, AvailabilityStatus)
-        +getId() int
-        +setId(int) void
-        +getTrainerId() int
-        +setTrainerId(int) void
-        +getDate() String
-        +setDate(String) void
-        +getStartTime() String
-        +setStartTime(String) void
-        +getEndTime() String
-        +setEndTime(String) void
-        +getMaxCustomers() int
-        +setMaxCustomers(int) void
-        +getStatus() AvailabilityStatus
-        +setStatus(AvailabilityStatus) void
         +toString() String
         +equals(Object) boolean
         +hashCode() int
@@ -1087,6 +688,14 @@ classDiagram
         CANCELLED
         +values() MembershipStatus[]
         +valueOf(String) MembershipStatus
+    }
+    class PlanType {
+        <<enumeration>>
+        MONTHLY
+        QUARTERLY
+        YEARLY
+        +values() PlanType[]
+        +valueOf(String) PlanType
     }
     class SessionStatus {
         <<enumeration>>
@@ -1161,7 +770,9 @@ classDiagram
     Trainer "1" --> "0..*" TrainerSubscription : offers
     Trainer "1" --> "0..*" TrainerAvailability : publishes
     TrainerSubscription "1" o-- "0..*" Session : covers
-    Payment "*" --> "1" Membership : pays for
+    Payment "*" --> "0..1" Membership : pays for
+    Payment "*" --> "0..1" TrainerSubscription : pays for
+    Payment "*" --> "0..1" Session : pays for
     note for Customer "Member: info, contact, status, links"
     note for Trainer "Coach: info, specialization, availability"
     note for Membership "Plan with start and end dates"
@@ -1171,12 +782,13 @@ classDiagram
     note for TrainerAvailability "Open days, caps, hourly slots"
     note for Equipment "Inventory item, condition, status"
     note for Attendance "Daily check-in/out record with customerId"
-    note for Payment "Amount, method, date per membership"
+    note for Payment "Amount, method, date; at most one of membership, subscription, session; voided flag"
     note for ProgressRecord "Dated body metrics and benchmarks"
     note for MedicalProfile "Blood type, conditions, meds, doctor"
     note for Administrator "Login identity, role, active flag"
     note for CustomerStatus "Active, inactive, suspended"
     note for MembershipStatus "Active, frozen, expired, cancelled"
+    note for PlanType "Monthly, quarterly, yearly"
     note for SessionStatus "Requested, confirmed, completed, cancelled"
     note for SubscriptionStatus "Active, expired, cancelled"
     note for AvailabilityStatus "Open, full, closed"
@@ -1211,6 +823,7 @@ classDiagram
         +update(Customer) void
         +delete(int) void
         +findByStatus(CustomerStatus) List~Customer~
+        +findByTrainer(int) List~Customer~
     }
     class CustomerDaoImpl {
         +save(Customer) int
@@ -1220,6 +833,7 @@ classDiagram
         +update(Customer) void
         +delete(int) void
         +findByStatus(CustomerStatus) List~Customer~
+        +findByTrainer(int) List~Customer~
     }
     class TrainerDao {
         <<interface>>
@@ -1511,13 +1125,16 @@ classDiagram
         +update(Customer) void
         +delete(int) void
         +changeStatus(int, CustomerStatus) void
+        +findByTrainer(int) List~Customer~
     }
     class TrainerService {
-        +checkAvailability(int, String) Boolean
         +assignCustomer(int, int) void
         +viewMedicalProfile(int, int) MedicalProfile
-        +setAvailability(int, String) void
         +setRate(int, double) void
+        +publishSlot(int, String, String, String, int) void
+        +closeSlot(int) void
+        +setDailyCap(int, String, int) void
+        +openSlots(int, String) List~TrainerAvailability~
         +findAll() List~Trainer~
         +findById(int) Trainer
         +save(Trainer) int
@@ -1525,15 +1142,18 @@ classDiagram
         +delete(int) void
     }
     class MembershipService {
-        +sell(int, String) Membership
+        +sell(int, PlanType) Membership
         +renew(int) void
         +freeze(int) void
+        +unfreeze(int) void
         +cancel(int) void
         +expiryReminders() List~Membership~
+        +findAll() List~Membership~
         +findByCustomer(int) List~Membership~
     }
     class WorkoutService {
-        +buildProgram(int, String) WorkoutProgram
+        +buildProgram(int, int, String, String) WorkoutProgram
+        +assign(int, int) void
         +newVersion(int) WorkoutProgram
         +findByCustomer(int) List~WorkoutProgram~
     }
@@ -1544,7 +1164,7 @@ classDiagram
         +subscriptionPrice(int) double
         +requestSession(int, int, String) Session
         +confirmSession(int) void
-        +cancelSession(int) void
+        +cancelSession(int, String) void
         +completeSession(int) void
         +reserveSession(int, int, String) Session
         +getAvailableSlots(int, String) List~TrainerAvailability~
@@ -1552,6 +1172,8 @@ classDiagram
         +getTrainerSessions(int) List~Session~
     }
     class EquipmentService {
+        +save(Equipment) int
+        +update(Equipment) void
         +changeStatus(int, EquipmentStatus) void
         +logMaintenance(int, String) void
         +findAll() List~Equipment~
@@ -1580,8 +1202,8 @@ classDiagram
     }
     class AdminService {
         +authenticate(String, String) Administrator
+        +resetPassword(String) void
         +saveStaff(Administrator) int
-        +editAny(String, int) void
         +reassignTrainer(int, int) void
         +adjustPayment(int, double) void
         +voidRecord(String, int) void
@@ -1591,6 +1213,10 @@ classDiagram
         +validEmail(String) Boolean
         +validDate(String) Boolean
         +validNumber(String) Boolean
+    }
+    class PasswordUtils {
+        +hash(String) String
+        +verify(String, String) boolean
     }
     class DateUtils {
         +addMonths(String, int) String
@@ -1606,7 +1232,7 @@ classDiagram
     CustomerService ..> Validators : validates with
     TrainerService ..> TrainerDao : persists via
     TrainerService ..> MedicalProfileDao : reads profiles from
-    TrainerService ..> TrainerAvailabilityDao : reads slots from
+    TrainerService ..> TrainerAvailabilityDao : persists slots via
     MembershipService ..> MembershipDao : persists via
     MembershipService ..> DateUtils : dates with
     WorkoutService ..> WorkoutProgramDao : persists via
@@ -1621,18 +1247,20 @@ classDiagram
     ProgressService ..> ChartUtils : charts with
     MedicalProfileService ..> MedicalProfileDao : persists via
     AdminService ..> AdminDao : persists via
+    AdminService ..> PasswordUtils : hashes with
     note for CustomerService "Validation, search, status rules"
     note for TrainerService "Availability, assign, medical view"
-    note for MembershipService "Sell, renew, freeze, cancel, reminders"
-    note for WorkoutService "Build programs, versioning"
-    note for SchedulingService "Booking, conflicts, reservation, subscribe"
-    note for EquipmentService "Status changes, maintenance log"
+    note for MembershipService "Sell, renew, freeze, unfreeze, cancel, reminders"
+    note for WorkoutService "Build programs, assign, versioning"
+    note for SchedulingService "Booking, conflicts, reservation, cancel with reason, subscribe"
+    note for EquipmentService "Add/edit equipment, status changes, maintenance date"
     note for AttendanceService "Check-in and out, daily report"
     note for PaymentService "Record, balances, revenue summary"
     note for ProgressService "Metric aggregation for charts"
     note for MedicalProfileService "Medical CRUD, lookup by customer"
     note for AdminService "Authenticate, manage staff, overrides"
     note for Validators "Phone, email, date, number checks"
+    note for PasswordUtils "PBKDF2 hash and verify, no external deps"
     note for DateUtils "Periods, slots, overlap, formatting"
     note for ChartUtils "Weight and revenue series"
 ```
@@ -1654,6 +1282,7 @@ classDiagram
     class DashboardController {
         +initialize() void
         +refreshData() void
+        +onLogout() void
     }
     class CustomerListController {
         +onSearch() void
@@ -1733,10 +1362,18 @@ classDiagram
         +switchScene(String) void
         +snackbar(String) void
     }
+    class SessionContext {
+        -Administrator current
+        +set(Administrator) void
+        +get() Administrator
+        +clear() void
+    }
     MainApp ..> LoginController : opens
     LoginController ..> AdminService : authenticates via
+    LoginController ..> SessionContext : stores user
     LoginController ..> DashboardController : opens on success
     MainApp ..> DashboardController : opens
+    DashboardController ..> SessionContext : clears on logout
     DashboardController ..> CustomerService : reads from
     DashboardController ..> PaymentService : reads from
     DashboardController ..> SchedulingService : reads from
@@ -1773,4 +1410,5 @@ classDiagram
     note for ProgressController "Body-metric charts screen"
     note for MedicalProfileController "Medical profile view and edit"
     note for FxUtils "Dialogs, confirms, error alerts, scene switch"
+    note for SessionContext "Holds logged-in admin; role checks read it"
 ```
