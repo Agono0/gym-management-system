@@ -25,17 +25,29 @@ here** — pure Java, fully unit testable.
 
 | Class | Responsibility | Owner |
 |-------|----------------|-------|
-| `CustomerService.java` | Customer validation, search/filter, status rules, list by assigned trainer | Abdelrhman |
-| `TrainerService.java` | Slot publishing and per-slot caps, close slot, set rate, assign/reassign customers, revoke medical access | Ziad |
-| `MembershipService.java` | Sell/renew/freeze/unfreeze/cancel, overdue expiry sweep, expiry reminders. Freeze stores `frozenDays`; unfreeze shifts `endDate` forward by it. | Ziad |
-| `WorkoutService.java` | Program building rules, reassignment to a customer, versioning per customer | Yousef |
-| `SchedulingService.java` | `bookOpenSlot` (needs OPEN slot + free capacity + no trainer or customer conflict), `requestOutsideSlots`, `adminReserve`, `detectConflicts`, the session state machine (`canTransition`), confirm/cancel-with-reason/complete/no-show, subscription lifecycle and pricing. Membership (gym access) and subscription (trainer engagement) are distinct concepts. | Yousef |
-| `EquipmentService.java` | Add/edit inventory, status and condition transitions, last-maintenance date | Yousef |
-| `AttendanceService.java` | Check-in/out rules, eligibility checks (ACTIVE customer + ACTIVE non-expired membership), daily report data | Abdel Raouf |
-| `PaymentService.java` | Recording, XOR link validation (`validLink`), voiding, balances, receipt lookup, revenue by range. Voided payments never count. | Abdel Raouf |
-| `ProgressService.java` | Metric access and chart series per customer | Abdel Raouf |
-| `MedicalProfileService.java` | Medical CRUD, lookup by customer, assigned-trainer access check (`getForTrainer`) | Abdelrhman |
-| `AdminService.java` | Authenticate (rejects `active == false`), password reset, staff management by role, reassign/adjust/void overrides, admin-only hard deletes that refuse while references exist | Abdelrhman |
+| `CustomerService.java` | Customer validation, search/filter, status rules, list by assigned trainer. **No hard delete** — rule 4 keeps that on `AdminService`. `changeStatus(SUSPENDED)` also freezes the customer's ACTIVE memberships (rule 14). | Abdelrhman |
+| `TrainerService.java` | Slot publishing (validates `startTime < endTime`) and per-slot caps, close slot, set rate, assign/reassign customers. `setSlotCap` overrides one slot; `setDailyCap` re-applies across a day and so wins regardless of call order. | Ziad |
+| `MembershipService.java` | Sell/renew/freeze/unfreeze/cancel, overdue expiry sweep, expiry reminders, and `freezeForSuspended` as the rule-14 hook. Freeze stores `frozenDays`; unfreeze shifts `endDate` forward by it. Only ACTIVE may freeze; renewing EXPIRED extends, renewing CANCELLED refuses. | Ziad |
+| `WorkoutService.java` | Program building rules, reassignment to a customer, versioning per customer. There is no in-place edit of an issued program — `newVersion` supersedes it; `update`/`delete` are for correcting mistakes before issue. | Yousef |
+| `SchedulingService.java` | `bookOpenSlot` (needs OPEN slot + free capacity + no trainer or customer conflict), `requestOutsideSlots`, `adminReserve` (ADMIN only), `detectConflicts`, the session state machine (`canTransition` — rule 18), confirm/cancel-with-reason/complete/no-show, subscription lifecycle and pricing. `bookedCount` counts CONFIRMED only (rule 17). Membership (gym access) and subscription (trainer engagement) are distinct concepts. | Yousef |
+| `EquipmentService.java` | Add/edit inventory, status and condition transitions, last-maintenance date, delete | Yousef |
+| `AttendanceService.java` | Check-in/out rules, eligibility checks (ACTIVE customer + ACTIVE non-expired membership), daily report data, and `correctRecord` for fixing a mis-keyed time. Attendance rows are never deleted (rule 19). | Abdel Raouf |
+| `PaymentService.java` | Recording, XOR link validation (`validLink`, public so it is unit-testable), voiding, balances, receipt lookup, revenue by range. Voided payments never count, and payments are never deleted (rule 19) — money is corrected by voiding or by `AdminService.adjustPayment`. | Abdel Raouf |
+| `ProgressService.java` | Metric access and chart series per customer, keyed by `ProgressMetric` | Abdel Raouf |
+| `MedicalProfileService.java` | Medical CRUD, lookup by customer, assigned-trainer access check (`getForTrainer`) — the only sanctioned read path for a trainer | Abdelrhman |
+| `AdminService.java` | Authenticate (rejects `active == false`, returns null), password reset, staff CRUD by role, reassign/adjust overrides, admin-only hard deletes that ask `GuardService.countReferences` first and refuse while references exist | Abdelrhman |
+
+### Cross-service rules worth knowing before you code
+
+- **A service never imports JavaFX and never renders a message.** Return data or throw; the
+  controller calls `FxUtils.error(...)`.
+- **A service only touches DAOs it declares.** If you need another aggregate's data, call its service
+  — `TrainerService` reads medical data through `MedicalProfileService.getForTrainer`, not through
+  `MedicalProfileDao`.
+- **Rule 18 holds the state machine.** Only `CONFIRMED` may become `COMPLETED`/`NO_SHOW`/`CANCELLED`;
+  only `REQUESTED` may become `CONFIRMED`. Every transition calls `canTransition` first.
+- **Overrides need ADMIN** — that includes `SchedulingService.adminReserve`, not just `AdminService`
+  (rule 16).
 
 ## Error handling
 
