@@ -28,22 +28,30 @@ Conventions that apply to every entity (see `docs/UML.md` header):
 | `Session.java` | Scheduled session: customer, trainer, `date` + `startTime`, `durationMin`, slot link (`availabilityId`, nullable), subscription link (nullable), price, cancel reason, notes. `price` must be 0 when covered by a subscription. | Yousef |
 | `Equipment.java` | Standalone inventory item + condition + status + last maintenance. No foreign key to any other entity. | Yousef |
 | `Attendance.java` | One check-in/out record per customer per day. `checkOut` is nullable (still inside). | Abdel Raouf |
-| `Payment.java` | `amount` (`BigDecimal`), method, date, `receiptNo`, `voided`; **exactly one** of membership / trainer subscription / session is set (XOR). Build it with the `forMembership` / `forSubscription` / `forSession` factories, not the positional constructor. | Abdel Raouf |
+| `Payment.java` | `amount` (`BigDecimal`), method, date, `receiptNo`, `voided`; **exactly one** of membership / trainer subscription / session is set (XOR). Voiding also stores `voidReason` and `voidedDate`; `adjustPayment` stores `previousAmount` so a receipt stays reconcilable. Build it with the `forMembership` / `forSubscription` / `forSession` factories, not the positional constructor — three adjacent `Integer` params swap silently. | Abdel Raouf |
 | `ProgressRecord.java` | Body metrics with date (weight, body fat, measurements, `targetWeightKg` benchmark, notes) | Abdel Raouf |
 | `MedicalProfile.java` | Blood type, conditions, allergies, medications, injuries, doctor, notes. At most one per customer, created on demand. | Abdelrhman |
 | `Administrator.java` | System operator: login identity, role (ADMIN/MANAGER/STAFF), `active` flag. Use primitive `boolean active`. | Abdelrhman |
-| `TrainerSubscription.java` | Customer sticks with trainer for a period at a flat `ratePerPeriod` | Yousef |
+| `TrainerSubscription.java` | Customer sticks with trainer for a period at a flat `ratePerPeriod`. `trainerId` must equal the customer's assigned `trainerId` (rule 15), and every covered session must carry the same trainer. | Yousef |
 | `TrainerAvailability.java` | **One hourly slot per row**: date, start/end time, `maxCustomers` (cap for *this slot*), status. A trainer may publish several per day. | Yousef |
 
 ### Enumerations
 
 `CustomerStatus`, `MembershipStatus`, `PlanType`, `SessionStatus` (includes `NO_SHOW`),
 `SubscriptionStatus`, `AvailabilityStatus`, `StaffRole`, `PaymentMethod`, `EquipmentStatus`,
-`EquipmentCondition`.
+`EquipmentCondition`, `ProgressMetric` (WEIGHT_KG, BODY_FAT_PCT — selects which measurement
+`ProgressService.series` returns).
 
 `AvailabilityStatus.FULL`, `MembershipStatus.EXPIRED` and `SubscriptionStatus.EXPIRED` are
 **derived** — recomputed on read, never set by hand. Only `OPEN`/`CLOSED`, `FROZEN`, and the
 `CANCELLED` literals are assigned explicitly.
+
+### Entity contract
+
+Every entity is a plain POJO with `toString`, `equals` and `hashCode`. `Payment` needs `equals`
+specifically because the XOR rule is defined over it and tests compare payments. Entities reference
+other entities **by id only** (`customerId`, `trainerId`, …) — there is no object graph, which is
+what keeps this layer free of JDBC and of lazy-loading concerns.
 
 ## Tasks
 

@@ -32,13 +32,26 @@ validation, date/time handling, session state, and small JavaFX utilities.
 |-------|----------------|-------|
 | `DbConnection.java` | Interface: `getConnection()`, `initializeSchema()` | Abdelrhman |
 | `SqliteDbConnection.java` | SQLite implementation; `gym.db` bootstrap, schema init | Abdelrhman |
-| `Validators.java` | Phone/email/number/date validation. Returns primitive `boolean`, never `Boolean`. | Abdelrhman |
-| `SessionContext.java` | Holds the logged-in `Administrator` for role checks; `set`/`get`/`requireRole`/`clear` | Abdelrhman |
+| `DaoException.java` | Unchecked `SQLException` wrapper, **`extends RuntimeException`** so it chains via `super(message, cause)` and declares no `message`/`cause` fields of its own | Abdelrhman |
+| `Validators.java` | Phone/email/number/date and time-range validation. Returns primitive `boolean`, never `Boolean`. | Abdelrhman |
+| `SessionContext.java` | Holds the logged-in `Administrator` for role checks; `setAdministrator`/`getAdministrator`/`requireRole`/`clear` | Abdelrhman |
 | `PasswordUtils.java` | PBKDF2 password hashing and verification (Java built-in, no new deps) | Abdelrhman |
-| `FxUtils.java` | Dialogs, alerts, scene switching, M3 snackbar/toast helper. The only JavaFX-aware utility. | Abdelrhman |
-| `DateUtils.java` | Membership periods, session slot math, overlap tests, formatting | Yousef |
-| `ChartUtils.java` | Progress-chart and revenue-series dataset formatting | Abdel Raouf |
-| `DaoException.java` | Unchecked `SQLException` wrapper; thrown by DAOs, rendered by `FxUtils` | Abdelrhman |
+| `FxUtils.java` | Dialogs, alerts, scene switching, M3 snackbar/toast helper. The only JavaFX-aware utility. Takes plain strings, so it never sees `DaoException`. | Abdelrhman |
+| `DateUtils.java` | Membership periods, session slot math, hours-until check, formatting | Yousef |
+| `ChartUtils.java` | Progress-chart dataset formatting. Takes already-fetched values; does no DAO work and no money. | Abdel Raouf |
+| `GuardService.java` | `countReferences(table, id)` — the reference check behind the admin delete rule. Reads which tables reference a row and counts them. | Abdelrhman |
+
+### Two things to know before writing these
+
+**`GuardService` is what makes business rule 4 implementable.** Deleting a customer requires checking
+memberships, sessions, payments, attendance, progress, medical profile, workout programs,
+subscriptions and availability. A `countByCustomer` on every DAO would add ~26 near-identical
+methods; one helper that reads which tables reference the row keeps the DAOs to their normal CRUD
+shape. See `DECISIONS.md` 39.
+
+**`$` in the diagram does not render.** Mermaid silently strips the static marker, so the diagrams
+stereotype these classes `«utility»` instead. Keep the members `static` and mark them `$` in the
+source anyway — the marker stays visible in the raw diagram text. See `DECISIONS.md` 37.
 
 ## Tasks
 
@@ -47,9 +60,10 @@ validation, date/time handling, session state, and small JavaFX utilities.
 | Skeleton + this README created | Abdelrhman | Done |
 | `DbConnection` + `SqliteDbConnection` + schema init (Week 1, foundation) | Abdelrhman | To Do |
 | `DaoException`, `Validators`, `FxUtils`, `SessionContext`, `PasswordUtils` | Abdelrhman | To Do |
+| `GuardService` (needed by `AdminService` deletes) | Abdelrhman | To Do |
 | `DateUtils` | Yousef | To Do |
 | `ChartUtils` | Abdel Raouf | To Do |
 
-`DbConnection`, `SqliteDbConnection`, `DaoException`, `Validators`, `DateUtils`, `PasswordUtils` and
-`ChartUtils` must stay UI-toolkit-free so the `swing` branch reuses them as-is. That branch has no
-Java files yet.
+`DbConnection`, `SqliteDbConnection`, `DaoException`, `Validators`, `GuardService`, `DateUtils`,
+`PasswordUtils` and `ChartUtils` must stay UI-toolkit-free so the `swing` branch reuses them as-is.
+That branch has no Java files yet.

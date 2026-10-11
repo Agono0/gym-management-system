@@ -39,14 +39,17 @@ implemented:
 
 | DAO method | Rule it enables |
 |---|---|
-| `AttendanceDao.findByCustomerAndDay(int, String)` | One check-in record per customer per day |
+| `AttendanceDao.findByCustomerAndDay(int, String)` | One check-in record per customer per day. Returns a **list**, so a stray duplicate row cannot be silently dropped. |
 | `SessionDao.findByCustomerAndDay(int, String)` | Customer-side double-booking detection |
-| `SessionDao.countByAvailability(int)` | Slot capacity check (`bookedCount < maxCustomers`) |
+| `SessionDao.countByAvailability(int, SessionStatus)` | Slot capacity check. Pass `CONFIRMED` so cancelling frees capacity (rule 17) |
 | `WorkoutProgramDao.findLatestVersion(int)` | Per-customer program versioning |
-| `PaymentDao.revenueBetween(String, String)` | Revenue by range, voided excluded |
+| `PaymentDao.revenueBetween(String from, String to)` | Revenue by range, voided excluded |
 | `PaymentDao.findByReceipt(String)` | Looking a receipt up again |
 | `MembershipDao.findByStatus(MembershipStatus)` | Expiry sweep and frozen memberships |
 | `TrainerSubscriptionDao.findActive(int, int, String)` | "Already subscribed to this trainer?" |
+
+`§3` is the **full DAO surface**: a service is expected to use a subset of it. `findById`, `findAll`
+and `delete` exist so a future screen does not have to reopen the interface.
 
 ### Week 1 table specs for `schema.sql`
 
@@ -57,8 +60,10 @@ doctorName, doctorPhone, notes, updatedDate)`,
 `trainer_availability(id, trainerId, date, startTime, endTime, maxCustomers, status)`.
 
 Payments need `CHECK` constraints, not just columns: at most one of
-`membershipId`/`subscriptionId`/`sessionId` may be non-null, and `voided` defaults to 0. No FK
-cascades anywhere — "delete" means deactivate (see `docs/UML.md` business rule 4).
+`membershipId`/`subscriptionId`/`sessionId` may be non-null, and `voided` defaults to 0. Payments and
+attendance are **never deleted** (rule 19) — corrections go through `voidPayment`/`adjustPayment` and
+`AttendanceService.correctRecord`. No FK cascades anywhere — "delete" means deactivate (rule 4), and
+the admin hard delete asks `util/GuardService.countReferences` before it proceeds.
 
 ## Tasks
 

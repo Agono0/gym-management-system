@@ -123,4 +123,34 @@
 35. **`MainApp` needs a public m3fx overlay entry point.** The overlay layer that dialogs,
     snackbars and sheets use lives in `io.m3fx.controls.internal`, which `module-info.java` does
     not export. The shell cannot install it until m3fx exposes a public facade.
+36. **No generalization and no association classes, and both were argued rather than skipped.**
+    All three inheritance candidates were examined and rejected: the 13 DAOs vary in SQL and entity
+    type, not structure, and are already joined by the `DbConnection` interface; `validate` exists
+    on one service, so a `BaseService` would be empty; `initialize()` is the JavaFX `Initializable`
+    convention with a different body in every controller and must stay a public no-arg method for
+    `FXMLLoader`. `Payment` is a genuine link class (amount/method/date belong to the act of paying)
+    but XORs three targets and Mermaid has no association-class operator, so it stays a class with
+    an XOR note instead of three dashed links that read worse.
+37. **Mermaid silently strips the static (`$`) and abstract (`*`) member markers.** Verified by
+    rendering: `+hash(String) String$` renders as `+hash(String) : String`, and `+validate() boolean*`
+    renders as `+validate() : boolean`. `<<interface>>`/`<<enumeration>>`/`<<utility>>` do render,
+    as does `<|--`, `<|..`, `..>`, `o--`, `*--` and multiplicities. Consequences: the `$` is kept in
+    the source (it is the standard Mermaid marker and stays visible in the raw text) and every
+    stateless helper additionally carries the `«utility»` stereotype so its static nature survives
+    rendering; and nothing in the model is abstract, so the stripped `*` costs nothing. The
+    support matrix is recorded in the `docs/UML.md` header so the next person does not rediscover it.
+38. **Direction is asserted, not assumed.** `direction TB` is written explicitly in every class
+    diagram even though Mermaid 11 defaults to TB under both ELK and dagre, and the diagrams are
+    verified vertical by checking that 100% of rendered edges flow down the page. The earlier
+    viewBox-based check reported "horizontal" for a TB graph, so the verification measures edge
+    geometry rather than canvas dimensions.
+39. **`GuardService` rather than 26 reference-count methods.** Rule 4 needs "refuse to delete while
+    references exist", which spans nine tables. Adding `countByCustomer`/`countByTrainer` to every
+    DAO would have added ~26 near-identical methods. One static helper that reads which tables
+    reference a row and counts them keeps that cross-cutting query in one place and keeps the DAOs
+    to their normal CRUD shape.
+40. **`DaoException` extends `RuntimeException`.** Drawn the first time with its own `message` and
+    `cause` fields, which breaks exception chaining and stack-trace printing. It now passes both to
+    `super` and declares no fields, so `getMessage()`/`getCause()` are inherited rather than
+    overridden.
 

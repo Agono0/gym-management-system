@@ -27,23 +27,29 @@ styling via theme tokens. One controller per screen; FXML files live in
 |---------------------|--------|-------|
 | `LoginController` | Login screen (authenticates via `AdminService`, stores user in `SessionContext`) | Abdelrhman |
 | `DashboardController` | Main dashboard + navigation + logout | Abdel Raouf |
-| `CustomerListController` | Searchable customer list | Abdelrhman |
+| `CustomerListController` | Searchable customer list. `onOpenProfile(customerId)` is what carries the selected row into the profile screen. | Abdelrhman |
 | `CustomerProfileController` | Full member profile, editable medical section | Abdelrhman |
-| `MedicalProfileController` | Medical profile view/edit per customer | Abdelrhman |
-| `TrainerListController` | Trainer roster + availability | Ziad |
-| `TrainerProfileController` | Trainer profile, assigned customers (read-only medical section) | Ziad |
+| `MedicalProfileController` | Medical profile view/edit/delete per customer | Abdelrhman |
+| `TrainerListController` | Trainer roster + availability; `onOpenProfile(trainerId)` likewise | Ziad |
+| `TrainerProfileController` | Trainer profile, assigned customers, and `showMedicalProfile(customerId)` — the read-only medical section | Ziad |
 | `AvailabilityController` | Trainer calendar, per-slot caps, hourly slot publishing | Ziad |
 | `MembershipController` | Plans, sell/renew/freeze/unfreeze/cancel | Ziad |
-| `WorkoutController` | Program builder + reassignment | Yousef |
-| `ScheduleController` | Agenda, booking dialog, request/reserve, subscribe-to-trainer flow | Yousef |
-| `EquipmentController` | Inventory add/edit + status + condition + maintenance date | Yousef |
-| `AttendanceController` | Check-in/out + daily report | Abdel Raouf |
+| `WorkoutController` | Program builder, reassignment, new version, delete | Yousef |
+| `ScheduleController` | Agenda, booking dialog, request, **confirm / complete / no-show**, reserve (ADMIN only), cancel with reason, subscribe and subscription renew/cancel | Yousef |
+| `EquipmentController` | Inventory add/edit + status + condition + maintenance date + delete | Yousef |
+| `AttendanceController` | Check-in/out + daily report + correcting a mis-keyed record | Abdel Raouf |
 | `PaymentController` | Payments, voiding, receipts | Abdel Raouf |
-| `ProgressController` | Metrics + charts | Abdel Raouf |
+| `ProgressController` | Metrics + charts + deleting a record | Abdel Raouf |
 | `StaffController` | Staff management and admin overrides (ADMIN only) | Abdelrhman |
 
 Sixteen screens. `main.fxml` currently holds a component showcase with **no `fx:controller`** — it is
 the m3fx gallery, not one of these screens, and it will be replaced by the real shell.
+
+Every controller is a `FxUtils` client: it shows dialogs through `FxUtils.info/confirm/error/snackbar`
+and never renders a `DaoException` itself — it catches one and passes `e.getMessage()` as a string.
+Each controller also declares the `..>` edges to the services it uses; see `docs/UML.md` §5. If you
+add a controller method that calls a new service, add the matching edge, or the diagram stops being
+the design.
 
 ## Tasks
 
