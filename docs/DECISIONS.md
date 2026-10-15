@@ -154,3 +154,9 @@
     `super` and declares no fields, so `getMessage()`/`getCause()` are inherited rather than
     overridden.
 
+41. **Calendar-grid date picker shipped as `M3Calendar` + `M3DateDialog` (closes the deferral in #7).**
+    `M3Calendar` is the reusable month grid; `M3DateDialog` hosts it with Cancel/OK and
+    `showIn(OverlayLayer, ...)` helpers. `M3DatePicker` keeps #18's design (M3-styled field +
+    M3-themed native popup). The `M3DatePicker` javadoc and `SPEC_NOTES/overlays.md` now point at the
+    dialog components instead of "planned" work.
+

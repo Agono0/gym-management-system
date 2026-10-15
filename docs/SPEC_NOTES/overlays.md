@@ -28,9 +28,9 @@ Sources:
   @40%; level1; modal with scrim. Side sheet — 256 docked / 320-400 wide, same color, modal adds
   level1 + scrim.
 ## Date picker — input = filled field 56px; calendar dialog surface-container-high 28px radius,
-  headline + weekday + day cells (selected = primary circle). NOTE: full calendar-grid skin is
-  planned work — M3DatePicker currently wraps JavaFX DatePicker with M3 field styling; the dialog
-  tokens are documented here for the next pass.
+  headline + weekday + day cells (selected = primary circle). Implemented: `M3DateDialog` +
+  `M3Calendar` (io.m3fx.controls.picker) are the calendar-grid dialog; `M3DatePicker` wraps the
+  JavaFX DatePicker with M3 field styling + M3-themed native popup.
 ## Time picker — dial surface-container-high (future), input mode = hour/minute 56px fields +
   AM/PM segmented toggle; implemented exactly as input mode.
 ## Search — collapsed bar 56px full shape, surface-container-high, ⌕ + hint (body-large 16px) +

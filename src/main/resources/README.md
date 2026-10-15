@@ -7,7 +7,7 @@ All non-code assets. Subfolders:
   `docs/UML.md` §5).
 - `theme/` — M3 theming is **dynamic**: `M3Stylesheets.applyTo(scene, M3Theme)` generates the
   `-md-sys-color-*` stylesheet at runtime (no static `material-theme.css` to maintain).
-- `db/` — `schema.sql` (SQLite DDL, written Week 1) + demo seed data.
+- `db/` — `schema.sql` (SQLite DDL, planned Week 1) + demo seed data.
 - `images/` — logo, placeholder avatar, equipment icons.
 
 ## Contents

@@ -51,10 +51,40 @@ classDiagram
     class PaymentMethod
     class EquipmentStatus
     class EquipmentCondition
-    classDef abdel fill:#dbeafe
-    classDef ziad fill:#dcfce7
-    classDef yousef fill:#fef3c7
-    classDef raouf fill:#ede9fe
+    class ProgressMetric
+    %% Mermaid lays a relation-less diagram out in a single row, which rendered this overlay as an
+    %% unreadable 4090x99 strip. `~~` is NOT an invisible edge in Mermaid — it creates no link at all,
+    %% so the stack needs real associations to rank the nodes vertically. Mermaid class diagrams have
+    %% no `linkStyle`, so the arrows cannot be dimmed; read the fill colours as the content here, not
+    %% the edges. Adding a class without adding it to this chain pushes it back out to the side.
+    MainApp --> Customer
+    Customer --> Trainer
+    Trainer --> Membership
+    Membership --> WorkoutProgram
+    WorkoutProgram --> Session
+    Session --> Equipment
+    Equipment --> Attendance
+    Attendance --> Payment
+    Payment --> ProgressRecord
+    ProgressRecord --> MedicalProfile
+    MedicalProfile --> Administrator
+    Administrator --> TrainerSubscription
+    TrainerSubscription --> TrainerAvailability
+    TrainerAvailability --> CustomerStatus
+    CustomerStatus --> MembershipStatus
+    MembershipStatus --> PlanType
+    PlanType --> SessionStatus
+    SessionStatus --> SubscriptionStatus
+    SubscriptionStatus --> AvailabilityStatus
+    AvailabilityStatus --> StaffRole
+    StaffRole --> PaymentMethod
+    PaymentMethod --> EquipmentStatus
+    EquipmentStatus --> EquipmentCondition
+    EquipmentCondition --> ProgressMetric
+    classDef abdel fill:#dbeafe,stroke:#93c5fd
+    classDef ziad fill:#dcfce7,stroke:#86efac
+    classDef yousef fill:#fef3c7,stroke:#fcd34d
+    classDef raouf fill:#ede9fe,stroke:#c4b5fd
     class MainApp:::abdel
     class Customer:::abdel
     class MedicalProfile:::abdel
@@ -79,6 +109,7 @@ classDiagram
     class PaymentMethod:::raouf
     class EquipmentStatus:::raouf
     class EquipmentCondition:::raouf
+    class ProgressMetric:::raouf
 ```
 
 Shared enumerations (`CustomerStatus` with Abdelrhman, `StaffRole`/`PaymentMethod`/

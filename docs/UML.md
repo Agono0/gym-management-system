@@ -5,9 +5,17 @@
 > showcase (`fxml/main.fxml`, no controller) and `com.gym.MainApp` — the classes below are *planned*.
 > See `docs/COVERAGE.md` for what is actually built.
 >
-> **One master diagram, then five per-layer zoom-ins** (architecture, data access, services,
-> controllers, utilities). Each class is drawn exactly once in full; the zoom-ins show layer members
-> and wiring. `docs/UML_TEAM.md` holds ownership, not a second copy of the diagrams.
+> **Two domain diagrams, then five per-layer zoom-ins** (architecture, data access, services,
+> controllers, utilities). Each class is drawn in full exactly once; a later diagram repeats a
+> class only where it participates in that diagram's wiring. `docs/UML_TEAM.md` holds ownership, not a second copy of the diagrams.
+>
+> **Structural diagrams carry no prose.** Mermaid lays `note for` blocks and unconnected classes out
+> *beside* the graph rather than inside it, so descriptions widen a diagram instead of annotating it.
+> Every descriptive note was therefore moved out of the drawings into §1b, which is the only diagram
+> that still carries them. Effect on §1: **13193 × 3200 → 6303 × 3000 units**, and on §6,
+> 12203 × 596 → 706 × 348. The 11 enumerations are grouped at the tail of §1 as unconnected
+> boxes; §1b describes each one. The rules those notes stated are unchanged and
+> still stated in the "Business rules" table; nothing was dropped, only relocated.
 >
 > Notation:
 > `-` private · `+` public · `#` protected · `~` package ·
@@ -16,7 +24,8 @@
 > `--|>` generalization (drawn from the subclass side).
 >
 > Symbols declared but deliberately unused, so their absence is not read as an omission:
-> `#` and `~` (no inheritance and no same-package-only collaborator exists), `o--` and `*--`
+> `#` and `~` (no inheritance among project classes — the two external generalizations are drawn
+> in §7 — and no same-package-only collaborator exists), `o--` and `*--`
 > (no part in this model is lifetime-bound to its whole — see the note on `Equipment` in §1 and
 > the reasoning under "Notes on scope"), and role names (Mermaid cannot place one at a single
 > association end; the one role this model needs is stated in the `Payment` note).
@@ -53,7 +62,7 @@
 > | UML adornment | Mermaid syntax | Renders? |
 > |---|---|---|
 > | Visibility `+ - # ~` | prefix on the member | yes |
-> | Stereotype (e.g. `«interface»`, `«enumeration»`, `«utility»`) | `<<interface>>` | yes, as «interface» |
+> | Stereotype (e.g. `«interface»`, `«enumeration»`, `«utility»`, `«description»`) | `<<interface>>` | yes, as «interface» |
 > | Realization (dashed line + hollow triangle) | `<\|..` | yes |
 > | Dependency (dashed line + open arrow) | `..>` | yes |
 > | Generalization (solid line + hollow triangle) | `<\|--` | yes |
@@ -374,32 +383,182 @@ classDiagram
     Payment "0..*" --> "0..1" Membership : pays for membership dues
     Payment "0..*" --> "0..1" TrainerSubscription : pays for trainer subscription
     Payment "0..*" --> "0..1" Session : pays for a single session
-    note for Customer "Member: info, contact, status, links."
-    note for Trainer "Coach: info, specialization, availability, hourlyRate. May read the MedicalProfile of customers whose trainerId is this trainer; enforced by MedicalProfileService.getForTrainer."
-    note for Membership "Plan with start and end dates. price is BigDecimal; no double money."
-    note for WorkoutProgram "Exercise list with version and creator. version is unique per customer."
+    %% Mermaid lays notes and unconnected classes out beside the graph, not inside it. Descriptions
+    %% therefore widen this diagram dramatically -- all 26 notes made it 13193 units wide against
+    %% 6303 without them. They now live in the "Class descriptions" diagram below; no note blocks
+    %% remain here.
+```
+
+## 1b. Class descriptions (one row per entity and enumeration)
+
+The prose for every class, kept out of §1 so the structural diagram stays vertical. Marked
+`«enumeration»` where the row describes an enum.
+
+```mermaid
+classDiagram
+    direction TB
+    class Customer {
+        <<description>>
+        Member: contact, status, links
+    }
+    class Trainer {
+        <<description>>
+        Coach: specialization, hourlyRate
+    }
+    class Membership {
+        <<description>>
+        Plan, start and end dates
+    }
+    class WorkoutProgram {
+        <<description>>
+        Exercise list, version, creator
+    }
+    class Session {
+        <<description>>
+        Booked slot, cancel reason, notes
+    }
+    class Equipment {
+        <<description>>
+        Inventory item, condition, status
+    }
+    class Attendance {
+        <<description>>
+        One check-in per customer per day
+    }
+    class Payment {
+        <<description>>
+        Amount, method, date, receiptNo
+    }
+    class ProgressRecord {
+        <<description>>
+        Dated body metrics and benchmarks
+    }
+    class MedicalProfile {
+        <<description>>
+        Blood type, conditions, meds, doctor
+    }
+    class Administrator {
+        <<description>>
+        Login identity, role, active flag
+    }
+    class TrainerSubscription {
+        <<description>>
+        Period engagement at a flat rate
+    }
+    class TrainerAvailability {
+        <<description>>
+        One hourly slot per row, per-slot cap
+    }
+    class CustomerStatus {
+        <<enumeration>>
+        ACTIVE
+        INACTIVE
+        SUSPENDED
+    }
+    class MembershipStatus {
+        <<enumeration>>
+        ACTIVE
+        FROZEN
+        EXPIRED
+        CANCELLED
+    }
+    class PlanType {
+        <<enumeration>>
+        MONTHLY
+        QUARTERLY
+        YEARLY
+    }
+    class SessionStatus {
+        <<enumeration>>
+        REQUESTED
+        CONFIRMED
+        COMPLETED
+        NO_SHOW
+        CANCELLED
+    }
+    class SubscriptionStatus {
+        <<enumeration>>
+        ACTIVE
+        EXPIRED
+        CANCELLED
+    }
+    class AvailabilityStatus {
+        <<enumeration>>
+        OPEN
+        FULL
+        CLOSED
+    }
+    class StaffRole {
+        <<enumeration>>
+        ADMIN
+        MANAGER
+        STAFF
+    }
+    class PaymentMethod {
+        <<enumeration>>
+        CASH
+        CARD
+        TRANSFER
+    }
+    class EquipmentStatus {
+        <<enumeration>>
+        AVAILABLE
+        IN_MAINTENANCE
+        RETIRED
+    }
+    class EquipmentCondition {
+        <<enumeration>>
+        NEW
+        GOOD
+        FAIR
+        POOR
+    }
+    class ProgressMetric {
+        <<enumeration>>
+        WEIGHT_KG
+        BODY_FAT_PCT
+    }
+    %% `~~` is not an invisible edge in Mermaid -- it creates no link, and Mermaid then lays these
+    %% classes out in one unreadable row. Real associations are used to stack them; read the class
+    %% bodies as the content here, not the arrows.
+    Customer --> Trainer
+    Trainer --> Membership
+    Membership --> WorkoutProgram
+    WorkoutProgram --> Session
+    Session --> Equipment
+    Equipment --> Attendance
+    Attendance --> Payment
+    Payment --> ProgressRecord
+    ProgressRecord --> MedicalProfile
+    MedicalProfile --> Administrator
+    Administrator --> TrainerSubscription
+    TrainerSubscription --> TrainerAvailability
+    TrainerAvailability --> CustomerStatus
+    CustomerStatus --> MembershipStatus
+    MembershipStatus --> PlanType
+    PlanType --> SessionStatus
+    SessionStatus --> SubscriptionStatus
+    SubscriptionStatus --> AvailabilityStatus
+    AvailabilityStatus --> StaffRole
+    StaffRole --> PaymentMethod
+    PaymentMethod --> EquipmentStatus
+    EquipmentStatus --> EquipmentCondition
+    EquipmentCondition --> ProgressMetric
+    note for Customer "price is BigDecimal; no double money anywhere."
+    note for Trainer "May read the MedicalProfile of customers whose trainerId is this trainer, enforced by MedicalProfileService.getForTrainer."
+    note for WorkoutProgram "version is unique per customer."
     note for Session "Booked slot with cancel reason and notes. price must be 0 when subscriptionId is set."
-    note for Equipment "Standalone inventory catalogue: no FK to any other entity. Inventory item, condition, status."
-    note for Attendance "One check-in/out record per customer per day (enforced by AttendanceDao.findByCustomerAndDay)."
-    note for Payment "Amount, method and date. Exactly one of membershipId, subscriptionId, sessionId is set (XOR); voided payments are excluded from every revenue and balance query. payer is the Customer; payee is the gym."
-    note for ProgressRecord "Dated body metrics and benchmarks (targetWeightKg)."
-    note for MedicalProfile "Blood type, conditions, meds, doctor. At most one per customer, created on demand."
-    note for Administrator "Login identity, role, active flag. authenticate() rejects active == false. Role ADMIN may mutate every entity through AdminService."
-    note for TrainerSubscription "Period engagement at a flat trainer rate. trainerId must equal the Customer's assigned trainerId (rule 15), and every Session it covers must carry the same trainerId and price 0 so it is not billed twice."
+    note for Attendance "One check-in/out record per customer per day, enforced by AttendanceDao.findByCustomerAndDay."
+    note for Payment "Amount, method and date. payer is the Customer; payee is the gym."
+    note for ProgressRecord "targetWeightKg is the nullable benchmark."
+    note for MedicalProfile "At most one per customer, created on demand."
+    note for Administrator "authenticate() rejects active == false. Role ADMIN may mutate every entity through AdminService."
     note for TrainerAvailability "One hourly slot per row: open day, time window, per-slot customer cap."
-    note for CustomerStatus "ACTIVE, INACTIVE, SUSPENDED"
-    note for MembershipStatus "ACTIVE, FROZEN, EXPIRED, CANCELLED. FROZEN is set by freeze(); EXPIRED is derived from endDate and never set by hand."
-    note for PlanType "MONTHLY, QUARTERLY, YEARLY"
-    note for SessionStatus "REQUESTED, CONFIRMED, COMPLETED, NO_SHOW, CANCELLED. Legal transitions are enforced by SchedulingService.canTransition."
-    note for SubscriptionStatus "ACTIVE, EXPIRED, CANCELLED. EXPIRED is derived from endDate; CANCELLED is set by cancelSubscription."
-    note for AvailabilityStatus "OPEN, FULL, CLOSED. FULL is derived (bookedCount >= maxCustomers); only OPEN and CLOSED are set by hand."
-    note for StaffRole "ADMIN, MANAGER, STAFF"
-    note for PaymentMethod "CASH, CARD, TRANSFER"
-    note for EquipmentStatus "AVAILABLE, IN_MAINTENANCE, RETIRED"
-    note for EquipmentCondition "NEW, GOOD, FAIR, POOR"
-    note for ProgressMetric "WEIGHT_KG, BODY_FAT_PCT. Selects which ProgressRecord measurement ProgressService.series returns."
-    note for Customer "trainerId is the assigned trainer and is authoritative for medical access and the trainer's roster; TrainerSubscription records only the paid engagement period."
-    note for WorkoutProgram "A trainer may be removed while their programs remain, so 'created by' is an association, not composition."
+    note for MembershipStatus "FROZEN is set by freeze(); EXPIRED is derived from endDate and never set by hand."
+    note for SessionStatus "Legal transitions are enforced by SchedulingService.canTransition."
+    note for SubscriptionStatus "EXPIRED is derived from endDate; CANCELLED is set by cancelSubscription."
+    note for AvailabilityStatus "FULL is derived from bookedCount >= maxCustomers; only OPEN and CLOSED are set by hand."
+    note for ProgressMetric "Selects which ProgressRecord measurement ProgressService.series returns."
 ```
 
 ## 2. Layered architecture
@@ -736,35 +895,6 @@ classDiagram
     AdminDaoImpl ..> DbConnection : uses
     TrainerSubscriptionDaoImpl ..> DbConnection : uses
     TrainerAvailabilityDaoImpl ..> DbConnection : uses
-    note for DbConnection "Interface: DAOs depend on this, never on the SQLite factory."
-    note for SqliteDbConnection "SQLite factory, creates gym.db, initialises the schema. Single seam for changing the database."
-    note for DaoException "Unchecked SQLException wrapper. Thrown by every DaoImpl; caught in the controller and shown with FxUtils.error(getMessage())."
-    note for CustomerDao "Contract to save, find, search customers"
-    note for CustomerDaoImpl "SQLite implementation, customers"
-    note for TrainerDao "Contract to save, find trainers"
-    note for TrainerDaoImpl "SQLite implementation, trainers"
-    note for MembershipDao "Contract, expiring memberships and status queries"
-    note for MembershipDaoImpl "SQLite implementation, memberships"
-    note for WorkoutProgramDao "Contract, programs per customer, latest version"
-    note for WorkoutProgramDaoImpl "SQLite implementation, programs"
-    note for SessionDao "Contract: by day, customer, trainer+day, status; slot occupancy count"
-    note for SessionDaoImpl "SQLite implementation, sessions"
-    note for EquipmentDao "Contract to save, list equipment by status and condition"
-    note for EquipmentDaoImpl "SQLite implementation, equipment"
-    note for AttendanceDao "Contract, daily attendance, by customer, one-row-per-day lookup"
-    note for AttendanceDaoImpl "SQLite implementation, attendance"
-    note for PaymentDao "Contract, revenue ranges (voided excluded), by customer, by receipt, by method"
-    note for PaymentDaoImpl "SQLite implementation, payments"
-    note for ProgressDao "Contract, history per customer"
-    note for ProgressDaoImpl "SQLite implementation, progress"
-    note for MedicalProfileDao "Contract, profile per customer"
-    note for MedicalProfileDaoImpl "SQLite implementation, medical"
-    note for AdminDao "Contract, lookup by username and role"
-    note for AdminDaoImpl "SQLite implementation, admins"
-    note for TrainerSubscriptionDao "Contract, engagements, by customer, by trainer, active lookup"
-    note for TrainerSubscriptionDaoImpl "SQLite implementation, subscriptions"
-    note for TrainerAvailabilityDao "Contract, slots by trainer+date, open slots only"
-    note for TrainerAvailabilityDaoImpl "SQLite implementation, availability"
 ```
 
 ## 4. Service layer (validation + business rules, no JavaFX, no SQL)
@@ -933,17 +1063,6 @@ classDiagram
     AdminService ..> PaymentService : voids and adjusts through
     AdminService ..> CustomerDao : overrides with
     AdminService ..> TrainerDao : overrides with
-    note for CustomerService "Validation, search, status rules. No hard delete: rule 4 keeps that on AdminService. changeStatus(SUSPENDED) also freezes the customer's ACTIVE memberships (rule 14)."
-    note for TrainerService "Availability, assign, rates, slot publishing. publishSlot validates startTime < endTime and creates one hourly slot; the cap is per slot. setDailyCap and setSlotCap write the same field: setDailyCap re-applies across every slot of that date and therefore wins regardless of publish order."
-    note for MembershipService "Sell, renew, freeze, unfreeze, cancel, expire sweep, reminders. freeze stores frozenDays; unfreeze shifts endDate forward by it. Only an ACTIVE membership may be frozen; renewing an EXPIRED one extends endDate, renewing a CANCELLED one refuses. freezeForSuspended is the rule-14 hook."
-    note for WorkoutService "Build programs, reassign, versioning. reassign overwrites customerId and requires an existing customer. There is no in-place edit of an issued program: newVersion supersedes it, and update/delete exist for correcting mistakes before a program is issued."
-    note for SchedulingService "bookOpenSlot requires AvailabilityStatus.OPEN, bookedCount < maxCustomers, no trainer conflict and no customer conflict. requestOutsideSlots yields REQUESTED; adminReserve ignores slot rules and requires StaffRole.ADMIN. Cancel up to 2h before start is free; later cancels are still CANCELLED with the reason recorded. bookedCount counts CONFIRMED sessions only, so cancelling frees capacity."
-    note for EquipmentService "Add/edit equipment, status and condition transitions, maintenance date"
-    note for AttendanceService "Check-in and out, daily report. checkIn requires CustomerStatus.ACTIVE and a Membership with status ACTIVE and endDate >= today; a second check-in on the same day returns the existing row instead of inserting. correctRecord fixes a mis-keyed time."
-    note for PaymentService "Record, balances, revenue by range. revenueBetween and balance exclude voided == true. validLink enforces the membership/subscription/session XOR and is public so it can be unit tested. voidRecord serves the non-payment entities; the payment case delegates to voidPayment."
-    note for ProgressService "Metric access for charts. series returns values ascending by date; metric selects which measurement column is returned, so the return type carries no dates because the caller already has them from findByCustomer."
-    note for MedicalProfileService "Medical CRUD, lookup by customer. getForTrainer rejects a trainer who is not the customer's assigned trainer — this is the only sanctioned read path for a trainer."
-    note for AdminService "Authenticate rejects active == false and returns null. Password reset, staff management, reassign/adjust/void overrides, admin-only hard deletes. deleteCustomer/deleteTrainer ask GuardService.countReferences first and refuse when any row still references the target, because schema.sql has no FK cascades."
 ```
 
 ## 5. Controllers (each backed by a matching FXML file)
@@ -1100,23 +1219,6 @@ classDiagram
     StaffController ..> SessionContext : requires ADMIN role
     MainApp ..> SessionContext : clears on exit
     MainApp ..> FxUtils : installs overlay layer via
-    note for MainApp "Entry point: builds the window, nav shell, theme and overlay layer. Uses FxUtils for the overlay layer and for any dialog shown before a controller exists."
-    note for LoginController "Admin login screen"
-    note for DashboardController "Members, sessions, revenue snapshot"
-    note for CustomerListController "Searchable customer list; onOpenProfile carries the selected row into CustomerProfileController"
-    note for CustomerProfileController "Full member profile screen"
-    note for TrainerListController "Trainer roster, availability; onOpenProfile carries the selected row into TrainerProfileController"
-    note for TrainerProfileController "Trainer details and assigned customers. showMedicalProfile is the trainer's read-only medical view, restricted to customers whose trainerId is this trainer."
-    note for MembershipController "Plans, sell, renew, freeze, unfreeze, cancel"
-    note for WorkoutController "Program builder, reassignment, versioning"
-    note for ScheduleController "Agenda, booking, request, confirm, complete, no-show, reservation, cancel with reason, and the subscription lifecycle. onReserve requires StaffRole.ADMIN."
-    note for AvailabilityController "Calendar, per-slot caps, slot publishing"
-    note for EquipmentController "Inventory, status, condition, maintenance"
-    note for AttendanceController "Check-in and out screen, daily report, correcting a mis-keyed record"
-    note for PaymentController "Record and void payments, receipts"
-    note for ProgressController "Body-metric charts screen"
-    note for MedicalProfileController "Medical profile view, edit and delete"
-    note for StaffController "Staff management and admin overrides; requires StaffRole.ADMIN"
 ```
 
 ## 6. Utilities
@@ -1180,16 +1282,6 @@ classDiagram
         +snackbar(String message) void$
     }
     GuardService ..> DbConnection : counts references via
-    note for DbConnection "Interface: DAO impls depend on this, never on the SQLite factory."
-    note for SqliteDbConnection "SQLite factory, creates gym.db, initialises the schema."
-    note for DaoException "Extends RuntimeException, so it chains through super(message, cause) and needs no message/cause fields of its own. Unchecked SQLException wrapper: thrown by every DaoImpl, caught in the controller, rendered with FxUtils.error(getMessage())."
-    note for GuardService "Reference counter used by the admin delete rule: reads sqlite_master for the foreign key columns that reference the target row and counts matching rows in each. Keeps that cross-cutting query out of the 13 DAOs. Returns 0 when nothing references the row, so AdminService.deleteCustomer/deleteTrainer can refuse safely."
-    note for Validators "Phone, email, date, number and time-range checks. All static; entity-free so the swing branch reuses it as-is. validTimeRange backs TrainerService.publishSlot."
-    note for DateUtils "Periods, slot math, formatting. Owns every date parse and format; static. hoursUntil backs the 2h free-cancellation window."
-    note for PasswordUtils "PBKDF2 hash and verify, no external deps; static."
-    note for ChartUtils "Formatting only: takes already-fetched values, does no DAO work. Static. revenueSeries was removed — revenue charts read PaymentService.revenueBetween directly rather than downcasting money to double."
-    note for SessionContext "Session-scoped holder for the signed-in Administrator. Static mutable state (the one documented exception to the no-static-state rule), FX-thread confined, cleared by DashboardController.onLogout and by MainApp on exit. getAdministrator returns null when nobody is signed in."
-    note for FxUtils "Dialogs, confirms, error alerts, scene switch, snackbar. The only JavaFX-aware utility; only controllers depend on it, and it takes plain strings so it never sees DaoException."
 ```
 
 ---
@@ -1217,10 +1309,6 @@ classDiagram
     }
     MainApp --|> Application : extends
     DaoException --|> RuntimeException : extends
-    note for MainApp "Entry point. JavaFX requires it to extend Application; the project extends nothing else."
-    note for DaoException "Unchecked SQLException wrapper. Extending RuntimeException is what makes it unchecked, so it can be thrown from a DAO without a checked-exception signature on every interface method."
-    note for Application "JavaFX javafx.application.Application — platform type."
-    note for RuntimeException "java.lang.RuntimeException — platform type."
 ```
 
 **No project class extends another project class**, and that is a decision rather than an omission.

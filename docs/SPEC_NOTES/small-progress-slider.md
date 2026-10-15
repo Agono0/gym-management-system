@@ -16,9 +16,9 @@ Sources:
   Show delay ~500ms.
 ## Progress — linear track 4px, surface-container-highest, 4px radius; active indicator primary
   full-width rounded; stop indicator: 4px gap + primary-container dot at track end (CSS hook,
-  simplified). Circular 48px, primary arc, 4px stroke (native indicator restyled; Expressive wavy
-  variant NOT implemented — planned, see COVERAGE.md).
+  simplified). Circular 48px, primary arc, 4px stroke (native indicator restyled); Expressive wavy
+  variant implemented as `M3WavyProgress` (canvas-drawn sine wave, see COVERAGE.md).
 ## Slider — active track 4px primary, inactive track 4px surface-container-highest; thumb 4x44px
   handle with 20px gap (approximated with CSS thumb block); discrete mode snaps to step with value
   indicator; range = two linked thumbs that cannot cross (M3RangeSlider). 48px touch height.
-  Stop indicators on discrete steps: planned (COVERAGE.md).
+  Stop indicators on discrete steps: styled axis ticks in `M3Slider` discrete mode (see COVERAGE.md).
