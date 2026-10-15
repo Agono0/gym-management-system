@@ -22,16 +22,16 @@ androidx.compose.material3 source. Verify the current state of the spec before e
 
 ## Phase 0: Setup (2-3 days)
 
-- Create repo, Maven multi-module (`core`, `controls`, `demo`), parent POM, `module-info.java`
-- Put reference repos in `refs/` (read-only, add to `.gitignore` or use git submodules)
-- Add formatter (spotless), JUnit 5, TestFX, CI (GitHub Actions: `mvn verify`)
+- Create repo, Gradle multi-module (`m3fx-core`, `m3fx-controls`) plus the app project; `module-info.java` in both m3fx modules
+- Reference repos are read-only clones at the repo root: `material-color-utilities-main/`, `material-web-2.5.0/`
+- Add JUnit 5 to both m3fx modules (no spotless, TestFX, or CI in this repo yet)
 - Copy `AGENTS.md`, `PLAN.md`; create `docs/COVERAGE.md` from the checklist below
 - Demo app skeleton with a sidebar listing component pages and a light/dark toggle
-- **Exit:** `mvn verify` green, demo window opens
+- **Exit:** `gradle build` green, `gradlew run` opens the component showcase
 
 ## Phase 1: Foundation: m3fx-core (1 week)
 
-1. Port `material-color-utilities` Java into `core/color` (HCT, TonalPalette, schemes, DynamicColor)
+1. Port `material-color-utilities` Java into `m3fx-core` package `io.m3fx.core.color` (HCT, TonalPalette, schemes, DynamicColor)
 2. `M3Theme.fromSeed(seed, variant, dark, contrast)` with variants: TonalSpot, Vibrant, Expressive, Neutral,
    Monochrome, Fidelity, Content, Rainbow, FruitSalad
 3. All color roles exposed + `toCss()` generating `-md-sys-color-*` looked-up colors
@@ -124,12 +124,12 @@ If the deadline is shorter, ship T1 + a few T2 items and list the rest as "plann
 ## Prompt templates for the agent
 
 **Phase 1 start**
-> Read AGENTS.md and PLAN.md. Do Phase 1 step 1 only: port the Java sources from refs/material-color-utilities/java into m3fx-core/color, keep license headers, fix package names, make it compile, and add a test that a seed of #6750A4 reproduces the baseline M3 light primary (#6750A4) and primary container (#EADDFF). Summarize what you did.
+> Read AGENTS.md and PLAN.md. Do Phase 1 step 1 only: port the Java sources from material-color-utilities-main/java into m3fx-core/color, keep license headers, fix package names, make it compile, and add a test that a seed of #6750A4 reproduces the current color-spec baseline light primary (#65558f) and primary container (#e9ddff). Summarize what you did.
 
 **Component start (template)**
 > Read AGENTS.md. Implement **<Component>** (Phase <n>, item <#>).
 > First write docs/SPEC_NOTES/<component>.md with dimensions, shapes, state opacities, colors, and type roles, citing the source for each (m3.material.io, material-web tokens, or compose source).
-> Then implement control, skin, and CSS using shared helpers, add a demo page showing all variants and states in light and dark, add tests, run `mvn verify`, update COVERAGE.md, and explain the classes to me in simple terms.
+> Then implement control, skin, and CSS using shared helpers, add a demo page showing all variants and states in light and dark, add tests, run `gradle build`, update COVERAGE.md, and explain the classes to me in simple terms.
 
 **Review pass**
 > Review <Component> against its SPEC_NOTES. List every deviation, hardcoded value, missing state, or accessibility gap. Do not fix anything yet.

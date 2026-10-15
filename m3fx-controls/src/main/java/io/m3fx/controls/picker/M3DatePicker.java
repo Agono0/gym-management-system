@@ -8,8 +8,8 @@ import java.time.LocalDate;
  *
  * <p>See <a href="https://m3.material.io/components/date-pickers/overview">M3 date pickers</a>.
  * The input field follows {@code M3TextField} styling; the popup calendar uses M3 dialog tokens
- * (surface container high). Docked/modal picker containers are covered by {@code M3Dialog} docs in
- * COVERAGE.md as planned work for the full calendar grid skin.
+ * (surface container high). The calendar-grid layout is covered by {@link M3DateDialog} and its
+ * {@code M3Calendar} month grid (same package).
  */
 public class M3DatePicker extends DatePicker {
 

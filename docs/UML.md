@@ -6,15 +6,15 @@
 > See `docs/COVERAGE.md` for what is actually built.
 >
 > **Two domain diagrams, then five per-layer zoom-ins** (architecture, data access, services,
-> controllers, utilities). Each class is drawn exactly once in full; the zoom-ins show layer members
-> and wiring. `docs/UML_TEAM.md` holds ownership, not a second copy of the diagrams.
+> controllers, utilities). Each class is drawn in full exactly once; a later diagram repeats a
+> class only where it participates in that diagram's wiring. `docs/UML_TEAM.md` holds ownership, not a second copy of the diagrams.
 >
 > **Structural diagrams carry no prose.** Mermaid lays `note for` blocks and unconnected classes out
 > *beside* the graph rather than inside it, so descriptions widen a diagram instead of annotating it.
 > Every descriptive note was therefore moved out of the drawings into §1b, which is the only diagram
-> that still carries them. Effect on §1: **13193 × 3200 → 6309 × 3000 units**, and on §6,
-> 12203 × 596 → 706 × 348. The 11 enumerations have their own diagram for the same reason — 11
-> unconnected boxes cost roughly 1500 units of width. The rules those notes stated are unchanged and
+> that still carries them. Effect on §1: **13193 × 3200 → 6303 × 3000 units**, and on §6,
+> 12203 × 596 → 706 × 348. The 11 enumerations are grouped at the tail of §1 as unconnected
+> boxes; §1b describes each one. The rules those notes stated are unchanged and
 > still stated in the "Business rules" table; nothing was dropped, only relocated.
 >
 > Notation:
@@ -24,7 +24,8 @@
 > `--|>` generalization (drawn from the subclass side).
 >
 > Symbols declared but deliberately unused, so their absence is not read as an omission:
-> `#` and `~` (no inheritance and no same-package-only collaborator exists), `o--` and `*--`
+> `#` and `~` (no inheritance among project classes — the two external generalizations are drawn
+> in §7 — and no same-package-only collaborator exists), `o--` and `*--`
 > (no part in this model is lifetime-bound to its whole — see the note on `Equipment` in §1 and
 > the reasoning under "Notes on scope"), and role names (Mermaid cannot place one at a single
 > association end; the one role this model needs is stated in the `Payment` note).
@@ -384,11 +385,11 @@ classDiagram
     Payment "0..*" --> "0..1" Session : pays for a single session
     %% Mermaid lays notes and unconnected classes out beside the graph, not inside it. Descriptions
     %% therefore widen this diagram dramatically -- all 26 notes made it 13193 units wide against
-    %% 6303 without them. They now live in the "Class descriptions" diagram below, and only the four
-    %% notes that state a structural constraint stay here.
+    %% 6303 without them. They now live in the "Class descriptions" diagram below; no note blocks
+    %% remain here.
 ```
 
-## 1b. Class descriptions (one row per class)
+## 1b. Class descriptions (one row per entity and enumeration)
 
 The prose for every class, kept out of §1 so the structural diagram stays vertical. Marked
 `«enumeration»` where the row describes an enum.

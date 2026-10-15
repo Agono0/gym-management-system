@@ -8,7 +8,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Verifies the ported dynamic-color engine against the M3 baseline: seed #6750A4 with TonalSpot
- * must reproduce the spec's baseline light theme (primary #6750A4, primary-container #EADDFF).
+ * must reproduce the current color-spec baseline light theme (primary #65558f,
+ * primary-container #e9ddff — see {@code docs/SPEC_NOTES/systems.md}; the #6750a4/#eaddff pair
+ * was the 2021 spec and is intentionally not asserted).
  */
 class M3ThemeTest {
 

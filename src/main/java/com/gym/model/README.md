@@ -65,7 +65,7 @@ what keeps this layer free of JDBC and of lazy-loading concerns.
 | Write `Attendance`, `Payment`, `ProgressRecord` | Abdel Raouf | To Do |
 | Write `MedicalProfile`, `Administrator` | Abdelrhman | To Do |
 | Write `TrainerSubscription`, `TrainerAvailability` | Yousef | To Do |
-| Write the 10 enumeration types | each owner, as needed | To Do |
+| Write the 11 enumeration types | each owner, as needed | To Do |
 
 Keep entities identical in the `swing` branch (copy, don't redesign). That branch has no Java files
 yet, so the copy is still pending for every row above.

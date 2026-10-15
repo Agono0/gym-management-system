@@ -25,7 +25,7 @@ trainers, and managers running the app on a Windows/Linux/macOS desktop.
 The `m3fx-core` + `m3fx-controls` Gradle modules are a **separate, reusable M3 library**
 (version `0.1.0`, group `io.m3fx`) — usable in any JavaFX project, not just this gym app:
 
-- `m3fx-core`: dynamic color engine (ported material-color-utilities, Apache 2.0 — see `NOTICE`),
+- `m3fx-core`: dynamic color engine (ported material-color-utilities, Apache 2.0 — see `LICENSE` and `NOTICE`),
   `M3Theme.fromSeed(...)`, all color roles, and shape/type/elevation/state/motion tokens.
 - `m3fx-controls`: 25+ `M3*` components (buttons → search, see `docs/COVERAGE.md`) + one
   `m3fx.css` that references only `-md-sys-color-*` theme lookups.
@@ -33,7 +33,7 @@ The `m3fx-core` + `m3fx-controls` Gradle modules are a **separate, reusable M3 l
   `implementation(project(':m3fx-core'))` / `implementation(project(':m3fx-controls'))`, then call
   `M3Stylesheets.applyTo(scene, M3Theme.baseline(false))` once. Full docs: `docs/SPEC_NOTES/`.
 
-Run the gallery demo: `gradlew run` (seed picker + light/dark toggle + all components).
+Run the component showcase: `gradlew run` (loads `fxml/main.fxml` through the placeholder `MainApp`).
 
 ## 2. Features
 
@@ -115,7 +115,7 @@ Run the gallery demo: `gradlew run` (seed picker + light/dark toggle + all compo
 ```
 (build.gradle, settings.gradle — Gradle build)
 src/main/java/com/gym/
-  MainApp.java            application entry point (to be written)
+  MainApp.java            application entry point (placeholder: loads the m3fx showcase)
   model/      entity POJOs: Customer, Trainer, Membership, WorkoutProgram,
               Session, Equipment, Attendance, Payment, ProgressRecord → README
   dao/        DAO interfaces + SQLite implementations (one per entity) → README
@@ -124,24 +124,24 @@ src/main/java/com/gym/
   util/       DbConnection, validators, date/time + FX helpers → README
 src/main/resources/
   fxml/       FXML layouts (one per screen, mirrors controller/) 
-  theme/      material-theme.css (M3 tokens) + animations
-  db/         schema.sql (created Week 1) + seed data for demo
+  theme/      theme applied in code — `M3Stylesheets.applyTo(scene, M3Theme)` (no CSS file yet)
+  db/         schema.sql (planned Week 1) + demo seed data
   images/     logo, icons, placeholders
 ```
 
 Each folder above contains its own `README.md` with purpose, contents,
-task list, owner, and status. **This skeleton is docs-only: packages contain
-no `.java` files yet — the team writes them following the timeline below.**
+task list, owner, and status. **Only `MainApp.java` (a placeholder) exists so far; the other
+packages contain no `.java` files yet — the team writes them following the timeline below.**
 
 ## 5. Installation & Running
 
-Requirements: JDK 27, Gradle 8+ (or the wrapper once added in Week 1).
+Requirements: JDK 27, Gradle 8+ (`gradlew`/`gradlew.bat` wrapper is committed at the repo root).
 
 ```bash
 git clone https://github.com/Agono0/gym-management-system.git
 cd gym-management-system
 git checkout main
-gradle run            # once MainApp exists (Week 1+)
+gradlew run           # opens the m3fx component showcase (placeholder MainApp)
 ```
 
 The SQLite file (`gym.db`) is created automatically on first run and is
@@ -187,7 +187,7 @@ end-to-end (model → DAO → service → UI) in both branches.
 3. The other branch's port is a separate PR — never mix JavaFX and Swing code.
 4. Run `gradle build` before pushing; validate all inputs and handle every failure (DB errors, bad input) with a user-friendly message — never show stack traces to users.
 5. Follow the folder READMEs: update the Status column (`To Do` → `In Progress` → `Done`) when you start/finish a task.
-6. M3 styling is mandatory: use theme tokens from `theme/material-theme.css`, no hardcoded colors.
+6. M3 styling is mandatory: reference `-md-sys-color-*` theme lookups (applied in code via `M3Stylesheets.applyTo(scene, M3Theme)`; there is no `theme/material-theme.css` file), no hardcoded colors.
 
 ## 9. Known Limitations / Future Improvements
 
@@ -207,10 +207,10 @@ Folder-level docs: [`model`](src/main/java/com/gym/model/README.md) ·
 [`util`](src/main/java/com/gym/util/README.md) ·
 [`resources`](src/main/resources/README.md)
 
-## 11. Error-Handling Standard (no test suite — handle errors instead)
+## 11. Error-Handling Standard (no gym-app test suite — handle errors instead)
 
-This project ships without automated tests. Quality comes from disciplined
-error handling:
+The `com.gym` app ships without automated tests (the m3fx modules carry their
+own JUnit suites). Quality comes from disciplined error handling:
 
 - Validate every user input at the service layer (`Validators`); reject bad
   data with a clear field-level message before it reaches the DAO.
