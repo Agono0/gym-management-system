@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.ColumnConstraints?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.RowConstraints?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chart.M3GaugeChart?>
+<?import io.m3fx.controls.chart.M3Heatmap?>
+<?import io.m3fx.controls.data.M3DataTable?>
+<?import io.m3fx.controls.data.M3StatCard?>
+<?import io.m3fx.controls.effect.M3GlassPane?>
+<?import io.m3fx.controls.effect.M3Scanline?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+
+<StackPane xmlns="http://javafx.com/javafx/21"
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.AttendanceController"
+           prefWidth="1280.0"
+           styleClass="attendance-root">
+
+    <BorderPane styleClass="attendance-layout">
+        <!-- Top App Bar & Turnstile Status -->
+        <top>
+            <VBox spacing="8.0" styleClass="top-bar-container">
+                <HBox alignment="CENTER_LEFT" spacing="16.0">
+                    <padding><Insets top="14.0" right="24.0" bottom="12.0" left="24.0"/></padding>
+                    <Label text="FAST-LANE ATTENDANCE &amp; TURNSTILE GATEWAY" styleClass="title-large"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Label fx:id="lblCurrentDate" text="2026-10-28" styleClass="title-medium"/>
+                    <M3Button fx:id="btnDailyReportAction" text="Daily Report" onAction="#onDailyReportClick"
+                              variant="TONAL" styleClass="m3-button-tonal"/>
+                </HBox>
+            </VBox>
+        </top>
+
+        <!-- Center Bento Command Grid -->
+        <center>
+            <GridPane hgap="16.0" vgap="16.0" styleClass="bento-command-grid">
+                <padding><Insets top="8.0" right="24.0" bottom="64.0" left="24.0"/></padding>
+                <columnConstraints>
+                    <ColumnConstraints percentWidth="42.0"/>
+                    <ColumnConstraints percentWidth="58.0"/>
+                </columnConstraints>
+                <rowConstraints>
+                    <RowConstraints percentHeight="26.0"/>
+                    <RowConstraints percentHeight="74.0"/>
+                </rowConstraints>
+
+                <!-- Top Left: Occupancy Gauge HUD -->
+                <HBox spacing="16.0" GridPane.columnIndex="0" GridPane.rowIndex="0" alignment="CENTER_LEFT">
+                    <M3StatCard fx:id="cardInsideCount" title="Currently Inside" value="142" deltaText="Safety Cap: 200"
+                                HBox.hgrow="ALWAYS"/>
+                    <M3GaugeChart fx:id="occupancyGauge" prefWidth="120.0" prefHeight="120.0"/>
+                </HBox>
+
+                <!-- Top Right: Peak Hours Density Heatmap -->
+                <VBox spacing="8.0" GridPane.columnIndex="1" GridPane.rowIndex="0" styleClass="heatmap-container-card">
+                    <padding><Insets top="10.0" right="14.0" bottom="10.0" left="14.0"/></padding>
+                    <Label text="HOURLY ATTENDANCE DENSITY (PEAK HOURS)" styleClass="label-small"/>
+                    <M3Heatmap fx:id="peakHoursHeatmap" VBox.vgrow="ALWAYS"/>
+                </VBox>
+
+                <!-- Bottom Left: Fast-Lane Scanner & Member Dossier -->
+                <VBox spacing="14.0" GridPane.columnIndex="0" GridPane.rowIndex="1">
+                    <!-- Laser Scanner Viewport -->
+                    <StackPane prefHeight="200.0" styleClass="scan-viewport-pane">
+                        <M3GlassPane opacity="0.8"/>
+                        <M3Scanline fx:id="turnstileScanline"/>
+                        <VBox alignment="CENTER" spacing="8.0">
+                            <Label text="PRESENT RFID BADGE / QR CODE" styleClass="label-large"/>
+                            <Label text="Align barcode within illuminated sensor zone" styleClass="body-small"/>
+                        </VBox>
+                    </StackPane>
+
+                    <!-- Last Scanned Member Dossier -->
+                    <M3Card fx:id="memberDossierCard" variant="ELEVATED" styleClass="dossier-pass-granted" VBox.vgrow="ALWAYS">
+                        <content>
+                            <VBox spacing="10.0">
+                                <padding><Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/></padding>
+                                <HBox alignment="CENTER_LEFT">
+                                    <Label fx:id="lblScanResult" text="ACCESS GRANTED" styleClass="title-medium"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Label fx:id="lblScanTimestamp" text="07:02 AM" styleClass="body-small"/>
+                                </HBox>
+                                <Label fx:id="lblScannedMemberName" text="Sarah Connor (ID #1042)" styleClass="headline-small"/>
+                                <Label fx:id="lblScannedPlanInfo" text="Plan: Yearly VIP · Valid until 2027-04-12" styleClass="body-medium"/>
+                                <Label fx:id="lblAssignedTrainer" text="Assigned Coach: Marcus Vance" styleClass="body-small"/>
+                            </VBox>
+                        </content>
+                    </M3Card>
+
+                    <!-- Manual Fast Check-In Row -->
+                    <HBox spacing="10.0" alignment="CENTER_LEFT">
+                        <M3TextField fx:id="txtMemberLookup" labelText="Enter Member ID or Phone" HBox.hgrow="ALWAYS"/>
+                        <M3Button fx:id="btnManualCheckIn" text="Check-In" onAction="#onManualCheckInClick"
+                                  variant="FILLED" styleClass="m3-button-filled"/>
+                        <M3Button fx:id="btnManualCheckOut" text="Check-Out" onAction="#onManualCheckOutClick"
+                                  variant="OUTLINED" styleClass="m3-button-outlined"/>
+                    </HBox>
+                </VBox>
+
+                <!-- Bottom Right: Live Check-In Stream Table -->
+                <VBox spacing="10.0" GridPane.columnIndex="1" GridPane.rowIndex="1" styleClass="table-container-card">
+                    <HBox alignment="CENTER_LEFT" spacing="12.0">
+                        <Label text="TODAY'S ATTENDANCE STREAM" styleClass="title-medium"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <TextField fx:id="txtTableSearch" promptText="Filter attendees..." prefWidth="220.0"/>
+                    </HBox>
+                    <M3DataTable fx:id="attendanceDataTable" VBox.vgrow="ALWAYS"/>
+                </VBox>
+            </GridPane>
+        </center>
+    </BorderPane>
+
+</StackPane>

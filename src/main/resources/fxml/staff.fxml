@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.data.M3DataTable?>
+<?import io.m3fx.controls.data.M3Timeline?>
+<?import io.m3fx.controls.selection.M3Switch?>
+<?import io.m3fx.controls.sheet.M3SideSheet?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane xmlns="http://javafx.com/javafx/21" 
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.StaffController"
+           prefWidth="1280.0"
+           styleClass="staff-root">
+
+    <!-- Primary Base Layout -->
+    <BorderPane styleClass="staff-base-pane">
+        <!-- Top App Bar -->
+        <top>
+            <VBox spacing="8.0" styleClass="top-bar-container">
+                <HBox alignment="CENTER_LEFT" spacing="16.0">
+                    <padding>
+                        <Insets top="16.0" right="24.0" bottom="16.0" left="24.0"/>
+                    </padding>
+                    <Label text="STAFF RBAC &amp; SECURITY GOVERNANCE" styleClass="title-large"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Label text="ROLE: ADMIN (Alex Vance)" styleClass="badge-admin"/>
+                    <M3Button fx:id="btnTopAddStaff" text="+ Add Staff Member" onAction="#onAddStaff" variant="FILLED" styleClass="m3-button-filled"/>
+                </HBox>
+            </VBox>
+        </top>
+
+        <!-- Main Workspace Split -->
+        <center>
+            <SplitPane dividerPositions="0.55">
+                <!-- Left Pane: Staff Roster & Management -->
+                <VBox spacing="16.0">
+                    <padding>
+                        <Insets top="16.0" right="16.0" bottom="64.0" left="16.0"/>
+                    </padding>
+                    <HBox spacing="12.0" alignment="CENTER_LEFT">
+                        <M3TextField fx:id="txtSearchStaff" labelText="Search staff members..." HBox.hgrow="ALWAYS"/>
+                    </HBox>
+
+                    <!-- Virtualized Staff Roster Table -->
+                    <M3DataTable fx:id="staffDataTable" VBox.vgrow="ALWAYS"/>
+
+                    <!-- Management Command Toolbar -->
+                    <HBox spacing="10.0" alignment="CENTER_RIGHT">
+                        <M3Button fx:id="btnEditStaffAction" text="Edit Profile" onAction="#onEditStaffClick" variant="TONAL" styleClass="m3-button-tonal"/>
+                        <M3Button fx:id="btnResetPasswordAction" text="Reset Password" onAction="#onResetPasswordClick" variant="OUTLINED" styleClass="m3-button-outlined"/>
+                        <M3Button fx:id="btnDeleteStaffAction" text="Delete Staff" onAction="#onDeleteStaffClick" variant="TEXT" styleClass="m3-button-text-danger"/>
+                    </HBox>
+                </VBox>
+
+                <!-- Right Pane: Overrides & Audit Feed -->
+                <VBox spacing="16.0">
+                    <padding>
+                        <Insets top="16.0" right="16.0" bottom="64.0" left="16.0"/>
+                    </padding>
+
+                    <!-- Admin Overrides Control Card -->
+                    <VBox spacing="12.0" styleClass="override-command-card">
+                        <Label text="ADMINISTRATIVE OVERRIDE COMMANDS" styleClass="title-medium"/>
+                        <HBox spacing="10.0">
+                            <M3Button fx:id="btnReassignAction" text="Reassign Athlete Coach" onAction="#onReassign" 
+                                      variant="TONAL" styleClass="m3-button-tonal" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                            <M3Button fx:id="btnAdjustPaymentAction" text="Adjust Payment Record" onAction="#onAdjustPaymentClick" 
+                                      variant="OUTLINED" styleClass="m3-button-outlined" HBox.hgrow="ALWAYS" maxWidth="Infinity"/>
+                        </HBox>
+                    </VBox>
+
+                    <!-- Security & Audit Timeline -->
+                    <VBox spacing="8.0" VBox.vgrow="ALWAYS">
+                        <Label text="CHRONOLOGICAL AUDIT &amp; SECURITY TIMELINE" styleClass="label-small"/>
+                        <M3Timeline fx:id="auditTimeline" VBox.vgrow="ALWAYS"/>
+                    </VBox>
+                </VBox>
+            </SplitPane>
+        </center>
+    </BorderPane>
+
+    <!-- Contextual Override SideSheet -->
+    <M3SideSheet fx:id="overrideSideSheet" visible="false" prefWidth="380.0" StackPane.alignment="CENTER_RIGHT">
+        <content>
+            <VBox spacing="16.0">
+                <padding>
+                    <Insets top="20.0" right="20.0" bottom="20.0" left="20.0"/>
+                </padding>
+                <HBox alignment="CENTER_LEFT">
+                    <Label fx:id="lblSideSheetTitle" text="Administrative Override" styleClass="headline-small"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <M3Button text="✕" variant="TEXT" onAction="#onCloseSideSheetClick"/>
+                </HBox>
+                <Label text="Configure entity parameters and review audit implications." styleClass="body-small"/>
+                <VBox fx:id="sideSheetFormContainer" spacing="12.0" VBox.vgrow="ALWAYS"/>
+                <HBox spacing="10.0" alignment="CENTER_RIGHT">
+                    <M3Button text="Cancel" onAction="#onCloseSideSheetClick" variant="OUTLINED" styleClass="m3-button-outlined"/>
+                    <M3Button text="Execute Override" onAction="#onExecuteOverride" variant="FILLED" styleClass="m3-button-filled"/>
+                </HBox>
+            </VBox>
+        </content>
+    </M3SideSheet>
+
+</StackPane>

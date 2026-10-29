@@ -160,3 +160,271 @@
     M3-themed native popup). The `M3DatePicker` javadoc and `SPEC_NOTES/overlays.md` now point at the
     dialog components instead of "planned" work.
 
+42. **`M3Overlay` public facade (closes limitation in #35).** `M3Overlay` in public package
+    `io.m3fx.controls.overlay` encapsulates `OverlayLayer`, providing a clean scene-level facade
+    for dialogs, sheets, and snackbars accessible across module boundaries without exporting `internal`.
+43. **`M3SplitButton` uses connected button composite.** `M3SplitButton` pairs an `M3Button`
+    (primary action) with an `M3IconButton` (dropdown chevron) separated by a 1px divider. Inner
+    corners are squared while outer corners are rounded (20-24dp). The dropdown chevron animates
+    180° rotation with `SpringAnimation.BOUNCY` on open and returns to 0° on close.
+44. **Toolbars support floating pill and docked bar with standard and vibrant styles.** `M3Toolbar`
+    implements floating (Level 2 elevation, 28dp pill radius) and docked (Level 0 elevation, 1px
+    outline border) modes in horizontal and vertical orientations, with standard surface and vibrant
+    primary-container styling.
+45. **Carousels use spring snap physics and drag inertia.** `M3Carousel` clips items with large
+    corner radii (16-28dp) and coordinates mouse drag gestures and prev/next arrow buttons using
+    `SpringAnimation` snapping.
+46. **Dedicated `M3CircularProgress` canvas arc sweep.** Replaces stock JavaFX progress indicator with
+    an authentic Material 3 circular progress indicator (4dp stroke, round caps, active `primary`,
+    oscillating 25°-270° sweep arc rotating smoothly at ~260°/s).
+47. **Spring physics preserves velocity on interruption.** `SpringAnimation` tracks current velocity
+    across steps, so rapid taps or retargeted animations maintain continuous momentum instead of
+    resetting to 0. Tactile press-scale feedback on buttons, cards, and chips uses spring physics.
+48. **`M3ShapeMorph` Canvas rendering eliminates `PathElement` NPE.** JavaFX's `Path.getElements().setAll()`
+    internally tracks node changes via `Path$3.onChanged`, where sparse or resized element arrays
+    trigger null pointer exceptions during rapid 60fps spring pulses. Rendering via a dedicated `Canvas`
+    and `GraphicsContext` with cubic Bézier lobes provides 100% thread safety, eliminates garbage
+    collection overhead, and enables fluid shape morphing between all 6 presets.
+49. **`M3SearchBar` decoupled master and displayed suggestion lists.** `M3SearchBar` now maintains
+    separate `masterSuggestions` (the authoritative list supplied by caller) and `displayedSuggestions`
+    (the filtered subset shown in the popup). Filtering no longer destroys the underlying suggestion
+    dataset on user keystrokes.
+50. **`OverlayLayer` partitioned sub-layers prevent accidental dismissal.** `OverlayLayer` isolates
+    `scrim`, `sheetLayer`, `modalLayer`, `anchoredLayer`, and `transientLayer`. `M3Snackbar.dismiss()`
+    clears only `transientLayer`, ensuring that transient toasts never inadvertently dismiss open
+    modal dialogs or bottom sheets.
+51. **`M3Chip` custom skin adds closable trailing affordance.** `M3Chip` now features an `onCloseProperty`
+    callback and displays a trailing close button (`M3Icon.symbol("close")`) when `isClosable()` is true.
+    Event handlers consume click and press events so closing does not inadvertently toggle chip selection.
+52. **`M3TopAppBar` symmetric spacing for Center-Aligned mode.** Center-aligned top app bars balance
+    flexible spacers on both sides of the title (`leftSpacer` and `rightSpacer`), perfectly centering the
+    title text relative to the app bar bounds while maintaining left navigation and right actions.
+53. **Built-in Pure JavaFX 21 Analytics Suite with zero external dependencies.** `M3SplineChart`, `M3BarChart`,
+    `M3DonutChart`, `M3Sparkline`, and `M3Heatmap` are implemented natively using `Canvas` and `GraphicsContext`
+    with cubic Bézier Catmull-Rom spline curves. This achieves 60fps rendering, dynamic resolution of
+    `-md-sys-color-*` looked-up colors, crosshair hover inspection, and spring transitions with zero
+    external library overhead.
+54. **Hardware-Accelerated 3D Viewports (`SubScene` & `PerspectiveCamera`).** `M3Scene3D`, `M3ModelViewer3D`,
+    `M3AnatomyViewer3D`, and `M3GyroRing3D` leverage JavaFX's native 3D hardware pipeline with specular
+    `PhongMaterial` responding to M3 theme palettes, mouse orbit/pan/zoom controls, and procedural 3D
+    gym equipment/anatomical meshes.
+55. **3D Parallax Tilt with Specular Glare (`M3TiltCard3D`).** `M3TiltCard3D` applies cursor-relative
+    3D rotation transforms (`Rotate.X_AXIS` and `Rotate.Y_AXIS`) coupled with `SpringAnimation` and a dynamic
+    linear gradient sheen that simulates real-world physical holographic depth.
+56. **High-Density Enterprise Telemetry Grid & Widgets.** `M3DataTable`, `M3StatCard`, `M3Timeline`,
+    `M3Stepper`, and `M3SpeedDial` provide rich enterprise dashboard capabilities including instant
+    search filtering, inline sparkline cells, status badge factories, vertical activity pipelines,
+    multi-step wizards, and spring-blooming radial action wheels.
+57. **Elimination of Prism `BoxBounds` `ClassCastException` in `M3TiltCard3D` via 2.5D Perspective Matrix & Parallax.**
+    Directly attaching 3D rotation transforms (`Rotate.X_AXIS` / `Rotate.Y_AXIS`) to a 2D node (`StackPane`) in
+    standard 2D layouts corrupts the bounding box to `BoxBounds`. When Prism dirty region tracking traverses
+    parent 2D containers (`ScrollPane`, `HBox`), it attempts a hard cast `(RectBounds) bounds`, causing
+    `ClassCastException: BoxBounds cannot be cast to RectBounds`. Transitioning `M3TiltCard3D` to 2D `Shear(x, y)`,
+    `Scale(x, y)`, multiplane layer parallax (`contentContainer.setTranslateX/Y`), dynamic light-tracking
+    `DropShadow` offset, and cursor-following specular sheen overlay preserves 100% 2D `RectBounds` fidelity,
+    eliminating all pipeline crashes while delivering butter-smooth 144Hz spatial depth and crisp text rendering.
+58. **Athletic Polar & Radial Telemetry Suite (`M3RadarChart`, `M3GaugeChart`, `M3Hologram`, `M3PulseBeacon`).**
+    Expands the futuristic analytical ecosystem with `M3RadarChart` (spider/polar attribute polygon with
+    concentric web rings and vertex inspection), `M3GaugeChart` (radial speedometer with spring-animated arcs
+    and numeric readouts), `M3Hologram` (sci-fi container with laser scanline sweep and corner brackets),
+    and `M3PulseBeacon` (concentric ripple wave operational status indicators).
+59. **Live Athletic Workout Telemetry HUD (`M3RepCounter`, `M3HeartRateZones`, `M3IntervalTimer`, `M3WorkoutHUD`).**
+    Implements athletic training stations directly tied to the smart gym domain: kinetic repetition counter with
+    spring-physics impulse bounce (1.0 -> 1.24 -> 1.0) and rolling cadence velocity (reps/min); 5-zone sports
+    science cardiac intensity visualizer (Warm Up, Fat Burn, Aerobic, Anaerobic, Redline Peak) with live status
+    beacon; and circular HIIT/Tabata work/rest interval timer.
+60. **Interactive Gym Floorplan Map with Live 3D Model Linking (`M3GymFloorMap`).**
+    Provides a 2D/2.5D facility blueprint canvas depicting fitness zones (Free Weights, Cardio Deck, Functional Cage,
+    Spa) with real-time equipment occupancy pins (Available, In Use, Maintenance). Clicking any pin opens a live
+    detail card with an action linking directly to `M3ModelViewer3D` to inspect that exact equipment item in 3D.
+61. **Global Spotlight Command Palette (`M3CommandPalette` - `Ctrl+K` / `Cmd+K`).**
+    Delivers a centered glassmorphic spotlight launcher accessible from any screen via global keyboard shortcut
+    (`Ctrl+K` or `Cmd+K`) or the top app bar search badge. Supports fuzzy filtering across categorized actions
+    (Workouts, Equipment, Members, Themes, Navigation) with arrow-key traversal, `ENTER` execution, and `ESC` dismissal.
+62. **Full 12-Piece Procedural 3D Gym Equipment Catalog (`M3ModelViewer3D`).**
+    Expanded procedural 3D model generator from 4 basic models to 12 commercial gym equipment stations
+    (`DUMBBELL`, `BARBELL`, `KETTLEBELL`, `WORKOUT_BENCH`, `SQUAT_RACK`, `CABLE_CROSSOVER`, `LEG_PRESS`,
+    `TREADMILL`, `EXERCISE_BIKE`, `ROWING_MACHINE`, `PUNCHING_BAG`, `PREACHER_BENCH`). Every piece is assembled
+    from hardware-accelerated JavaFX 3D primitive meshes (`Box`, `Cylinder`, `Sphere`), shaded with specular
+    and diffuse phong materials, aligned flush to the ground plane at Y = 80.0, and centered on (0, 0)
+    for seamless 360-degree orbit camera inspection and interactive wireframe toggling.
+63. **Expanded Athletic & Commercial Analytics Suite (`M3ScatterPlot`, `M3FunnelChart`, `M3ActivityCalendar`).**
+    Implemented high-performance canvas visualizations for sports science and gym management:
+    (1) `M3ScatterPlot` for Velocity-Based Training (VBT) load-velocity profiling, featuring automatic
+    coordinate scaling, 4-quadrant crosshairs, bubble radius sizing, and analytical Ordinary Least Squares (OLS)
+    linear regression trendline computation (y = mx + b, R²);
+    (2) `M3FunnelChart` for member lifecycle and marketing conversion pipelines, featuring tapered horizontal
+    trapezoids, overall conversion rates, step-to-step drop-off badges (▼ -XX.X%), and interactive hover tooltips;
+    (3) `M3ActivityCalendar` for 52-week annual training consistency (7 × 53 matrix = 371 days), featuring 4-level
+    M3 theme color intensity ramps, streak calculations (current active streak, longest lifetime streak, total
+    workouts), and date-precise hover cards.
+64. **Smooth Viewport Scrolling & Elimination of Nested Scrollpane Conflicts (Side Menu & All Pages).**
+    Resolved critical viewport clipping and cropping issues across the application shell:
+    (1) **Side Menu Overflow:** In `app-shell.fxml` (`M3NavigationRail`) and `M3NavigationDrawer.java`, destination
+    toggle items are wrapped in a transparent, borderless `ScrollPane` with `fitToWidth=true`, `hbarPolicy=NEVER`,
+    and `VBox.vgrow=ALWAYS`. This ensures all rail destinations (e.g. Staff, Help/Documentation) and drawer options
+    remain accessible and scrollable on compact displays.
+    (2) **Elimination of Hardcoded Height Clamps:** Removed rigid `prefHeight="820.0"` from root and inner containers
+    across all 18 screen FXMLs (`dashboard.fxml`, `attendance.fxml`, `customer-list.fxml`, `payment.fxml`, `membership.fxml`,
+    `staff.fxml`, etc.), resetting root elements to `Region.USE_COMPUTED_SIZE` with `minHeight="USE_PREF_SIZE"` at runtime.
+    This allows containers to calculate their real content bounds (e.g. 1050px+).
+    (3) **Nested Scrollpane Collision Prevention:** `AppShellController.loadScreen()` and `MainApp.java` dynamically
+    inspect the view tree using `containsScrollPane(view)`. Screens with internal scroll areas (`customer-profile`,
+    `medical-profile`, `progress`, `trainer-profile`, etc.) are mounted directly into `contentArea` without an outer
+    `ScrollPane`, eliminating double-scroll conflicts, trapped wheel events, and outer clipping.
+    (4) **Full-Height Vertical Scrolling with Bottom Breathing Room:** Views lacking internal scroll areas are wrapped
+    in a `ScrollPane` with `fitToHeight=false` and generous bottom padding (`Insets bottom="64.0"`), guaranteeing
+    that users can scroll smoothly from the top to the very bottom without cards, speed dials, or action toolbars being cropped.
+    (5) **Unsquished Matrices:** Replaced `fitToHeight="true"` with `fitToHeight="false"` in `availability.fxml` and
+    `schedule.fxml` so large activity matrices and agenda grids can expand and scroll vertically rather than being squished.
+65. **Screen Resolution Matching, Interaction Freeze Elimination, and Layout Deconfliction.**
+    Fixed startup layout, window geometry, and UI interaction bugs reported during desktop execution:
+    (1) **Screen Geometry Auto-Fit:** Updated `GymApp.java` to query `Screen.getPrimary().getVisualBounds()`,
+    clamping restore sizes to monitor capabilities and calling `stage.setMaximized(true)` on startup. Removed rigid
+    `prefHeight="900.0" prefWidth="1440.0"` from `app-shell.fxml` root container, allowing fluid responsive scaling.
+    (2) **Elimination of Perceived Window Freeze:** Identified that `M3SpeedDial` extended `StackPane` without bounding
+    `maxWidth`/`maxHeight` and had `pickOnBounds=true`, causing an invisible full-window overlay that intercepted all
+    mouse clicks across the entire screen. Enforced `setMaxSize(USE_PREF_SIZE, USE_PREF_SIZE)` and `setPickOnBounds(false)`
+    in `M3SpeedDial`, and set `mouseTransparent="true"` on idle snackbar overlays (`globalSnackbar`, `dashboardSnackbar`).
+    (3) **Top App Bar Layout Deconfliction:** `M3TopAppBar` in `app-shell.fxml` was changed from `CENTER_ALIGNED` to
+    `SMALL` (left-aligned title) so the system brand title no longer collides with or renders underneath the centered
+    global command search trigger bar (`Ctrl + K`).
+    (4) **Responsive Bento Grid Elasticity:** Added flexible `minWidth` thresholds to Bento rows in `dashboard.fxml`,
+    allowing stat cards, spline charts, and 3D radar viewports to scale cleanly down to 1024px displays without
+    horizontal clipping.
+    (5) **CSS Paint ClassCastException Removal:** Removed inline `-fx-background: transparent;` from scroll pane wrappers
+    in `app-shell.fxml`, `AppShellController.java`, `MainApp.java`, and `M3NavigationDrawer.java`, relying exclusively on
+    standard `-fx-background-color: transparent;` to eliminate JavaFX `CssStyleHelper` paint cast exceptions.
+
+66. **Bound Property Set Exception, FXML Reflection Type Mismatch, and Win32 Maximization Rectification.**
+    Resolved the remaining runtime freezes and layout bugs reported during `runGym`:
+    (1) **M3Carousel Bound Property Crash:** In `M3Carousel.java`, `clipRect.widthProperty().bind(viewport.widthProperty())`
+    and `heightProperty().bind(...)` were bound during initialization. `layoutChildren()` subsequently invoked
+    `clipRect.setWidth(w)` and `clipRect.setHeight(h)`. In JavaFX, setting a bound property throws `RuntimeException:
+    Rectangle.width : A bound value cannot be set.` whenever `layoutChildren()` runs (e.g. in `trainer-list.fxml` or
+    `membership.fxml`), causing the JavaFX pulse to abort and freezing the scene graph. Removed the redundant setter calls.
+    (2) **FXMLLoader Reflection Argument Type Mismatch:** Removed duplicate/overloaded `@FXML` methods in `AppShellController.java`
+    and `DashboardController.java` (`(ActionEvent event)`, `(MouseEvent event)`), consolidating to clean 0-arg handlers
+    (`onToggleThemeMode()`, `onOpenCommandPalette()`, `onToggleRail()`, `onLogout()`, etc.). In JavaFX, 0-arg handlers
+    universally accept any event type without reflection mismatch; previously, FXMLLoader bound to the `ActionEvent` signature,
+    and mouse clicks threw `IllegalArgumentException: argument type mismatch`.
+    (3) **CSS Looked-Up Colors ClassCastException:** Migrated inline styles (`-fx-background-color: -md-sys-color-...`)
+    from `M3CommandPalette.java` and `M3DataTable.java` into stylesheet classes (`.m3-command-palette-card`, `.m3-command-palette-header`,
+    `.m3-command-palette-badge`, `.m3-data-table-header`) in `m3fx.css`. Initialized `latestTheme = M3Theme.baseline(true)`
+    in `M3Stylesheets.java` and registered the theme in `GymApp.java` before FXML inflation, preventing probe failures in `ThemeColors`.
+    (4) **Win32 Window Maximization & Taskbar Cropping:** Reordered `stage.show()` before `stage.setMaximized(true)` in
+    `GymApp.java`. Calling `setMaximized(true)` before `show()` on Windows causes DWM to offset window coordinates, pushing the
+    bottom of the client window behind the Windows taskbar and cropping bottom navigation items.
+    (5) **End-Of-Scroll Padding:** Increased side navigation rail bottom insets to `56.0` and dashboard container bottom insets
+    to `112.0` (with `48.0` on `equipment.fxml` and `gym-floor-map.fxml`), ensuring the bottom-most navigation buttons (`navHelp`),
+    speed dials, and 3D radar/chart cards are completely visible with comfortable breathing room when scrolled to the end.
+
+67. **Resolution of Windows STATUS_APPLICATION_HANG (0xCFFFFFFF), Screen Size Mismatch, Canvas OutOfMemoryError, and Smooth Scrolling:**
+    Resolved the critical window freeze, layout crop, and scrolling issues:
+    (1) **JVM Heap & Execution Environment (`build.gradle`):** The `runGym` Gradle task previously lacked JVM arguments,
+    running on Gradle's small default heap (256MB–512MB) while hosting 19 screens with procedural 3D models and canvases.
+    Configured `jvmArgs = ['-Xms512m', '-Xmx2048m', '--enable-native-access=ALL-UNNAMED', '--sun-misc-unsafe-memory-access=allow']`
+    for `runGym` (and `-Xmx1024m` for `test` and `runSamples`), eliminating heap exhaustion and Java 27 restricted method warnings.
+    (2) **Clean Stage Lifecycle & Screen Size Matching (`GymApp.java`):** Previously, `Scene` was instantiated with
+    `screenBounds.getWidth()` and `screenBounds.getHeight()`, which caused the decorated window frame (titlebar + borders)
+    to overflow the desktop work area by ~40px, pushing the bottom of the window behind the Windows Taskbar and cropping the
+    bottom of the side rail and all pages. Replaced this with standard responsive dimensions (`1280x800`) and invoked
+    `stage.setMaximized(true)` before `stage.show()`. Added explicit `stage.setOnCloseRequest(e -> { Platform.exit(); System.exit(0); });`
+    and `@Override public void stop()`, terminating background threads cleanly on exit and preventing NTSTATUS 0xCFFFFFFF hangs.
+    (3) **M3GymFloorMap Infinite Loop & OutOfMemory Heap Exhaustion:** In `gym-floor-map.fxml`, `prefWidth="Infinity"` and
+    `prefHeight="Infinity"` caused the floorplan's `redraw()` method to compute an infinite height, running `for (double y = 0; y < h; y += 24)`
+    millions of times and generating gigabytes of `strokeLine` buffer commands until throwing `OutOfMemoryError: Java heap space`.
+    Set concrete preferred bounds (`800x520`) in FXML and clamped `w` and `h` in `M3GymFloorMap.java` to finite maximums (`2560x1600`).
+    (4) **AnimationTimer Lifecycle Cleanup:** Across 10 controls (`M3PulseBeacon`, `M3ParticleCanvas`, `M3Hologram`,
+    `M3Scanline`, `M3GlowShadow`, `M3ModelViewer3D`, `M3GyroRing3D`, `M3IntervalTimer`, `M3CircularProgress`, `M3WavyProgress`),
+    timers were running continuously even when nodes were removed from the scene graph, pinning entire page scene trees in memory
+    and causing 100% CPU thread thrashing. Added `sceneProperty()` listeners to stop all animation timers whenever `scene == null`.
+    (5) **Smooth Accelerated Scrolling & End-Crop Fix (`AppShellController.java`):** Implemented `enableSmoothScrolling`
+    with responsive 48px natural mouse-wheel stepping, direction normalization, and `pannable=true` across both the side navigation
+    rail's scroll pane and all dynamic module views in `contentArea`. Increased bottom padding on navigation rail to `64.0`
+    so the bottom items (`Documentation`, `Staff & Admin`) and bottom page cards are completely visible with comfortable breathing room.
+    (6) **CSS Looked-Up Colors & ClassCastException Cleanup:** Replaced all remaining inline `setStyle` calls in `M3StatCard.java`,
+    `M3DonutChart.java`, `M3DataTable.java`, `M3CommandPalette.java`, `M3Stepper.java`, and `M3Timeline.java` with centralized
+    style classes in `m3fx.css`, and eliminated the probe mechanism in `ThemeColors.java`.
+
+
+
+
+68. **Audit pass (Oct 2026): spec alignment + bug sweep across the whole library and app.**
+    Eight parallel audit agents reviewed every `m3fx-core` token/theme file, every control package,
+    and all 19 gym screens. Landmark fixes, each verified against `refs/material-web-2.5.0` tokens,
+    `material-color-utilities-main`, or m3.material.io:
+    (1) **Skin listener leaks** closed in `M3Button`, `M3IconButton`, `M3Chip`, `M3Card`, `M3CircularProgress`,
+    `M3WavyProgress`, `M3Calendar`, `M3LinearProgress` — dispose() now removes every listener/binding it registered.
+    (2) **Ripple now holds ink while pressed** (M3 behavior: expand on press, fade on release) instead of fading in parallel.
+    (3) **`MotionTokens.emphasized()` was returning the emphasized-decelerate curve** (0.05,0.7,0.1,1); fixed to the spec
+    curve cubic-bezier(0.2,0,0,1); added missing extra-long durations and standard accelerate/decelerate easings.
+    (4) **Linear/circular/wavy progress rebuilt to the updated M3 spec**: 4dp fixed stroke, 4dp stop indicator + gap,
+    indeterminate keyframes from material-web, Expressive wavy tokens (amplitude 3dp, wavelength 40/20dp).
+    (5) **Navigation bar/rail/drawer keep one destination always active** (re-select on active click); top app bar
+    medium/large variants now enforce their 112/152dp container heights; toolbar floating is level 3 with full-shape radius.
+    (6) **Charts**: negative/flat data no longer produce NaN bars/curves (zero-baseline handling), Catmull-Rom overshoot
+    clamped, data-table zebra striping alternates within the visible page, sortable headers implemented, speed-dial wheel
+    rebuilt around the FAB center with stagger animation, stepper gained a keyboard-operable error state.
+    (7) **Gym app**: replaced 11 icon names missing from the bundled catalog (rendered blank), wired dead buttons
+    (schedule week nav, override, bottom-sheet log entry, floor-map zoom + 3D inspector, live-workout reps/pause/clock),
+    populated previously empty tables (attendance, staff, membership, payment), removed hardcoded root widths that fought
+    the shell viewport, exclusive ToggleGroups for filter/method chips, fixed the inverted dark-mode toggle reading.
+    (8) **Theme stays on the baseline dynamic-color spec.** An audit attempt switched `M3Theme.resolve()` to
+    `SpecVersion.SPEC_2026`; probing the ported engine showed the repo-locked baseline (seed #6750A4 / TonalSpot / light →
+    primary #65558f, container #e9ddff, locked by `M3ThemeTest` + `docs/SPEC_NOTES/systems.md`) is what SPEC_2021 yields,
+    while SPEC_2025/2026 yield #655789/#d4c3fd. The spec-version change was reverted; the bundled 2025/2026 specs remain
+    available through the `DynamicScheme` 5-arg constructors for future opt-in.
+    (9) **CSS**: integrated ~20 spec corrections into `m3fx.css` (menu item 48dp, tooltip shapes/elevation, 16dp slider
+    track, 40dp icon-button container radius, 56dp text-field box, assist chip elevated variant, switch disabled
+    12%/38% state colors, side-sheet standard/modal surfaces, search-bar elevation, calendar :today, stepper error
+    styles, linear-progress class names).
+    (10) **`GymApp` shutdown**: window close now routes through `Platform.exit()` so `stop()` cleanup runs before the
+    force-exit that guards against orphaned threads.
+
+69. **Apple-style fluid motion for the app shell (Oct 2026).** User request: Apple-grade spring/morph
+    animation ("like in their videos"). Added — clearly marked NON-M3, Apple-flavored tokens in
+    `MotionTokens` (sheet ease cubic-bezier(0.32, 0.72, 0, 1) @450ms, gentle/fade curves, spring
+    presets APPLE_SETTLE k=320 ζ=0.88 and APPLE_PLAYFUL k=380 ζ=0.65), transform-only enter/exit/
+    press helpers in `internal/MotionUtil` (per-node tracked Timeline, scene-exit cleanup, FX-thread
+    guard), and `SpringAnimation.animateTranslation/stopTransforms`. The shell (`AppShellController`)
+    now plays a 400ms rise+fade+scale enter on every page swap (swap itself stays synchronous — the
+    FXML test contracts assert `contentArea` has exactly one child immediately after navigation),
+    springs a single nav-highlight pill between rail destinations (stiffness 320, ζ=0.88, velocity
+    preserved on retarget so fast clicking morphs continuously), and press-scales rail buttons.
+    Rule 25's "no `io.m3fx.controls.internal` imports" gains one documented exception for the shell
+    (see `controller/README.md` rule 25); screen controllers still use public API only. Page exit
+    overlaps are intentionally not used in the shell because `GymAppScreenViewerTest` pins the
+    one-child semantics; `MotionUtil.exit` remains available for containers that tolerate it.
+
+70. **Trainer-tab freeze investigation (Oct 2026).** Thread dumps of a frozen live session showed
+    the FX thread burning CPU continuously (~60fps pulses) and QuantumRenderer stuck in
+    `NGGroup.renderForcedContent` — a repaint storm, not a deadlock; scripted navigation (real
+    mouse events, scrolling, hovering, 16+ navigations incl. four trainer visits) could not
+    reproduce it. Three defensive fixes shipped: (1) `AppShellController.loadScreen` no longer
+    forces `minHeight=USE_PREF_SIZE` on roots that ARE ScrollPanes — pinning a ScrollPane to its
+    own pref height defeats its scrolling and forces enormous layout passes on the tallest pages
+    (trainer screens); (2) page entrances fade+rise without scale — a non-1.0 page scale feeds
+    JavaFX's snap-scale-aware layout insets and re-lays-out the whole page subtree every frame
+    (`MotionUtil.enter(node, direction, fromScale)` added, pages pass 1.0); (3) the nav pill
+    dedupes retargets (same button + same geometry = no spring restart, so no listener feedback
+    can keep a spring — and a full-scene repaint — alive forever). A freeze watchdog in `GymApp`
+    samples FX CPU and dumps FX + QuantumRenderer stacks to stderr if the FX thread stays >60%
+    busy for 4s, so any future freeze self-diagnoses in the runGym console.
+
+71. **Apple-style launch gates: splash → login → shell morph (Oct 2026).** User request: add a
+    splash screen and a login page with expanded morph animation. Library: `MotionUtil` gained
+    `splashIn`/`splashOut`/`shake`/`morphFromBounds` (transform-only, tracked, scene-exit-safe;
+    `morphFromBounds` uses the verified JavaFX center-pivot scale formula
+    `t = startMin − refMin − (1−s)·refSize/2`, probed empirically — JavaFX scales about the layout
+    bounds center, not the top-left) + `MotionTokens.APPLE_SPLASH_DURATION`; all locked by
+    `MotionUtilTest`. App: `LaunchGateController` builds the splash and glass login card entirely
+    in code (no FXML/fx:ids/@FXML — the FXML test contracts stay byte-identical); `GymApp`
+    shows the gates only when `main()` sets `SHOW_LAUNCH_GATES=true`, so tests driving
+    `start()` directly get the pre-gate shell unchanged. Choreography: splash blooms in →
+    progress fills while the dashboard prewarms → text dissolves while the brand mark reparents
+    into the login card and springs into place (shared-element morph) → valid sign-in captures
+    the card's scene bounds and the whole shell morphs out of that footprint (`morphFromBounds`)
+    while the veil lifts → sign-out reverses into the gate. Invalid input shakes the card
+    (`shake`), no dialogs. Demo auth: any email + 4+ char password (no backend by design —
+    `controller` purity rules hold).

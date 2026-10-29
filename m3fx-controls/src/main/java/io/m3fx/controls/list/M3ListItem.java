@@ -9,15 +9,16 @@ import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 /**
  * M3 list item: one/two/three-line rows with leading and trailing content.
  *
- * <p>See <a href="https://m3.material.io/components/lists/overview">M3 lists</a>. One-line 56dp
- * (with icon) / 56dp, two-line 72dp, three-line 88dp; headline/body/supporting type roles;
- * 16dp... actually 24dp leading padding with icon, 16dp without.
+ * <p>See <a href="https://m3.material.io/components/lists/overview">M3 lists</a>. One-line 56dp,
+ * two-line 72dp, three-line 88dp (container heights from {@code _md-comp-list.scss}); adding
+ * supporting or overline text grows the height even when the item was built as one-line. Leading
+ * and trailing content are optional: when absent their slots are unmanaged so no dead spacing is
+ * reserved (token leading/trailing space is 16dp).
  */
 public class M3ListItem extends HBox {
 
@@ -38,6 +39,7 @@ public class M3ListItem extends HBox {
     private final HBox leadingBox = new HBox();
     private final HBox trailingBox = new HBox();
     private final VBox textBox = new VBox(2);
+    private int lines = ONE_LINE;
 
     /** Creates a one-line item. */
     public M3ListItem() {
@@ -88,6 +90,27 @@ public class M3ListItem extends HBox {
         } else if (!needsOverline && hasOverline) {
             textBox.getChildren().remove(overlineLabel);
         }
+        // Optional leading/trailing slots collapse when empty instead of reserving spacing.
+        leadingBox.setManaged(getLeading() != null);
+        trailingBox.setManaged(getTrailing() != null);
+        applyHeight();
+    }
+
+    /** Applies the M3 container height for the effective line count (56/72/88dp). */
+    private void applyHeight() {
+        int natural = ONE_LINE;
+        if (!getSupporting().isEmpty()) {
+            natural++;
+        }
+        if (!getOverline().isEmpty()) {
+            natural++;
+        }
+        int effective = Math.min(THREE_LINES, Math.max(lines, natural));
+        setMinHeight(switch (effective) {
+            case THREE_LINES -> 88;
+            case TWO_LINES -> 72;
+            default -> 56;
+        });
     }
 
     /** Returns the headline property. */
@@ -156,12 +179,12 @@ public class M3ListItem extends HBox {
      * @param lines 1-3
      */
     public void setLines(int lines) {
-        int clamped = Math.min(3, Math.max(1, lines));
+        this.lines = Math.min(THREE_LINES, Math.max(ONE_LINE, lines));
         pseudoClassStateChanged(
-                javafx.css.PseudoClass.getPseudoClass("two-lines"), clamped >= 2);
+                javafx.css.PseudoClass.getPseudoClass("two-lines"), this.lines >= TWO_LINES);
         pseudoClassStateChanged(
-                javafx.css.PseudoClass.getPseudoClass("three-lines"), clamped == 3);
-        setMinHeight(clamped == 1 ? 56 : clamped == 2 ? 72 : 88);
+                javafx.css.PseudoClass.getPseudoClass("three-lines"), this.lines == THREE_LINES);
+        applyHeight();
     }
 
     /** Leading content property (FXML-settable). */
@@ -180,13 +203,18 @@ public class M3ListItem extends HBox {
     }
 
     /**
-     * Sets the leading content (icon, avatar, image).
+     * Sets the leading content (icon, avatar, image); {@code null} collapses the leading slot.
      *
      * @param leading leading node, may be {@code null}
      */
     public void setLeading(Node leading) {
         this.leading.set(leading);
-        leadingBox.getChildren().setAll(leading == null ? new Region() : leading);
+        if (leading == null) {
+            leadingBox.getChildren().clear();
+        } else {
+            leadingBox.getChildren().setAll(leading);
+        }
+        leadingBox.setManaged(leading != null);
     }
 
     /** Returns the trailing content property. */
@@ -200,12 +228,18 @@ public class M3ListItem extends HBox {
     }
 
     /**
-     * Sets the trailing content (checkbox, switch, text, icon).
+     * Sets the trailing content (checkbox, switch, text, icon); {@code null} collapses the
+     * trailing slot.
      *
      * @param trailing trailing node, may be {@code null}
      */
     public void setTrailing(Node trailing) {
         this.trailing.set(trailing);
-        trailingBox.getChildren().setAll(trailing == null ? new Region() : trailing);
+        if (trailing == null) {
+            trailingBox.getChildren().clear();
+        } else {
+            trailingBox.getChildren().setAll(trailing);
+        }
+        trailingBox.setManaged(trailing != null);
     }
 }

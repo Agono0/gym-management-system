@@ -8,12 +8,17 @@ import javafx.scene.control.Slider;
 /**
  * M3 slider: continuous and discrete (step) modes with 48dp touch handling.
  *
- * <p>See <a href="https://m3.material.io/components/sliders/overview">M3 sliders</a>. Active track
- * 4dp, inactive track 16dp... actually both 4dp visually with the inactive track on
- * surface-container-highest; thumb is a 4x44dp handle (20dp gap). Discrete mode snaps to
- * {@code majorTickUnit} steps and shows a value indicator via the label formatter hook.
+ * <p>See <a href="https://m3.material.io/components/sliders/overview">M3 sliders</a>. The updated
+ * M3 Expressive slider (androidx {@code SliderTokens}) uses a 16dp active track, a 4dp inactive
+ * track, a 4x44dp handle and 4dp stop indicators; the baseline material-web v0_192 tokens define
+ * 4dp tracks with a 20dp round handle. The handle dimensions come from the CSS (4x44 handle),
+ * so both generations render. Discrete mode snaps to {@code majorTickUnit} steps and styles the
+ * axis ticks as stop indicators via the {@code .axis} CSS hooks.
  */
 public class M3Slider extends Slider {
+
+    /** Minimum touch target in px (spec: 48dp). */
+    public static final double TOUCH_TARGET = 48;
 
     private final BooleanProperty discrete = new SimpleBooleanProperty(this, "discrete", false);
 
@@ -33,7 +38,7 @@ public class M3Slider extends Slider {
         super(min, max, value);
         getStyleClass().add("m3-slider");
         setFocusTraversable(true);
-        setMinHeight(48);
+        setMinHeight(TOUCH_TARGET);
         discreteProperty().addListener((obs, oldV, isDiscrete) -> {
             setSnapToTicks(isDiscrete);
             pseudoClassStateChanged(
@@ -55,6 +60,10 @@ public class M3Slider extends Slider {
         slider.setMajorTickUnit(step);
         slider.setMinorTickCount(0);
         slider.setShowTickMarks(true);
+        // Arrow keys move one step, matching the snapped drag behavior.
+        if (step > 0) {
+            slider.setBlockIncrement(step);
+        }
         slider.setDiscrete(true);
         return slider;
     }

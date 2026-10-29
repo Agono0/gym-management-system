@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+<?import javafx.scene.shape.Circle?>
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chip.M3Chip?>
+<?import io.m3fx.controls.effect.M3GlassPane?>
+<?import io.m3fx.controls.floorplan.M3GymFloorMap?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.progress.M3LinearProgress?>
+<?import io.m3fx.controls.scene3d.M3ModelViewer3D?>
+
+<StackPane xmlns="http://javafx.com/javafx/21"
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.GymFloorMapController"
+           prefWidth="1280.0"
+           styleClass="floor-map-root">
+
+    <!-- Main Floor Map Presentation Container -->
+    <BorderPane styleClass="floor-map-layout">
+        <!-- Top App Bar & Layer Selection Header -->
+        <top>
+            <VBox spacing="8.0" styleClass="top-bar-box">
+                <padding><Insets top="16.0" right="24.0" bottom="12.0" left="24.0"/></padding>
+                <HBox alignment="CENTER_LEFT" spacing="16.0" styleClass="header-row">
+                    <Label text="Gym Floor Blueprint &amp; 3D Spatial Twin" styleClass="header-title-text"/>
+                    <M3Chip fx:id="occupancyChip" text="Occupancy: 64 / 120 (53%)" styleClass="occupancy-badge"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <M3IconButton onAction="#onZoomOut" styleClass="zoom-btn">
+                        <graphic>
+                            <M3Icon symbolName="remove"/>
+                        </graphic>
+                    </M3IconButton>
+                    <Label fx:id="zoomPercentLabel" text="100%" styleClass="zoom-label"/>
+                    <M3IconButton onAction="#onZoomIn" styleClass="zoom-btn">
+                        <graphic>
+                            <M3Icon symbolName="add"/>
+                        </graphic>
+                    </M3IconButton>
+                    <Separator orientation="VERTICAL"/>
+                    <M3Button text="Reset View" onAction="#onResetView" variant="TEXT" styleClass="text-btn-compact"/>
+                </HBox>
+
+                <!-- Layer Toggle Strip -->
+                <HBox spacing="8.0" alignment="CENTER_LEFT" styleClass="layer-toggle-strip">
+                    <Label text="Layers:" styleClass="layer-label"/>
+                    <M3Chip fx:id="layerPinsChip" text="Machine Pins" selected="true" variant="FILTER" onAction="#onTogglePinsLayer"/>
+                    <M3Chip fx:id="layerHeatmapChip" text="Occupancy Heatmap" selected="true" variant="FILTER" onAction="#onToggleHeatmapLayer"/>
+                    <M3Chip fx:id="layerZonesChip" text="Zone Boundaries" selected="true" variant="FILTER" onAction="#onToggleZonesLayer"/>
+                    <M3Chip fx:id="layerSensorsChip" text="IoT Sensors" selected="false" variant="FILTER" onAction="#onToggleSensorsLayer"/>
+                </HBox>
+            </VBox>
+        </top>
+
+        <!-- Center: Interactive 2.5D Blueprint Canvas Stack -->
+        <center>
+            <StackPane fx:id="canvasStackPane" styleClass="blueprint-canvas-container">
+                <!-- Core 2.5D Blueprint Viewport Component -->
+                <M3GymFloorMap fx:id="gymFloorMap" prefWidth="800.0" prefHeight="520.0"/>
+
+                <!-- Floating 1-Click 3D Inspection Card (Initially Hidden) -->
+                <M3GlassPane fx:id="inspectionGlassCard" visible="false" maxWidth="380.0" maxHeight="440.0"
+                             StackPane.alignment="CENTER" styleClass="pin-popover-glass">
+                    <VBox spacing="10.0" styleClass="popover-inner-box">
+                        <padding><Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/></padding>
+                        <HBox alignment="CENTER_LEFT">
+                            <Label fx:id="inspectEquipmentNameLabel" text="Olympic Power Cage #01" styleClass="popover-title"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <M3IconButton onAction="#onCloseInspection" styleClass="popover-close-btn">
+                                <graphic>
+                                    <M3Icon symbolName="close"/>
+                                </graphic>
+                            </M3IconButton>
+                        </HBox>
+                        <HBox spacing="8.0">
+                            <M3Chip fx:id="inspectStatusChip" text="AVAILABLE" styleClass="chip-status-available"/>
+                            <M3Chip fx:id="inspectConditionChip" text="CONDITION: GOOD" styleClass="chip-condition-good"/>
+                        </HBox>
+
+                        <!-- Embedded Compact 3D Digital Twin Viewport -->
+                        <M3ModelViewer3D fx:id="inspectModelViewer3D" prefWidth="340.0" prefHeight="220.0"
+                                         styleClass="popover-3d-viewport"/>
+
+                        <Label fx:id="inspectLastMaintLabel" text="Last Maintenance: 2026-10-15" styleClass="popover-subtext"/>
+
+                        <HBox spacing="10.0" alignment="CENTER">
+                            <M3Button text="Mark Maintenance" onAction="#onScheduleServiceFromMap" variant="TONAL" styleClass="tonal-btn-compact"/>
+                            <M3Button text="Full Asset Page" onAction="#onOpenFullAssetDetails" variant="FILLED" styleClass="filled-btn-compact"/>
+                        </HBox>
+                    </VBox>
+                </M3GlassPane>
+            </StackPane>
+        </center>
+
+        <!-- Right: Zone Occupancy & Environmental Telemetry -->
+        <right>
+            <VBox spacing="14.0" prefWidth="300.0" styleClass="spatial-telemetry-rail">
+                <padding><Insets top="8.0" right="24.0" bottom="48.0" left="16.0"/></padding>
+                <Label text="Zone Congestion Telemetry" styleClass="telemetry-section-title"/>
+
+                <M3Card variant="ELEVATED" styleClass="zone-stat-card">
+                    <content>
+                        <VBox spacing="8.0" styleClass="zone-stat-box">
+                            <padding><Insets top="12.0" right="14.0" bottom="12.0" left="14.0"/></padding>
+                            <HBox alignment="CENTER_LEFT">
+                                <Label text="Cardio Deck" styleClass="zone-name"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Label text="78% (High)" styleClass="zone-val-warn"/>
+                            </HBox>
+                            <M3LinearProgress progress="0.78" styleClass="progress-warn"/>
+                        </VBox>
+                    </content>
+                </M3Card>
+
+                <M3Card variant="ELEVATED" styleClass="zone-stat-card">
+                    <content>
+                        <VBox spacing="8.0" styleClass="zone-stat-box">
+                            <padding><Insets top="12.0" right="14.0" bottom="12.0" left="14.0"/></padding>
+                            <HBox alignment="CENTER_LEFT">
+                                <Label text="Free Weights Arena" styleClass="zone-name"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Label text="62% (Med)" styleClass="zone-val-normal"/>
+                            </HBox>
+                            <M3LinearProgress progress="0.62" styleClass="progress-normal"/>
+                        </VBox>
+                    </content>
+                </M3Card>
+
+                <M3Card variant="ELEVATED" styleClass="zone-stat-card">
+                    <content>
+                        <VBox spacing="8.0" styleClass="zone-stat-box">
+                            <padding><Insets top="12.0" right="14.0" bottom="12.0" left="14.0"/></padding>
+                            <HBox alignment="CENTER_LEFT">
+                                <Label text="Olympic Platforms" styleClass="zone-name"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Label text="85% (Critical)" styleClass="zone-val-high"/>
+                            </HBox>
+                            <M3LinearProgress progress="0.85" styleClass="progress-high"/>
+                        </VBox>
+                    </content>
+                </M3Card>
+
+                <M3Card variant="ELEVATED" styleClass="zone-stat-card">
+                    <content>
+                        <VBox spacing="8.0" styleClass="zone-stat-box">
+                            <padding><Insets top="12.0" right="14.0" bottom="12.0" left="14.0"/></padding>
+                            <HBox alignment="CENTER_LEFT">
+                                <Label text="Functional Turf" styleClass="zone-name"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Label text="34% (Low)" styleClass="zone-val-low"/>
+                            </HBox>
+                            <M3LinearProgress progress="0.34" styleClass="progress-low"/>
+                        </VBox>
+                    </content>
+                </M3Card>
+
+                <Region VBox.vgrow="ALWAYS"/>
+
+                <VBox spacing="8.0" styleClass="quick-legend-box">
+                    <Label text="Map Legend" styleClass="legend-header"/>
+                    <HBox spacing="8.0" alignment="CENTER_LEFT">
+                        <Circle radius="6.0" fill="#00E676"/>
+                        <Label text="Available / Operational" styleClass="legend-text"/>
+                    </HBox>
+                    <HBox spacing="8.0" alignment="CENTER_LEFT">
+                        <Circle radius="6.0" fill="#FF1744"/>
+                        <Label text="Occupied / Live Set" styleClass="legend-text"/>
+                    </HBox>
+                    <HBox spacing="8.0" alignment="CENTER_LEFT">
+                        <Circle radius="6.0" fill="#FF9100"/>
+                        <Label text="In Maintenance / Service Req" styleClass="legend-text"/>
+                    </HBox>
+                </VBox>
+            </VBox>
+        </right>
+
+        <!-- Bottom: Blueprint Toolbar & Pin Placement Controls -->
+        <bottom>
+            <HBox alignment="CENTER_RIGHT" spacing="16.0" styleClass="blueprint-bottom-dock">
+                <padding><Insets top="12.0" right="24.0" bottom="16.0" left="24.0"/></padding>
+                <M3Button text="2.5D / 2D Perspective Toggle" onAction="#onTogglePerspective" variant="OUTLINED" styleClass="outlined-btn"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <M3Button text="Export Blueprint Layout (DXF/PDF)" onAction="#onExportBlueprint" variant="TEXT" styleClass="text-btn"/>
+                <M3Button text="+ Place Equipment Pin" onAction="#onPlacePin" variant="FILLED" styleClass="filled-primary-btn"/>
+            </HBox>
+        </bottom>
+    </BorderPane>
+
+</StackPane>

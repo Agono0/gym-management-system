@@ -69,7 +69,11 @@ public class M3TimePicker extends HBox {
                         new javafx.scene.control.SpinnerValueFactory.IntegerSpinnerValueFactory(
                                 0, 23, getValue() == null ? 0 : getValue().getHour()));
             } else {
-                int h12 = getValue() == null ? 12 : (getValue().getHour() % 12 == 0 ? 12 : getValue().getHour() % 12);
+                // Refresh the AM/PM label from the current value BEFORE the new factory fires
+                // pushToValue — the label may be stale from a previous 12h session.
+                LocalTime current = getValue() == null ? LocalTime.MIDNIGHT : getValue();
+                amPmToggle.setText(current.getHour() < 12 ? "AM" : "PM");
+                int h12 = current.getHour() % 12 == 0 ? 12 : current.getHour() % 12;
                 hourSpinner.setValueFactory(
                         new javafx.scene.control.SpinnerValueFactory.IntegerSpinnerValueFactory(
                                 1, 12, h12));

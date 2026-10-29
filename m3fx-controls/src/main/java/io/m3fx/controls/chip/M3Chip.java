@@ -1,11 +1,19 @@
 package io.m3fx.controls.chip;
 
+import io.m3fx.controls.icon.M3Icon;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleObjectProperty;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.control.Label;
+import javafx.scene.control.Skin;
+import javafx.scene.control.SkinBase;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
 
 /**
  * M3 chip: assist, filter, input and suggestion variants with icon support and selection state.
@@ -19,6 +27,7 @@ public class M3Chip extends ToggleButton {
     private final ObjectProperty<ChipVariant> variant =
             new SimpleObjectProperty<>(this, "variant", ChipVariant.ASSIST);
     private final BooleanProperty closable = new SimpleBooleanProperty(this, "closable", false);
+    private final ObjectProperty<Runnable> onClose = new SimpleObjectProperty<>(this, "onClose");
 
     /** Creates an assist chip. */
     public M3Chip() {
@@ -119,6 +128,9 @@ public class M3Chip extends ToggleButton {
     public void setVariant(ChipVariant variant) {
         ChipVariant old = this.variant.get();
         this.variant.set(variant == null ? ChipVariant.ASSIST : variant);
+        if (this.variant.get() == ChipVariant.INPUT) {
+            setClosable(true);
+        }
         updateStyleClass(old, this.variant.get());
     }
 
@@ -141,12 +153,141 @@ public class M3Chip extends ToggleButton {
         this.closable.set(closable);
     }
 
+    /** Returns the on-close callback property. */
+    public ObjectProperty<Runnable> onCloseProperty() {
+        return onClose;
+    }
+
+    /** Returns the on-close callback. */
+    public Runnable getOnClose() {
+        return onClose.get();
+    }
+
+    /**
+     * Sets the on-close callback run when the close affordance is clicked.
+     *
+     * @param onClose the callback
+     */
+    public void setOnClose(Runnable onClose) {
+        this.onClose.set(onClose);
+    }
+
+    @Override
+    protected Skin<?> createDefaultSkin() {
+        return new ChipSkin(this);
+    }
+
     private void updateStyleClass(ChipVariant oldV, ChipVariant newV) {
         if (oldV != null) {
             getStyleClass().remove("m3-chip-" + oldV.name().toLowerCase());
         }
         if (newV != null && !getStyleClass().contains("m3-chip-" + newV.name().toLowerCase())) {
             getStyleClass().add("m3-chip-" + newV.name().toLowerCase());
+        }
+    }
+
+    /** Skin laying out leading icon, chip label and trailing close affordance. */
+    static final class ChipSkin extends SkinBase<M3Chip> {
+        private final HBox root = new HBox(6);
+        private final StackPane leadingSlot = new StackPane();
+        private final Label textLabel = new Label();
+        private final StackPane closeSlot = new StackPane();
+        private final javafx.beans.value.ChangeListener<Node> graphicListener;
+        private final javafx.beans.value.ChangeListener<Boolean> closableListener;
+        private final javafx.beans.value.ChangeListener<Boolean> selectedListener;
+        private final javafx.beans.value.ChangeListener<ChipVariant> variantListener;
+
+        ChipSkin(M3Chip chip) {
+            super(chip);
+            root.setAlignment(Pos.CENTER);
+            root.getStyleClass().add("m3-chip-content");
+            root.setMouseTransparent(false);
+
+            leadingSlot.getStyleClass().add("m3-chip-leading");
+            textLabel.getStyleClass().add("m3-chip-text");
+            textLabel.textProperty().bind(chip.textProperty());
+            textLabel.textFillProperty().bind(chip.textFillProperty());
+            textLabel.fontProperty().bind(chip.fontProperty());
+
+            M3Icon closeIcon = M3Icon.symbol("close");
+            closeIcon.setScaleX(0.7);
+            closeIcon.setScaleY(0.7);
+            closeSlot.getStyleClass().add("m3-chip-close");
+            closeSlot.getChildren().add(closeIcon);
+            closeSlot.setCursor(javafx.scene.Cursor.HAND);
+
+            closeSlot.addEventHandler(MouseEvent.MOUSE_PRESSED, javafx.event.Event::consume);
+            closeSlot.addEventHandler(MouseEvent.MOUSE_RELEASED, javafx.event.Event::consume);
+            closeSlot.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
+                e.consume();
+                Runnable onClose = chip.getOnClose();
+                if (onClose != null) {
+                    onClose.run();
+                }
+            });
+
+            root.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
+                if (!chip.isDisabled()) {
+                    chip.fire();
+                }
+            });
+
+            graphicListener = (o, ov, nv) -> updateSlots(chip);
+            closableListener = (o, ov, nv) -> updateSlots(chip);
+            selectedListener = (o, ov, nv) -> updateSlots(chip);
+            variantListener = (o, ov, nv) -> updateSlots(chip);
+            chip.graphicProperty().addListener(graphicListener);
+            chip.closableProperty().addListener(closableListener);
+            chip.selectedProperty().addListener(selectedListener);
+            chip.variantProperty().addListener(variantListener);
+
+            updateSlots(chip);
+            root.getChildren().addAll(leadingSlot, textLabel, closeSlot);
+            getChildren().add(root);
+        }
+
+        @Override
+        public void dispose() {
+            M3Chip chip = getSkinnable();
+            if (chip != null) {
+                chip.graphicProperty().removeListener(graphicListener);
+                chip.closableProperty().removeListener(closableListener);
+                chip.selectedProperty().removeListener(selectedListener);
+                chip.variantProperty().removeListener(variantListener);
+                textLabel.textProperty().unbind();
+                textLabel.textFillProperty().unbind();
+                textLabel.fontProperty().unbind();
+            }
+            super.dispose();
+        }
+
+        private void updateSlots(M3Chip chip) {
+            // Selected filter chips replace any leading icon with the spec checkmark (18px box).
+            boolean showCheck = chip.getVariant() == ChipVariant.FILTER && chip.isSelected();
+            if (showCheck) {
+                M3Icon check = M3Icon.symbol("check");
+                check.setMinSize(18, 18);
+                check.setPrefSize(18, 18);
+                check.setMaxSize(18, 18);
+                leadingSlot.getChildren().setAll(check);
+                leadingSlot.setVisible(true);
+                leadingSlot.setManaged(true);
+                return;
+            }
+            Node g = chip.getGraphic();
+            leadingSlot.getChildren().clear();
+            if (g != null) {
+                leadingSlot.getChildren().add(g);
+                leadingSlot.setVisible(true);
+                leadingSlot.setManaged(true);
+            } else {
+                leadingSlot.setVisible(false);
+                leadingSlot.setManaged(false);
+            }
+
+            boolean isClose = chip.isClosable();
+            closeSlot.setVisible(isClose);
+            closeSlot.setManaged(isClose);
         }
     }
 }

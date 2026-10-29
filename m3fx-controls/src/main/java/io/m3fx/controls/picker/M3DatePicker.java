@@ -34,7 +34,9 @@ public class M3DatePicker extends DatePicker {
                         javafx.css.PseudoClass.getPseudoClass("input-focused"),
                         isFocused() || (getEditor() != null && getEditor().isFocused()));
         focusedProperty().addListener((obs, oldV, newV) -> refreshFocus.run());
-        getEditor().focusedProperty().addListener((obs, oldV, newV) -> refreshFocus.run());
+        if (getEditor() != null) {
+            getEditor().focusedProperty().addListener((obs, oldV, newV) -> refreshFocus.run());
+        }
         refreshFocus.run();
     }
 }

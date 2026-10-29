@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.button.M3SplitButton?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chart.M3DonutChart?>
+<?import io.m3fx.controls.chip.M3Chip?>
+<?import io.m3fx.controls.data.M3Timeline?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.sheet.M3SideSheet?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane xmlns="http://javafx.com/javafx/21"
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.ScheduleController"
+           prefWidth="1280.0"
+           styleClass="schedule-root">
+
+    <BorderPane prefWidth="1280.0">
+        <!-- Top App Bar & Time Navigation -->
+        <top>
+            <VBox styleClass="top-bar-container" spacing="8.0">
+                <HBox alignment="CENTER_LEFT" spacing="16.0">
+                    <padding><Insets top="12.0" right="24.0" bottom="12.0" left="24.0"/></padding>
+                    <Label text="SCHEDULE &amp; TIMETABLE" styleClass="title-large"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <M3IconButton fx:id="btnPrevWeek" accessibleText="Previous Week" onAction="#onPrevWeek">
+                        <graphic>
+                            <M3Icon symbolName="chevron_left"/>
+                        </graphic>
+                    </M3IconButton>
+                    <Label fx:id="lblCurrentDateRange" text="Oct 26 - Nov 01, 2026" styleClass="title-medium"/>
+                    <M3IconButton fx:id="btnNextWeek" accessibleText="Next Week" onAction="#onNextWeek">
+                        <graphic>
+                            <M3Icon symbolName="chevron_right"/>
+                        </graphic>
+                    </M3IconButton>
+                    <M3Button fx:id="btnToday" text="Today" onAction="#onToday" styleClass="m3-button-tonal"/>
+                    <Separator orientation="VERTICAL"/>
+                    <M3SplitButton fx:id="actionSplitButton" text="Book Slot" onAction="#onBook" styleClass="m3-split-button-filled"/>
+                </HBox>
+            </VBox>
+        </top>
+
+        <!-- Main Workspace Bento Split -->
+        <center>
+            <SplitPane dividerPositions="0.25, 0.72">
+                <!-- Left Filter & Resource Rail -->
+                <VBox spacing="16.0" styleClass="filter-rail">
+                    <padding><Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/></padding>
+                    <M3TextField fx:id="searchTrainerField" labelText="Search Coaches or Classes"/>
+                    <Label text="COACH ROSTER" styleClass="label-small"/>
+                    <ListView fx:id="trainerListView" VBox.vgrow="ALWAYS"/>
+                    <M3Button fx:id="btnShowAvailableTrainers" text="Available Coaches Matrix"
+                              onAction="#showAvailableTrainers" styleClass="m3-button-outlined" maxWidth="Infinity"/>
+                </VBox>
+
+                <!-- Center Calendar Matrix -->
+                <VBox spacing="8.0" styleClass="calendar-matrix-pane">
+                    <padding><Insets top="12.0" right="12.0" bottom="12.0" left="12.0"/></padding>
+                    <HBox spacing="8.0" alignment="CENTER_LEFT">
+                        <M3Chip fx:id="chipFilterConfirmed" text="Confirmed" selected="true"/>
+                        <M3Chip fx:id="chipFilterRequested" text="Requested" selected="true"/>
+                        <M3Chip fx:id="chipFilterCancelled" text="Cancelled" selected="false"/>
+                    </HBox>
+                    <ScrollPane fitToWidth="true" fitToHeight="false" VBox.vgrow="ALWAYS">
+                        <GridPane fx:id="agendaGrid" hgap="8.0" vgap="8.0" styleClass="agenda-grid-container"/>
+                    </ScrollPane>
+                </VBox>
+
+                <!-- Right Contextual Inspector SideSheet -->
+                <VBox fx:id="inspectorContainer" spacing="16.0" styleClass="sidesheet-surface">
+                    <padding><Insets top="20.0" right="20.0" bottom="20.0" left="20.0"/></padding>
+                    <HBox alignment="CENTER_LEFT">
+                        <Label fx:id="lblInspectorTitle" text="Session Inspector" styleClass="headline-small"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <M3IconButton fx:id="btnCloseInspector" accessibleText="Close Inspector" onAction="#onCloseInspector">
+                            <graphic>
+                                <M3Icon symbolName="close"/>
+                            </graphic>
+                        </M3IconButton>
+                    </HBox>
+                    <M3Card styleClass="inspector-summary-card" variant="OUTLINED">
+                        <content>
+                            <VBox spacing="10.0">
+                                <padding><Insets top="14.0" right="14.0" bottom="14.0" left="14.0"/></padding>
+                                <Label fx:id="lblSessionStatus" text="CONFIRMED" styleClass="badge-confirmed"/>
+                                <Label fx:id="lblAthleteName" text="Athlete: John Doe" styleClass="title-medium"/>
+                                <Label fx:id="lblCoachName" text="Coach: Marcus Vance" styleClass="body-medium"/>
+                                <Label fx:id="lblSessionTime" text="Time: 08:00 - 09:00 AM" styleClass="body-small"/>
+                                <Label fx:id="lblPriceOrSub" text="Price: Covered by Subscription" styleClass="label-large"/>
+                                <M3DonutChart fx:id="slotDonutChart" prefWidth="120.0" prefHeight="120.0"/>
+                            </VBox>
+                        </content>
+                    </M3Card>
+                    <Label text="LIFECYCLE AUDIT TRAIL" styleClass="label-small"/>
+                    <M3Timeline fx:id="sessionTimeline" VBox.vgrow="ALWAYS"/>
+                    <!-- Command Button Cluster -->
+                    <VBox spacing="8.0">
+                        <M3Button fx:id="btnConfirmAction" text="Confirm Session" onAction="#onConfirmClick"
+                                  styleClass="m3-button-filled" maxWidth="Infinity"/>
+                        <M3Button fx:id="btnCompleteAction" text="Complete Session" onAction="#onCompleteClick"
+                                  styleClass="m3-button-tonal" maxWidth="Infinity"/>
+                        <M3Button fx:id="btnNoShowAction" text="Mark No-Show" onAction="#onNoShowClick"
+                                  styleClass="m3-button-outlined" maxWidth="Infinity"/>
+                        <M3Button fx:id="btnCancelAction" text="Cancel Session" onAction="#onCancel"
+                                  styleClass="m3-button-text-danger" maxWidth="Infinity"/>
+                    </VBox>
+                </VBox>
+            </SplitPane>
+        </center>
+    </BorderPane>
+
+</StackPane>

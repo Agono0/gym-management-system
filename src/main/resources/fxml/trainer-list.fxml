@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.appbar.M3TopAppBar?>
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.button.M3SplitButton?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.carousel.M3Carousel?>
+<?import io.m3fx.controls.chart.M3Heatmap?>
+<?import io.m3fx.controls.chart.M3RadarChart?>
+<?import io.m3fx.controls.chip.M3Chip?>
+<?import io.m3fx.controls.data.M3DataTable?>
+<?import io.m3fx.controls.data.M3StatCard?>
+<?import io.m3fx.controls.effect.M3GlassPane?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/21" 
+      xmlns:fx="http://javafx.com/fxml/1" 
+      fx:controller="com.gym.controller.TrainerListController"
+      spacing="0" 
+      styleClass="trainer-list-root">
+
+    <!-- Top Application Bar -->
+    <M3TopAppBar fx:id="topAppBar" 
+                 title="Coaching &amp; Athletic Staff Management" 
+                 variant="LARGE" />
+
+    <!-- Main Scrollable Workspace -->
+    <ScrollPane fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED" VBox.vgrow="ALWAYS">
+        <VBox spacing="20">
+            <padding>
+                <Insets top="24.0" right="24.0" bottom="64.0" left="24.0" />
+            </padding>
+
+            <!-- Stat Card Bento Grid (reflows to 2x2 at ~804px content width instead of clipping) -->
+            <FlowPane hgap="16.0" vgap="16.0" alignment="CENTER_LEFT">
+                <M3StatCard fx:id="statTotalCoaches" title="TOTAL ACTIVE COACHES" value="16" deltaText="+2 this month" />
+                <M3StatCard fx:id="statCapacitySaturation" title="STAFF CAPACITY UTILIZATION" value="84.2%" deltaText="182 / 216 Clients" />
+                <M3StatCard fx:id="statTodaySlots" title="SLOTS BOOKED TODAY" value="68 / 82" deltaText="82.9% Fill Rate" />
+                <M3StatCard fx:id="statAverageRate" title="AVERAGE HOURLY RATE" value="\$74.50" deltaText="Min \$50.00 / Max \$120.00" />
+            </FlowPane>
+
+            <!-- Featured On-Duty Carousel Header -->
+            <VBox spacing="12">
+                <HBox alignment="CENTER_LEFT">
+                    <Label text="On-Duty Athletic Coaches Today" styleClass="title-medium" />
+                    <Region HBox.hgrow="ALWAYS" />
+                    <M3IconButton fx:id="btnCarouselPrev" accessibleText="Previous Coach Cards" onAction="#onCarouselPrev">
+                        <graphic><M3Icon symbolName="chevron_left" /></graphic>
+                    </M3IconButton>
+                    <M3IconButton fx:id="btnCarouselNext" accessibleText="Next Coach Cards" onAction="#onCarouselNext">
+                        <graphic><M3Icon symbolName="chevron_right" /></graphic>
+                    </M3IconButton>
+                </HBox>
+                <M3Carousel fx:id="carouselCoaches" prefHeight="220.0" />
+            </VBox>
+
+            <!-- Search, Filter & Command Strip (GlassPane) — rows wrap instead of clipping at
+                 ~804px content width: search + commands on row 1, domain chips reflow on row 2 -->
+            <M3GlassPane fx:id="filterGlassPane" styleClass="filter-strip-container">
+                <content>
+                <VBox spacing="12">
+                    <padding>
+                        <Insets top="16.0" right="16.0" bottom="16.0" left="16.0" />
+                    </padding>
+                    <HBox spacing="12" alignment="CENTER_LEFT">
+                        <M3TextField fx:id="txtSearch"
+                                     labelText="Search coaches..."
+                                     supportingText="Name, specialization, or email (Ctrl+F)"
+                                     prefWidth="380.0" HBox.hgrow="ALWAYS" />
+                        <Separator orientation="VERTICAL" />
+                        <M3SplitButton fx:id="btnSortOptions" text="Sort: Saturation" />
+                        <M3Button fx:id="btnAddTrainer" text="+ Onboard Coach" variant="FILLED" onAction="#onAdd" />
+                    </HBox>
+                    <FlowPane hgap="8.0" vgap="8.0" alignment="CENTER_LEFT">
+                        <Label text="Domain:" styleClass="label-small" />
+                        <M3Chip fx:id="chipFilterAll" text="All (16)" selected="true" />
+                        <M3Chip fx:id="chipFilterStrength" text="Strength" />
+                        <M3Chip fx:id="chipFilterHypertrophy" text="Hypertrophy" />
+                        <M3Chip fx:id="chipFilterRehab" text="Post-Rehab" />
+                        <M3Chip fx:id="chipFilterCardio" text="Cardio &amp; VO2" />
+                    </FlowPane>
+                </VBox>
+                </content>
+            </M3GlassPane>
+
+            <!-- Master Table Roster -->
+            <VBox spacing="12">
+                <Label text="Master Coaching Roster" styleClass="title-medium" />
+                <M3DataTable fx:id="tableTrainers" minHeight="360.0" VBox.vgrow="ALWAYS" />
+            </VBox>
+
+            <!-- Column Declarations for Controller Binding (wired onto tableTrainers in initialize(),
+                 because M3DataTable.Column is not FXML-constructible) -->
+            <fx:define>
+                <TableColumn fx:id="colId" text="ID" prefWidth="70.0" />
+                <TableColumn fx:id="colName" text="Coach Full Name" prefWidth="180.0" />
+                <TableColumn fx:id="colSpecialization" text="Primary Specialization" prefWidth="160.0" />
+                <TableColumn fx:id="colExperience" text="Exp (Yrs)" prefWidth="90.0" />
+                <TableColumn fx:id="colRate" text="Hourly Rate" prefWidth="110.0" />
+                <TableColumn fx:id="colAssignedAthletes" text="Active Athletes" prefWidth="120.0" />
+                <TableColumn fx:id="colCapacityGauge" text="Capacity Saturation" prefWidth="180.0" />
+                <TableColumn fx:id="colActions" text="Actions" prefWidth="160.0" sortable="false" />
+            </fx:define>
+
+            <!-- Sports Science HUD Footer (Radar & Heatmap) -->
+            <HBox spacing="20">
+                <M3Card fx:id="cardSpecializationRadar" HBox.hgrow="ALWAYS">
+                    <content>
+                        <VBox spacing="8">
+                            <Label text="Coaching Domain Coverage" styleClass="title-medium" />
+                            <M3RadarChart fx:id="chartSpecialization" prefHeight="240.0" />
+                        </VBox>
+                    </content>
+                </M3Card>
+                <M3Card fx:id="cardFacilityDensity" HBox.hgrow="ALWAYS">
+                    <content>
+                        <VBox spacing="8">
+                            <Label text="Facility Weekly Booking Density" styleClass="title-medium" />
+                            <M3Heatmap fx:id="heatmapBookingDensity" prefHeight="240.0" />
+                        </VBox>
+                    </content>
+                </M3Card>
+            </HBox>
+
+        </VBox>
+    </ScrollPane>
+</VBox>

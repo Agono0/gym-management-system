@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.appbar.M3TopAppBar?>
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chart.M3GaugeChart?>
+<?import io.m3fx.controls.chart.M3Heatmap?>
+<?import io.m3fx.controls.chart.M3RadarChart?>
+<?import io.m3fx.controls.data.M3DataTable?>
+<?import io.m3fx.controls.data.M3Timeline?>
+<?import io.m3fx.controls.effect.M3GlassPane?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.scene3d.M3AnatomyViewer3D?>
+<?import io.m3fx.controls.sheet.M3SideSheet?>
+<?import io.m3fx.controls.tabs.M3Tabs?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.Tab?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane xmlns="http://javafx.com/javafx/21" 
+           xmlns:fx="http://javafx.com/fxml/1" 
+           fx:controller="com.gym.controller.TrainerProfileController"
+           styleClass="trainer-profile-root">
+
+    <!-- Primary Layout Container -->
+    <VBox spacing="0">
+        <!-- Top App Bar with back navigation -->
+        <M3TopAppBar fx:id="topAppBar" 
+                     title="Trainer Dossier :: Elena Rostova" 
+                     variant="SMALL">
+            <navigationIcon>
+                <M3Icon symbolName="arrow_back" />
+            </navigationIcon>
+        </M3TopAppBar>
+
+        <ScrollPane fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED" VBox.vgrow="ALWAYS">
+            <VBox spacing="20">
+                <padding>
+                    <Insets top="24.0" right="24.0" bottom="64.0" left="24.0" />
+                </padding>
+
+                <!-- Hero Identity Bento Banner (GlassPane) — name, contact and metric zones reflow
+                     at ~804px content width instead of clipping -->
+                <M3GlassPane fx:id="heroGlassPane" styleClass="hero-dossier-card">
+                    <content>
+                    <HBox spacing="24" alignment="CENTER_LEFT">
+                        <padding>
+                            <Insets top="20.0" right="20.0" bottom="20.0" left="20.0" />
+                        </padding>
+
+                        <StackPane styleClass="avatar-container" prefWidth="100.0" prefHeight="100.0" minHeight="100.0" minWidth="100.0">
+                            <Label text="ER" styleClass="avatar-initials" />
+                        </StackPane>
+
+                        <VBox spacing="6" HBox.hgrow="ALWAYS">
+                            <FlowPane hgap="12.0" vgap="4.0" alignment="CENTER_LEFT">
+                                <Label fx:id="lblCoachName" text="Elena Rostova, CSCS, USAW-L2" styleClass="headline-medium" wrapText="true" />
+                                <Label text="ACTIVE STAFF" styleClass="status-badge-active" />
+                            </FlowPane>
+                            <Label fx:id="lblSpecialization" text="Specialization: Olympic Weightlifting, Power Development, Biomechanics" styleClass="body-large" wrapText="true" />
+                            <FlowPane hgap="16.0" vgap="4.0" alignment="CENTER_LEFT">
+                                <Label fx:id="lblEmail" text="e.rostova@cybercoregym.io" styleClass="body-medium" />
+                                <Label fx:id="lblPhone" text="+1 (555) 392-8819" styleClass="body-medium" />
+                                <Label fx:id="lblExperience" text="Experience: 8 Years" styleClass="body-medium" />
+                            </FlowPane>
+                        </VBox>
+
+                        <VBox spacing="8" alignment="CENTER_RIGHT">
+                            <HBox spacing="8" alignment="CENTER_RIGHT">
+                                <Label text="Hourly Rate (\$):" styleClass="label-medium" />
+                                <M3TextField fx:id="txtHourlyRate" labelText="Hourly Rate" prefWidth="120.0" />
+                            </HBox>
+                            <M3GaugeChart fx:id="gaugeCapacity" prefWidth="160.0" prefHeight="160.0" />
+                            <Label fx:id="lblCapacityText" text="Saturation: 23 / 25 Athletes (92%)" styleClass="label-small" />
+                        </VBox>
+                    </HBox>
+                    </content>
+                </M3GlassPane>
+
+                <!-- Navigation Tabs -->
+                <M3Tabs fx:id="profileTabs">
+                    <tabs>
+                        <Tab text="Overview &amp; Biometrics" fx:id="tabOverview" closable="false">
+                            <content>
+                                <VBox spacing="20">
+                                    <padding>
+                                        <Insets top="16.0" />
+                                    </padding>
+                                    <HBox spacing="20">
+                                        <M3Card fx:id="cardRadar" HBox.hgrow="ALWAYS">
+                                            <content>
+                                                <VBox spacing="8">
+                                                    <Label text="Coaching Competency Radar" styleClass="title-medium" />
+                                                    <M3RadarChart fx:id="chartCompetency" prefHeight="240.0" />
+                                                </VBox>
+                                            </content>
+                                        </M3Card>
+                                        <M3Card fx:id="cardScheduleDensity" HBox.hgrow="ALWAYS">
+                                            <content>
+                                                <VBox spacing="8">
+                                                    <Label text="Weekly Booking Density" styleClass="title-medium" />
+                                                    <M3Heatmap fx:id="heatmapWeeklySchedule" prefHeight="240.0" />
+                                                </VBox>
+                                            </content>
+                                        </M3Card>
+                                    </HBox>
+                                </VBox>
+                            </content>
+                        </Tab>
+
+                        <Tab text="Assigned Athletes" fx:id="tabAthletes" closable="false">
+                            <content>
+                                <VBox spacing="16">
+                                    <padding>
+                                        <Insets top="16.0" />
+                                    </padding>
+                                    <HBox alignment="CENTER_LEFT">
+                                        <Label text="Assigned Athlete Cohort (Rule 15 Authoritative)" styleClass="title-medium" />
+                                        <Region HBox.hgrow="ALWAYS" />
+                                        <Label text="23 Active Assigned Athletes" styleClass="body-medium" />
+                                    </HBox>
+
+                                    <M3DataTable fx:id="tableAssignedAthletes" minHeight="340.0" />
+                                </VBox>
+                            </content>
+                        </Tab>
+
+                        <Tab text="Certifications &amp; Career" fx:id="tabCertifications" closable="false">
+                            <content>
+                                <VBox spacing="16">
+                                    <padding>
+                                        <Insets top="16.0" />
+                                    </padding>
+                                    <M3Card fx:id="cardTimeline">
+                                        <content>
+                                            <VBox spacing="8">
+                                                <Label text="Verified Professional Credentials" styleClass="title-medium" />
+                                                <M3Timeline fx:id="timelineCertifications" prefHeight="260.0" />
+                                            </VBox>
+                                        </content>
+                                    </M3Card>
+                                </VBox>
+                            </content>
+                        </Tab>
+                    </tabs>
+                </M3Tabs>
+
+                <!-- Command Footer Bar (wraps instead of clipping on narrow windows) -->
+                <M3GlassPane styleClass="footer-command-bar">
+                    <content>
+                    <FlowPane hgap="16.0" vgap="8.0" alignment="CENTER_RIGHT">
+                        <padding>
+                            <Insets top="16.0" right="16.0" bottom="16.0" left="16.0" />
+                        </padding>
+                        <Label fx:id="lblValidationStatus" text="All trainer credentials and rates verified." styleClass="body-small" />
+                        <M3Button fx:id="btnCancel" text="Cancel" variant="OUTLINED" onAction="#onCancel" />
+                        <M3Button fx:id="btnSave" text="Save Profile Changes" variant="FILLED" onAction="#onSave" />
+                    </FlowPane>
+                    </content>
+                </M3GlassPane>
+
+            </VBox>
+        </ScrollPane>
+    </VBox>
+
+    <!-- Column Declarations for tableAssignedAthletes (wired onto the table in initialize(),
+         because M3DataTable.Column is not FXML-constructible) -->
+    <fx:define>
+        <TableColumn fx:id="colAthleteId" text="ID" prefWidth="70.0" />
+        <TableColumn fx:id="colAthleteName" text="Athlete Full Name" prefWidth="200.0" />
+        <TableColumn fx:id="colAthleteStatus" text="Status" prefWidth="110.0" />
+        <TableColumn fx:id="colAthleteSubscription" text="Trainer Subscription" prefWidth="160.0" />
+        <TableColumn fx:id="colAthleteProgram" text="Active Program" prefWidth="200.0" />
+        <TableColumn fx:id="colAthleteMedicalAction" text="Clinical Records" prefWidth="160.0" sortable="false" />
+    </fx:define>
+
+    <!-- Modal SideSheet for Medical Profile (Rule 3 & 15 Compliance) -->
+    <M3SideSheet fx:id="sideSheetMedicalProfile" visible="false" StackPane.alignment="CENTER_RIGHT">
+        <content>
+            <VBox spacing="16" prefWidth="420.0" styleClass="medical-drawer-content">
+                <padding>
+                    <Insets top="24.0" right="24.0" bottom="64.0" left="24.0" />
+                </padding>
+                <HBox alignment="CENTER_LEFT">
+                    <Label text="Athlete Clinical Dossier" styleClass="headline-small" />
+                    <Region HBox.hgrow="ALWAYS" />
+                    <M3IconButton fx:id="btnCloseMedicalFlyout" onAction="#onCloseMedical">
+                        <graphic><M3Icon symbolName="close" /></graphic>
+                    </M3IconButton>
+                </HBox>
+
+                <Separator />
+
+                <VBox spacing="8">
+                    <Label fx:id="lblMedAthleteName" text="Athlete: Maya Lin (#312)" styleClass="title-medium" />
+                    <Label fx:id="lblMedBloodType" text="Blood Type: O+" styleClass="body-medium" />
+                    <Label fx:id="lblMedDoctor" text="Physician: Dr. Robert Chen (555-0199)" styleClass="body-medium" />
+                </VBox>
+
+                <M3Card prefHeight="220.0">
+                    <content>
+                        <VBox spacing="8">
+                            <Label text="3D Musculoskeletal Injury Map" styleClass="title-medium" />
+                            <M3AnatomyViewer3D fx:id="anatomyViewer" />
+                        </VBox>
+                    </content>
+                </M3Card>
+
+                <VBox spacing="6">
+                    <Label text="Restrictive Conditions &amp; Injuries:" styleClass="label-medium" />
+                    <TextArea fx:id="txtConditions" editable="false" wrapText="true" prefHeight="80.0" />
+                </VBox>
+
+                <VBox spacing="6">
+                    <Label text="Allergies &amp; Medications:" styleClass="label-medium" />
+                    <TextArea fx:id="txtAllergies" editable="false" wrapText="true" prefHeight="60.0" />
+                </VBox>
+
+                <Region VBox.vgrow="ALWAYS" />
+                <M3Button fx:id="btnPrintMedical" text="Print Clinical Sheet" variant="TONAL" onAction="#onPrintMedical" />
+            </VBox>
+        </content>
+    </M3SideSheet>
+
+</StackPane>

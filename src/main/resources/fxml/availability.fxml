@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.appbar.M3TopAppBar?>
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.button.M3SplitButton?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chart.M3ActivityCalendar?>
+<?import io.m3fx.controls.chart.M3Heatmap?>
+<?import io.m3fx.controls.data.M3Stepper?>
+<?import io.m3fx.controls.effect.M3GlassPane?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.selection.M3Switch?>
+<?import io.m3fx.controls.sheet.M3BottomSheet?>
+<?import io.m3fx.controls.slider.M3Slider?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane xmlns="http://javafx.com/javafx/21" 
+           xmlns:fx="http://javafx.com/fxml/1" 
+           fx:controller="com.gym.controller.AvailabilityController"
+           prefWidth="1280.0"
+           styleClass="trainer-availability-root">
+
+    <!-- Primary Vertical Shell -->
+    <VBox spacing="0">
+        <!-- Top App Bar -->
+        <M3TopAppBar fx:id="topAppBar" 
+                     title="Trainer Scheduling :: Availability &amp; Slot Capacity" 
+                     variant="SMALL">
+            <navigationIcon>
+                <M3Icon symbolName="arrow_back" />
+            </navigationIcon>
+        </M3TopAppBar>
+
+        <!-- Control Strip GlassPane (wraps instead of clipping on narrow windows) -->
+        <M3GlassPane fx:id="controlStrip" styleClass="control-strip">
+            <FlowPane hgap="16" vgap="8" alignment="CENTER_LEFT">
+                <padding>
+                    <Insets top="12.0" right="24.0" bottom="12.0" left="24.0" />
+                </padding>
+                <Label text="Coach:" styleClass="label-medium" />
+                <M3SplitButton fx:id="btnCoachSelector" text="Elena Rostova (#101)" />
+                <Separator orientation="VERTICAL" />
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <M3IconButton fx:id="btnPrevWeek" accessibleText="Previous Week" onAction="#onPrevWeek">
+                        <graphic><M3Icon symbolName="chevron_left" /></graphic>
+                    </M3IconButton>
+                    <Label fx:id="lblDateRange" text="Oct 26 - Nov 01, 2026 (Week 44)" styleClass="title-small" />
+                    <M3IconButton fx:id="btnNextWeek" accessibleText="Next Week" onAction="#onNextWeek">
+                        <graphic><M3Icon symbolName="chevron_right" /></graphic>
+                    </M3IconButton>
+                    <M3Button fx:id="btnToday" text="Today" variant="OUTLINED" onAction="#onToday" />
+                </HBox>
+                <Separator orientation="VERTICAL" />
+                <HBox spacing="8" alignment="CENTER_LEFT">
+                    <Label text="Daily Cap:" styleClass="label-medium" />
+                    <M3Stepper fx:id="stepperDailyCap" />
+                    <M3Button fx:id="btnApplyDailyCap" text="Apply to Day" variant="TONAL" onAction="#onApplyDailyCap" />
+                </HBox>
+                <M3Button fx:id="btnBatchPublish" text="+ Batch Publish Slots" variant="FILLED" onAction="#onBatchPublish" />
+            </FlowPane>
+        </M3GlassPane>
+
+        <!-- Main Workspace -->
+        <ScrollPane fitToWidth="true" fitToHeight="false" VBox.vgrow="ALWAYS" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED">
+            <VBox spacing="16">
+                <padding>
+                    <Insets top="20.0" right="20.0" bottom="64.0" left="20.0" />
+                </padding>
+
+                <!-- Weekly Density HUD Banner -->
+                <M3Card fx:id="cardDensityBanner">
+                    <content>
+                        <VBox spacing="12">
+                            <HBox alignment="CENTER_LEFT">
+                                <Label fx:id="lblDensityStats" text="Confirmed Sessions: 38 / 52 Capacity (73.1% Saturation) | Peak: Wed 17:00" styleClass="body-medium" />
+                                <Region HBox.hgrow="ALWAYS" />
+                                <Label text="Derived Statuses Active (Rule 13)" styleClass="label-small" />
+                            </HBox>
+                            <M3Heatmap fx:id="heatmapDensity" prefHeight="120.0" />
+                        </VBox>
+                    </content>
+                </M3Card>
+
+                <!-- Interactive 7-Day Slot Matrix Grid -->
+                <VBox spacing="8" VBox.vgrow="ALWAYS">
+                    <Label text="7-Day Interactive Hourly Slot Matrix" styleClass="title-medium" />
+                    <M3ActivityCalendar fx:id="calendarGrid" minHeight="540.0" VBox.vgrow="ALWAYS" />
+                </VBox>
+
+            </VBox>
+        </ScrollPane>
+
+        <!-- Bottom Action & Cap Modulation Command Bar (wraps instead of clipping on narrow windows) -->
+        <M3GlassPane fx:id="bottomCommandBar" styleClass="bottom-command-bar">
+            <FlowPane hgap="20" vgap="8" alignment="CENTER_LEFT">
+                <padding>
+                    <Insets top="16.0" right="24.0" bottom="16.0" left="24.0" />
+                </padding>
+                <VBox spacing="4">
+                    <Label fx:id="lblSelectedSlotTitle" text="Selected Slot: #SLOT-882 (Wed 2026-10-28 @ 07:00)" styleClass="title-small" />
+                    <Label fx:id="lblSlotOccupancy" text="Occupancy: 4 Confirmed Athletes (Derived State: FULL)" styleClass="body-small" />
+                </VBox>
+                <Separator orientation="VERTICAL" />
+                <HBox spacing="12" alignment="CENTER_LEFT">
+                    <Label text="Slot Status:" styleClass="label-medium" />
+                    <M3Switch fx:id="switchSlotOpen" selected="true" />
+                </HBox>
+                <Separator orientation="VERTICAL" />
+                <HBox spacing="12" alignment="CENTER_LEFT">
+                    <Label text="Per-Slot Cap (Rule 8):" styleClass="label-medium" />
+                    <M3Slider fx:id="sliderSlotCap" min="1.0" max="10.0" value="4.0" discrete="true" majorTickUnit="1.0" minorTickCount="0" showTickLabels="true" prefWidth="260.0" />
+                    <Label fx:id="lblSlotCapValue" text="4 Athletes" styleClass="title-small" />
+                </HBox>
+                <M3Button fx:id="btnSaveSlotCap" text="Save Slot Cap" variant="FILLED" onAction="#onSaveSlotCap" />
+            </FlowPane>
+        </M3GlassPane>
+    </VBox>
+
+    <!-- Batch Slot Publisher Slide-up Bottom Sheet -->
+    <M3BottomSheet fx:id="bottomSheetBatchPublish" visible="false" StackPane.alignment="BOTTOM_CENTER">
+        <content>
+            <VBox spacing="20" prefWidth="640.0" styleClass="batch-publisher-card">
+                <padding>
+                    <Insets top="24.0" right="24.0" bottom="24.0" left="24.0" />
+                </padding>
+                <HBox alignment="CENTER_LEFT">
+                    <Label text="Batch Publish Hourly Availability Slots" styleClass="headline-small" />
+                    <Region HBox.hgrow="ALWAYS" />
+                    <M3IconButton fx:id="btnCloseBottomSheet" onAction="#onCloseBottomSheet">
+                        <graphic><M3Icon symbolName="close" /></graphic>
+                    </M3IconButton>
+                </HBox>
+
+                <Separator />
+
+                <VBox spacing="12">
+                    <Label text="1. Select Date Range (ISO-8601 yyyy-MM-dd per Rule 9):" styleClass="label-medium" />
+                    <HBox spacing="12">
+                        <M3TextField fx:id="txtBatchStartDate" labelText="Start Date (yyyy-MM-dd)" HBox.hgrow="ALWAYS" />
+                        <M3TextField fx:id="txtBatchEndDate" labelText="End Date (yyyy-MM-dd)" HBox.hgrow="ALWAYS" />
+                    </HBox>
+                </VBox>
+
+                <VBox spacing="12">
+                    <Label text="2. Daily Hourly Window (Rule 8: startTime &lt; endTime):" styleClass="label-medium" />
+                    <HBox spacing="12">
+                        <M3TextField fx:id="txtBatchStartTime" labelText="Start (e.g. 07:00)" HBox.hgrow="ALWAYS" />
+                        <M3TextField fx:id="txtBatchEndTime" labelText="End (e.g. 11:00)" HBox.hgrow="ALWAYS" />
+                    </HBox>
+                </VBox>
+
+                <HBox spacing="16" alignment="CENTER_LEFT">
+                    <Label text="3. Default Slot Capacity:" styleClass="label-medium" />
+                    <M3Stepper fx:id="stepperBatchCap" />
+                    <Label text="Athletes per 60-min slot" styleClass="body-small" />
+                </HBox>
+
+                <Label fx:id="lblBatchValidation" text="" styleClass="error-message-label" />
+
+                <HBox spacing="16" alignment="CENTER_RIGHT">
+                    <M3Button fx:id="btnCancelBatch" text="Cancel" variant="OUTLINED" onAction="#onCancelBatch" />
+                    <M3Button fx:id="btnConfirmBatchPublish" text="Publish Slots" variant="FILLED" onAction="#onConfirmBatchPublish" />
+                </HBox>
+            </VBox>
+        </content>
+    </M3BottomSheet>
+
+</StackPane>

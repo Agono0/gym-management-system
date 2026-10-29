@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.chart.M3SplineChart?>
+<?import io.m3fx.controls.effect.M3GlassPane?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.workout.M3HeartRateZones?>
+<?import io.m3fx.controls.workout.M3IntervalTimer?>
+<?import io.m3fx.controls.workout.M3RepCounter?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.ColumnConstraints?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.RowConstraints?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane xmlns="http://javafx.com/javafx/21"
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.LiveWorkoutController"
+           prefWidth="1280.0"
+           styleClass="live-hud-root">
+
+    <BorderPane prefWidth="1280.0">
+        <!-- Top: 5-Zone Cardiac Intensity Gauge -->
+        <top>
+            <VBox styleClass="hud-top-container">
+                <M3HeartRateZones fx:id="heartRateZonesBar" prefHeight="28.0" maxWidth="Infinity"/>
+
+                <HBox alignment="CENTER_LEFT" spacing="20.0" styleClass="hud-meta-header">
+                    <padding><Insets top="8.0" right="20.0" bottom="8.0" left="20.0"/></padding>
+                    <Label text="ATHLETE:" styleClass="hud-meta-label"/>
+                    <Label fx:id="athleteNameLabel" text="Marcus Vance (#104)" styleClass="hud-meta-value"/>
+                    <Separator orientation="VERTICAL"/>
+                    <Label text="EXERCISE:" styleClass="hud-meta-label"/>
+                    <Label fx:id="exerciseTitleLabel" text="Barbell Back Squat" styleClass="hud-meta-value-accent"/>
+                    <Separator orientation="VERTICAL"/>
+                    <Label text="SET:" styleClass="hud-meta-label"/>
+                    <Label fx:id="setTrackerLabel" text="3 of 4" styleClass="hud-meta-value"/>
+                    <Separator orientation="VERTICAL"/>
+                    <Label text="LOAD:" styleClass="hud-meta-label"/>
+                    <Label fx:id="targetLoadLabel" text="140.0 kg" styleClass="hud-meta-value-bold"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Label fx:id="elapsedSessionTimerLabel" text="00:34:12" styleClass="hud-clock-label"/>
+                </HBox>
+            </VBox>
+        </top>
+
+        <!-- Center: Bento Cockpit Telemetry Grid -->
+        <center>
+            <GridPane hgap="16.0" vgap="16.0" styleClass="hud-bento-grid">
+                <padding><Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/></padding>
+                <columnConstraints>
+                    <ColumnConstraints percentWidth="25.0"/>
+                    <ColumnConstraints percentWidth="50.0"/>
+                    <ColumnConstraints percentWidth="25.0"/>
+                </columnConstraints>
+                <rowConstraints>
+                    <RowConstraints percentHeight="100.0"/>
+                </rowConstraints>
+
+                <!-- Column 0: VBT & Muscular Power Telemetry -->
+                <VBox spacing="12.0" GridPane.columnIndex="0" styleClass="telemetry-column">
+                    <M3GlassPane styleClass="hud-glass-visor" VBox.vgrow="ALWAYS">
+                        <VBox spacing="10.0" styleClass="hud-card-padded">
+                            <padding><Insets top="14.0" right="14.0" bottom="14.0" left="14.0"/></padding>
+                            <Label text="Velocity-Based Training" styleClass="hud-card-header"/>
+                            <HBox alignment="CENTER_LEFT">
+                                <Label text="Mean Velocity:" styleClass="hud-metric-label"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Label fx:id="meanVelocityLabel" text="0.68 m/s" styleClass="hud-metric-value-green"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT">
+                                <Label text="Peak Velocity:" styleClass="hud-metric-label"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Label fx:id="peakVelocityLabel" text="0.92 m/s" styleClass="hud-metric-value"/>
+                            </HBox>
+                            <HBox alignment="CENTER_LEFT">
+                                <Label text="Velocity Loss:" styleClass="hud-metric-label"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Label fx:id="velocityLossLabel" text="-14.2%" styleClass="hud-metric-value-warning"/>
+                            </HBox>
+                            <Separator/>
+                            <Label text="Estimated 1RM: 168.5 kg" styleClass="hud-metric-subtext"/>
+                            <Label text="Accumulated Tonnage: 11,200 kg" styleClass="hud-metric-subtext"/>
+                        </VBox>
+                    </M3GlassPane>
+
+                    <M3GlassPane styleClass="hud-glass-visor" prefHeight="160.0">
+                        <VBox spacing="8.0" styleClass="hud-card-padded">
+                            <padding><Insets top="12.0" right="12.0" bottom="12.0" left="12.0"/></padding>
+                            <Label text="Live Cardiac Stream" styleClass="hud-card-header"/>
+                            <HBox alignment="CENTER">
+                                <Label fx:id="currentBpmLabel" text="184" styleClass="hud-bpm-large"/>
+                                <Label text=" BPM" styleClass="hud-bpm-unit"/>
+                            </HBox>
+                            <Label fx:id="cardiacZoneLabel" text="Zone 5: VO2 Max Strain" alignment="CENTER"
+                                   maxWidth="Infinity" styleClass="hud-zone-pill-red"/>
+                        </VBox>
+                    </M3GlassPane>
+                </VBox>
+
+                <!-- Column 1: Center Kinetic Rep Counter & Cadence Visor -->
+                <VBox spacing="12.0" GridPane.columnIndex="1" alignment="CENTER" styleClass="center-cockpit-column">
+                    <M3GlassPane styleClass="hud-glass-visor" VBox.vgrow="ALWAYS">
+                        <VBox alignment="CENTER" spacing="16.0" styleClass="hud-center-deck">
+                            <padding><Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/></padding>
+                            <Label text="CONCENTRIC KINETIC IMPULSE" styleClass="hud-cockpit-subhead"/>
+
+                            <!-- Core M3RepCounter Component with manual controls -->
+                            <HBox alignment="CENTER" spacing="24.0">
+                                <M3IconButton onAction="#onManualRepDecrement" styleClass="hud-rep-pill-btn">
+                                    <graphic>
+                                        <Label text="-" styleClass="hud-rep-pill-text"/>
+                                    </graphic>
+                                </M3IconButton>
+                                <M3RepCounter fx:id="repCounterDisplay" prefWidth="240.0" prefHeight="180.0"/>
+                                <M3IconButton onAction="#onManualRepIncrement" styleClass="hud-rep-pill-btn">
+                                    <graphic>
+                                        <M3Icon symbolName="add"/>
+                                    </graphic>
+                                </M3IconButton>
+                            </HBox>
+
+                            <Label fx:id="cadenceDisplayLabel" text="Cadence: 3.2s | Ecc: 2.1s | Con: 0.9s"
+                                   styleClass="hud-cadence-caption"/>
+
+                            <!-- Real-time Cadence Curve (fills available cockpit width) -->
+                            <M3SplineChart fx:id="cadenceSplineChart" prefHeight="100.0"
+                                           styleClass="hud-cadence-chart"/>
+                        </VBox>
+                    </M3GlassPane>
+                </VBox>
+
+                <!-- Column 2: Concentric Interval Timer & Quick RPE Logging -->
+                <VBox spacing="12.0" GridPane.columnIndex="2" styleClass="telemetry-column">
+                    <M3GlassPane styleClass="hud-glass-visor" VBox.vgrow="ALWAYS">
+                        <VBox alignment="CENTER" spacing="12.0" styleClass="hud-card-padded">
+                            <padding><Insets top="14.0" right="14.0" bottom="14.0" left="14.0"/></padding>
+                            <Label text="Rest Interval Countdown" styleClass="hud-card-header"/>
+                            <M3IntervalTimer fx:id="intervalCountdownTimer" prefWidth="180.0" prefHeight="180.0"/>
+                            <Label fx:id="timerStateLabel" text="Target Rest: 180s" styleClass="hud-metric-subtext"/>
+                            <M3Button text="Skip Rest Window" onAction="#onSkipRest" styleClass="hud-secondary-btn"/>
+                        </VBox>
+                    </M3GlassPane>
+
+                    <M3GlassPane styleClass="hud-glass-visor" prefHeight="160.0">
+                        <VBox spacing="8.0" styleClass="hud-card-padded">
+                            <padding><Insets top="12.0" right="12.0" bottom="12.0" left="12.0"/></padding>
+                            <Label text="Perceived Exertion (RPE)" styleClass="hud-card-header"/>
+                            <HBox spacing="6.0" alignment="CENTER">
+                                <M3Button text="7" onAction="#onSelectRpe" styleClass="rpe-btn"/>
+                                <M3Button text="8" onAction="#onSelectRpe" styleClass="rpe-btn"/>
+                                <M3Button text="8.5" onAction="#onSelectRpe" styleClass="rpe-btn-active"/>
+                                <M3Button text="9" onAction="#onSelectRpe" styleClass="rpe-btn"/>
+                                <M3Button text="10" onAction="#onSelectRpe" styleClass="rpe-btn-red"/>
+                            </HBox>
+                        </VBox>
+                    </M3GlassPane>
+                </VBox>
+            </GridPane>
+        </center>
+
+        <!-- Bottom: High-Visibility Contextual Cockpit Controls -->
+        <bottom>
+            <HBox alignment="CENTER_RIGHT" spacing="20.0" styleClass="hud-bottom-action-dock">
+                <padding><Insets top="14.0" right="20.0" bottom="14.0" left="20.0"/></padding>
+                <M3Button text="⚠️ ABORT SET / REST" onAction="#onAbortSet" styleClass="hud-danger-btn"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <M3Button text="⏸️ PAUSE" onAction="#onTogglePause" styleClass="hud-neutral-btn"/>
+                <M3Button text="🔄 RE-CALIBRATE" onAction="#onRecalibrateSensor" styleClass="hud-neutral-btn"/>
+                <M3Button fx:id="completeSetButton" text="✅ COMPLETE SET (140kg)" onAction="#onCompleteSet"
+                          styleClass="hud-complete-set-btn"/>
+            </HBox>
+        </bottom>
+    </BorderPane>
+
+</StackPane>

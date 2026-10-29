@@ -8,9 +8,10 @@ import javafx.scene.control.TabPane;
 /**
  * M3 tabs: primary and secondary variants with an active indicator.
  *
- * <p>See <a href="https://m3.material.io/components/tabs/overview">M3 tabs</a>. Primary tabs use
- * title-small active text with a 3dp primary indicator; secondary tabs are more compact.
- * Keyboard navigation (arrows/Home/End) comes from {@link TabPane}.
+ * <p>See <a href="https://m3.material.io/components/tabs/overview">M3 tabs</a>. Both variants use a
+ * 48dp container; primary tabs show a 3dp active indicator with label-large text, secondary tabs a
+ * 2dp indicator with title-small text. Keyboard navigation (arrows/Home/End) comes from
+ * {@link TabPane}.
  */
 public class M3Tabs extends TabPane {
 

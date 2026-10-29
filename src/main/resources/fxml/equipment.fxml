@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.ToggleGroup?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chip.M3Chip?>
+<?import io.m3fx.controls.data.M3DataTable?>
+<?import io.m3fx.controls.scene3d.M3ModelViewer3D?>
+<?import io.m3fx.controls.selection.M3Switch?>
+<?import io.m3fx.controls.sheet.M3SideSheet?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+
+<StackPane xmlns="http://javafx.com/javafx/21"
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.EquipmentController"
+           prefWidth="1280.0"
+           styleClass="equipment-root">
+
+    <!-- Primary Screen Layout -->
+    <BorderPane styleClass="equipment-layout">
+        <!-- Top App Bar & Search Deck -->
+        <top>
+            <VBox spacing="10.0" styleClass="top-bar-box">
+                <padding><Insets top="16.0" right="24.0" bottom="12.0" left="24.0"/></padding>
+                <HBox alignment="CENTER_LEFT" spacing="16.0" styleClass="app-header-box">
+                    <Label text="Equipment Inventory &amp; 3D Diagnostics" styleClass="header-title-text"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <M3TextField fx:id="searchField" labelText="Search equipment, serial, category..."
+                                 prefWidth="320.0" styleClass="search-field"/>
+                    <M3Button text="+ Add Equipment" onAction="#onAdd" variant="FILLED" styleClass="filled-primary-btn"/>
+                </HBox>
+
+                <!-- Category Filter Chips -->
+                <HBox spacing="8.0" alignment="CENTER_LEFT" styleClass="category-filter-strip">
+                    <M3Chip text="All Assets" selected="true" variant="FILTER"/>
+                    <M3Chip text="Free Weights" variant="FILTER"/>
+                    <M3Chip text="Cardio" variant="FILTER"/>
+                    <M3Chip text="Plate-Loaded" variant="FILTER"/>
+                    <M3Chip text="Cable Machines" variant="FILTER"/>
+                    <M3Chip text="Recovery &amp; Mobility" variant="FILTER"/>
+                </HBox>
+            </VBox>
+        </top>
+
+        <!-- Center: Master Split Pane (Ledger Left, 3D Twin Right) -->
+        <center>
+            <SplitPane dividerPositions="0.56" styleClass="bento-split-pane">
+                <padding><Insets top="8.0" right="24.0" bottom="48.0" left="24.0"/></padding>
+
+                <!-- Left Panel: Virtualized TableView -->
+                <VBox spacing="10.0" styleClass="table-container-box">
+                    <TableView fx:id="equipmentTableView" VBox.vgrow="ALWAYS" styleClass="m3-data-table">
+                        <columnResizePolicy><TableView fx:constant="CONSTRAINED_RESIZE_POLICY"/></columnResizePolicy>
+                        <columns>
+                            <TableColumn fx:id="colId" text="ID" prefWidth="60.0"/>
+                            <TableColumn fx:id="colName" text="Asset Name" prefWidth="200.0"/>
+                            <TableColumn fx:id="colCategory" text="Category" prefWidth="130.0"/>
+                            <TableColumn fx:id="colCondition" text="Condition" prefWidth="100.0"/>
+                            <TableColumn fx:id="colStatus" text="Status" prefWidth="110.0"/>
+                            <TableColumn fx:id="colLastMaintenance" text="Last Maint." prefWidth="110.0"/>
+                        </columns>
+                    </TableView>
+
+                    <!-- Table Footer / Pagination -->
+                    <HBox alignment="CENTER_LEFT" spacing="12.0" styleClass="table-footer-box">
+                        <Label fx:id="assetCountLabel" text="Showing 12 of 84 equipment items" styleClass="footer-label"/>
+                    </HBox>
+                </VBox>
+
+                <!-- Right Panel: 3D Digital Twin Viewport & Lifecycle Dock -->
+                <VBox spacing="14.0" styleClass="inspector-container-box">
+                    <!-- 3D Model Viewport Box -->
+                    <VBox spacing="8.0" styleClass="model-3d-glass-container" VBox.vgrow="ALWAYS">
+                        <padding><Insets top="10.0" right="14.0" bottom="10.0" left="14.0"/></padding>
+                        <HBox alignment="CENTER_LEFT" spacing="10.0" styleClass="viewport-toolbar">
+                            <Label fx:id="selectedModelTitleLabel" text="Olympic Power Cage" styleClass="model-title"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Label text="Wireframe X-Ray" styleClass="switch-label"/>
+                            <M3Switch fx:id="wireframeToggleSwitch"/>
+                            <M3Button text="Reset Cam" onAction="#onResetCamera" variant="OUTLINED" styleClass="text-btn-compact"/>
+                        </HBox>
+
+                        <!-- 3D Hardware Viewport -->
+                        <M3ModelViewer3D fx:id="modelViewer3D" prefWidth="520.0" prefHeight="360.0"
+                                         VBox.vgrow="ALWAYS" styleClass="viewport-3d-canvas"/>
+                    </VBox>
+
+                    <!-- Detailed Lifecycle & Condition Dock -->
+                    <M3Card variant="ELEVATED" styleClass="inspector-details-card">
+                        <content>
+                            <VBox spacing="12.0" styleClass="details-card-inner">
+                                <padding><Insets top="14.0" right="16.0" bottom="14.0" left="16.0"/></padding>
+                                <Label text="Asset State &amp; Maintenance Controls" styleClass="card-section-title"/>
+
+                                <fx:define>
+                                    <ToggleGroup fx:id="conditionGroup"/>
+                                    <ToggleGroup fx:id="statusGroup"/>
+                                </fx:define>
+
+                                <!-- Condition Selector Radio Row -->
+                                <HBox spacing="16.0" alignment="CENTER_LEFT">
+                                    <Label text="Condition:" styleClass="dock-label"/>
+                                    <RadioButton fx:id="conditionNewRadio" text="NEW" toggleGroup="$conditionGroup" onAction="#handleConditionRadio"/>
+                                    <RadioButton fx:id="conditionGoodRadio" text="GOOD" toggleGroup="$conditionGroup" onAction="#handleConditionRadio"/>
+                                    <RadioButton fx:id="conditionFairRadio" text="FAIR" toggleGroup="$conditionGroup" onAction="#handleConditionRadio"/>
+                                    <RadioButton fx:id="conditionPoorRadio" text="POOR" toggleGroup="$conditionGroup" onAction="#handleConditionRadio"/>
+                                </HBox>
+
+                                <!-- Status Selector Radio Row -->
+                                <HBox spacing="16.0" alignment="CENTER_LEFT">
+                                    <Label text="Status:" styleClass="dock-label"/>
+                                    <RadioButton fx:id="statusAvailRadio" text="AVAILABLE" toggleGroup="$statusGroup" onAction="#handleStatusRadio"/>
+                                    <RadioButton fx:id="statusMaintRadio" text="MAINTENANCE" toggleGroup="$statusGroup" onAction="#handleStatusRadio"/>
+                                    <RadioButton fx:id="statusRetireRadio" text="RETIRED" toggleGroup="$statusGroup" onAction="#handleStatusRadio"/>
+                                </HBox>
+
+                                <!-- Quick Maintenance Logger CTA -->
+                                <HBox spacing="12.0" alignment="CENTER_LEFT">
+                                    <M3Button text="🛠️ Log Today's Maintenance" onAction="#handleLogMaintenanceToday"
+                                              variant="TONAL" styleClass="tonal-button"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <M3Button text="🗑️ Delete Item" onAction="#handleDeleteSelected"
+                                              variant="TEXT" styleClass="danger-text-btn"/>
+                                </HBox>
+                            </VBox>
+                        </content>
+                    </M3Card>
+                </VBox>
+            </SplitPane>
+        </center>
+
+        <!-- Bottom: Contextual Action Dock -->
+        <bottom>
+            <HBox alignment="CENTER_RIGHT" spacing="16.0" styleClass="contextual-action-dock">
+                <padding><Insets top="12.0" right="24.0" bottom="16.0" left="24.0"/></padding>
+                <M3Button text="Export Asset Ledger (PDF)" onAction="#onExportPdf" variant="OUTLINED" styleClass="outlined-btn"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <M3Button text="Refresh Inventory" onAction="#onRefresh" variant="TEXT" styleClass="text-btn"/>
+            </HBox>
+        </bottom>
+    </BorderPane>
+
+    <!-- SideSheet Overlay for Detailed Asset History & Maintenance Ledger -->
+    <M3SideSheet fx:id="maintenanceSideSheet" visible="false" managed="false"
+                 StackPane.alignment="CENTER_RIGHT" styleClass="maintenance-side-sheet">
+        <content>
+            <VBox spacing="12.0">
+                <Label text="Maintenance History Ledger" styleClass="title-medium"/>
+                <M3DataTable fx:id="maintenanceHistoryTable" VBox.vgrow="ALWAYS"/>
+            </VBox>
+        </content>
+    </M3SideSheet>
+
+</StackPane>

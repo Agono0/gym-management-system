@@ -77,8 +77,8 @@
 
 /* ============ icon buttons (Control+Skin: bg + state + icon + ripple) ============ */
 .m3-icon-button { -fx-cursor: hand; }
-.m3-icon-button-bg { -fx-background-radius: 24px; -fx-border-radius: 24px; }
-.m3-icon-button-state { -fx-background-radius: 24px; -fx-opacity: 0; }
+.m3-icon-button-bg { -fx-background-radius: 20px; -fx-border-radius: 20px; }
+.m3-icon-button-state { -fx-background-radius: 20px; -fx-opacity: 0; }
 .m3-icon-button-ripple { -fx-background-color: transparent; }
 .m3-icon-button-icon { -fx-alignment: center; }
 
@@ -209,6 +209,7 @@
   -fx-border-radius: 4px 4px 0 0;
   -fx-padding: 0 16px 0 16px;
   -fx-alignment: center-left;
+  -fx-min-height: 56px;
 }
 .m3-text-field-filled .m3-text-field-box {
   -fx-background-color: -md-sys-color-surface-container-highest;
@@ -274,7 +275,10 @@
 .m3-switch:selected .m3-switch-track { -fx-fill: -md-sys-color-primary; -fx-stroke: -md-sys-color-primary; }
 .m3-switch-thumb { -fx-fill: -md-sys-color-outline; }
 .m3-switch:selected .m3-switch-thumb { -fx-fill: -md-sys-color-on-primary; }
+.m3-switch:disabled .m3-switch-track { -fx-fill: -md-sys-color-on-surface-a12; -fx-stroke: -md-sys-color-on-surface-a12; }
+.m3-switch:disabled .m3-switch-thumb { -fx-fill: -md-sys-color-on-surface-a38; }
 .m3-switch-thumb-icon { -fx-fill: -md-sys-color-on-primary-container; }
+.m3-switch-thumb-icon .m3-icon-svg { -fx-fill: -md-sys-color-on-primary-container; }
 
 /* ============ chips ============ */
 .m3-chip {
@@ -285,13 +289,20 @@
   -fx-min-height: 32px;
   -fx-cursor: hand;
 }
-.m3-chip-assist, .m3-chip-suggestion {
+.m3-chip-suggestion {
   -fx-background-color: transparent;
   -fx-border-color: -md-sys-color-outline;
   -fx-border-width: 1px;
   -fx-text-fill: -md-sys-color-on-surface;
 }
-.m3-chip-assist { -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a10, 2, 0, 0, 1); }
+/* Assist chips are the elevated variant (md.comp.assist-chip.elevated). */
+.m3-chip-assist {
+  -fx-background-color: -md-sys-color-surface-container-low;
+  -fx-border-color: -md-sys-color-outline;
+  -fx-border-width: 1px;
+  -fx-text-fill: -md-sys-color-on-surface;
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a10, 2, 0, 0, 1);
+}
 .m3-chip-filter, .m3-chip-input {
   -fx-background-color: -md-sys-color-surface-container-low;
   -fx-border-color: -md-sys-color-outline;
@@ -329,9 +340,16 @@
 }
 .m3-chip:focused { -fx-border-color: -md-sys-color-primary; -fx-border-width: 2px; }
 .m3-chip:selected:focused { -fx-border-color: -md-sys-color-primary; }
+.m3-chip-content { -fx-alignment: CENTER; }
+.m3-chip-text { -fx-text-fill: inherit; -fx-font-size: 14px; }
+.m3-chip-close { -fx-cursor: hand; -fx-padding: 0 0 0 2px; }
+.m3-chip-close .m3-icon-svg { -fx-fill: -md-sys-color-on-surface-variant; }
+.m3-chip-close:hover .m3-icon-svg { -fx-fill: -md-sys-color-on-surface; }
+.m3-chip:selected .m3-chip-close .m3-icon-svg { -fx-fill: -md-sys-color-on-secondary-container; }
 
 /* ============ divider / badge / tooltip ============ */
 .m3-divider .line { -fx-border-color: -md-sys-color-outline-variant; -fx-border-width: 1px 0 0 0; }
+.m3-divider.vertical .line { -fx-border-color: -md-sys-color-outline-variant; -fx-border-width: 0 0 0 1px; }
 .m3-badge {
   -fx-background-color: -md-sys-color-error;
   -fx-text-fill: -md-sys-color-on-error;
@@ -346,24 +364,29 @@
   -fx-text-fill: -md-sys-color-inverse-on-surface;
   -fx-font-size: 12px;
   -fx-background-radius: 4px;
+  -fx-padding: 4px 8px 4px 8px;
 }
 .m3-tooltip-rich {
   -fx-background-color: -md-sys-color-surface-container;
-  -fx-background-radius: 4px;
+  -fx-background-radius: 12px;
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a15, 6, 0, 0, 2);
 }
 .m3-tooltip-rich-title { -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface-variant; }
 .m3-tooltip-rich-body { -fx-font-size: 14px; -fx-text-fill: -md-sys-color-on-surface-variant; }
 
 /* ============ progress ============ */
 .m3-linear-progress-bar { -fx-pref-height: 4px; }
-.m3-linear-progress-bar .track { -fx-background-color: -md-sys-color-surface-container-highest; -fx-background-radius: 2px; }
-.m3-linear-progress-bar .bar { -fx-background-color: -md-sys-color-primary; -fx-background-radius: 2px; -fx-background-insets: 0; -fx-padding: 4px; }
+.m3-linear-track { -fx-background-color: -md-sys-color-surface-container-highest; -fx-background-radius: 2px; }
+.m3-linear-active { -fx-background-color: -md-sys-color-primary; -fx-background-radius: 2px; }
+.m3-linear-secondary { -fx-background-color: -md-sys-color-primary; -fx-background-radius: 2px; }
+.m3-linear-stop { -fx-background-color: -md-sys-color-primary-container; -fx-background-radius: 2px; }
 .m3-circular-progress { -fx-progress-color: -md-sys-color-primary; -fx-pref-width: 48px; -fx-pref-height: 48px; }
 
 /* ============ sliders ============ */
 .m3-slider .track {
   -fx-background-color: -md-sys-color-surface-container-highest;
-  -fx-pref-height: 4px;
+  -fx-pref-height: 16px;
+  -fx-background-radius: 8px;
 }
 .m3-slider .thumb {
   -fx-background-color: -md-sys-color-primary;
@@ -448,7 +471,7 @@
 .m3-dialog {
   -fx-background-color: -md-sys-color-surface-container-high;
   -fx-background-radius: 28px;
-  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a25, 16, 0, 0, 6);
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a16, 8, 0, 0, 4);
 }
 .m3-dialog-title { -fx-font-size: 24px; -fx-text-fill: -md-sys-color-on-surface; }
 .m3-dialog-content { -fx-font-size: 14px; -fx-text-fill: -md-sys-color-on-surface-variant; }
@@ -473,11 +496,16 @@
   -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a15, 4, 0, 0, 1);
 }
 .m3-bottom-sheet-handle { -fx-background-color: -md-sys-color-on-surface-variant; -fx-background-radius: 2px; -fx-opacity: 0.4; }
-.m3-side-sheet { -fx-background-color: -md-sys-color-surface-container-low; }
-.m3-side-sheet:modal { -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a15, 4, 0, 0, 1); }
+.m3-side-sheet { -fx-background-color: -md-sys-color-surface; }
+.m3-side-sheet:modal {
+  -fx-background-color: -md-sys-color-surface-container-low;
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a15, 4, 0, 0, 1);
+}
 
 /* ============ menus / select ============ */
 .m3-menu { -fx-background-color: -md-sys-color-surface-container; -fx-background-radius: 4px; -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a18, 8, 0, 0, 2); }
+/* Menu list items: container-height 48, item space 6 top/bottom, 12 leading/trailing. */
+.m3-menu .menu-item { -fx-min-height: 48px; -fx-padding: 6px 12px 6px 12px; }
 .m3-menu-item .label { -fx-text-fill: -md-sys-color-on-surface; -fx-font-size: 14px; }
 .m3-menu-item:focused { -fx-background-color: -md-sys-color-secondary-container; }
 .m3-select {
@@ -489,7 +517,7 @@
 .m3-select .list-cell { -fx-text-fill: -md-sys-color-on-surface; -fx-font-size: 16px; }
 
 /* ============ lists ============ */
-.m3-list-item { -fx-background-color: transparent; -fx-padding: 8px 24px 8px 16px; }
+.m3-list-item { -fx-background-color: transparent; -fx-padding: 8px 16px 8px 16px; }
 .m3-list-item:hover { -fx-background-color: -md-sys-color-on-surface-a08; }
 .m3-list-item:focused { -fx-background-color: -md-sys-color-on-surface-a10; }
 .m3-list-overline { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface-variant; }
@@ -640,6 +668,7 @@
   -fx-background-radius: 28px;
   -fx-min-height: 56px;
   -fx-padding: 0 16px 0 16px;
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a16, 8, 0, 0, 4);
 }
 .m3-search-input { -fx-background-color: transparent; -fx-font-size: 16px; -fx-text-fill: -md-sys-color-on-surface; }
 .m3-search-suggestions { -fx-background-color: -md-sys-color-surface-container; }
@@ -776,6 +805,7 @@
   -fx-background-color: -md-sys-color-primary;
   -fx-text-fill: -md-sys-color-on-primary;
 }
+.m3-calendar-day:today { -fx-text-fill: -md-sys-color-primary; -fx-font-weight: bold; }
 .m3-date-dialog { -fx-min-width: 360px; }
 
 /* ============ search panel (overlay mode) ============ */
@@ -892,3 +922,478 @@
 .m3-tabs .tab-header-area .control-buttons-tab .arrow {
   -fx-background-color: -md-sys-color-on-surface-variant;
 }
+
+/* ============ split button ============ */
+.m3-split-button {
+  -fx-alignment: center-left;
+  -fx-spacing: 0;
+}
+.m3-split-button .m3-split-button-leading .m3-button-bg,
+.m3-split-button .m3-split-button-leading .m3-button-state {
+  -fx-background-radius: 20px 0 0 20px;
+  -fx-border-radius: 20px 0 0 20px;
+}
+.m3-split-button .m3-split-button-trailing .m3-icon-button-bg,
+.m3-split-button .m3-split-button-trailing .m3-icon-button-state {
+  -fx-background-radius: 0 20px 20px 0;
+  -fx-border-radius: 0 20px 20px 0;
+}
+.m3-split-button-divider {
+  -fx-min-width: 1px;
+  -fx-pref-width: 1px;
+  -fx-max-width: 1px;
+  -fx-background-color: -md-sys-color-outline-variant;
+}
+.m3-split-button-filled .m3-split-button-divider {
+  -fx-background-color: -md-sys-color-on-primary-a38;
+}
+.m3-split-button-tonal .m3-split-button-divider {
+  -fx-background-color: -md-sys-color-on-secondary-container-a38;
+}
+
+/* ============ toolbar ============ */
+.m3-toolbar {
+  -fx-alignment: center;
+}
+.m3-toolbar-floating {
+  -fx-background-radius: 32px;
+  -fx-border-radius: 32px;
+  -fx-padding: 4px;
+}
+.m3-toolbar-docked {
+  -fx-background-radius: 0;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-width: 1px 0 0 0;
+  -fx-padding: 8px 16px;
+}
+.m3-toolbar-standard {
+  -fx-background-color: -md-sys-color-surface-container;
+}
+.m3-toolbar-vibrant {
+  -fx-background-color: -md-sys-color-primary-container;
+}
+.m3-toolbar-vibrant .m3-icon-svg {
+  -fx-fill: -md-sys-color-on-primary-container;
+}
+
+/* ============ carousel ============ */
+.m3-carousel {
+  -fx-alignment: center;
+}
+.m3-carousel-track {
+  -fx-padding: 8px 16px;
+}
+.m3-carousel-nav-prev {
+  -fx-translate-x: 8px;
+}
+.m3-carousel-nav-next {
+  -fx-translate-x: -8px;
+}
+
+/* ============ circular progress ============ */
+.m3-circular-progress {
+  -fx-background-color: transparent;
+}
+
+/* ============ shape morph ============ */
+.m3-shape-morph {
+  -fx-alignment: center;
+}
+.m3-shape-morph-path {
+  -fx-fill: -md-sys-color-primary-container;
+  -fx-stroke: -md-sys-color-primary;
+  -fx-stroke-width: 1.5px;
+}
+
+/* ============ cyber charts & analytics ============ */
+.m3-spline-chart,
+.m3-bar-chart,
+.m3-donut-chart,
+.m3-sparkline,
+.m3-heatmap {
+  -fx-background-color: transparent;
+}
+.m3-donut-headline {
+  -fx-text-fill: -md-sys-color-on-surface;
+}
+.m3-donut-subtitle {
+  -fx-text-fill: -md-sys-color-on-surface-variant;
+}
+
+/* ============ 3d hardware-accelerated scenes ============ */
+.m3-scene-3d,
+.m3-model-viewer-3d,
+.m3-anatomy-viewer-3d,
+.m3-gyro-ring-3d {
+  -fx-background-color: transparent;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 16px;
+  -fx-border-width: 1px;
+}
+.m3-tilt-card-3d {
+  -fx-background-color: -md-sys-color-surface-container-low;
+  -fx-background-radius: 16px;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 16px;
+  -fx-border-width: 1px;
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a10, 8, 0, 0, 4);
+}
+
+/* ============ futuristic visual effects ============ */
+.m3-glass-pane {
+  -fx-alignment: center;
+}
+.m3-glass-content {
+  -fx-padding: 16px;
+  -fx-alignment: center;
+}
+.m3-particle-canvas {
+  -fx-background-color: transparent;
+}
+.m3-scanline {
+  -fx-background-color: transparent;
+}
+
+/* ============ enterprise data & telemetry widgets ============ */
+.m3-stat-card {
+  -fx-min-width: 200px;
+}
+.m3-data-table {
+  -fx-background-color: transparent;
+}
+.m3-timeline {
+  -fx-padding: 8px 12px;
+}
+.m3-stepper {
+  -fx-padding: 12px 16px;
+}
+.m3-speed-dial {
+  -fx-alignment: center;
+}
+
+/* ============ M3 Radar & Gauge Charts ============ */
+.m3-radar-chart {
+  -fx-background-color: -md-sys-color-surface-container-low;
+  -fx-background-radius: 16px;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 16px;
+  -fx-border-width: 1px;
+  -fx-padding: 16px;
+}
+.m3-gauge-chart {
+  -fx-background-color: -md-sys-color-surface-container-low;
+  -fx-background-radius: 16px;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 16px;
+  -fx-border-width: 1px;
+  -fx-padding: 12px;
+}
+
+/* ============ M3 Hologram & Pulse Beacon ============ */
+.m3-hologram {
+  -fx-background-color: -md-sys-color-surface-container-lowest;
+  -fx-background-radius: 12px;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 12px;
+  -fx-border-width: 1px;
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a10, 10, 0, 0, 4);
+}
+.m3-hologram-badge {
+  -fx-text-fill: -md-sys-color-primary;
+  -fx-font-size: 10px;
+  -fx-font-weight: bold;
+  -fx-padding: 2px 8px;
+  -fx-background-color: -md-sys-color-surface-container-high;
+  -fx-background-radius: 6px;
+}
+.m3-pulse-beacon {
+  -fx-alignment: center-left;
+}
+.m3-pulse-beacon-label {
+  -fx-text-fill: -md-sys-color-on-surface;
+  -fx-font-size: 12px;
+}
+
+/* ============ Smart Gym UI & Workout Suite ============ */
+.m3-rep-counter {
+  -fx-alignment: center;
+}
+.m3-rep-counter-set {
+  -fx-text-fill: -md-sys-color-primary;
+}
+.m3-rep-counter-cadence {
+  -fx-text-fill: -md-sys-color-on-surface-variant;
+}
+
+.m3-heart-rate-zones {
+  -fx-background-color: -md-sys-color-surface-container-low;
+  -fx-background-radius: 12px;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 12px;
+  -fx-border-width: 1px;
+}
+.m3-heart-rate-readout {
+  -fx-text-fill: -md-sys-color-on-surface;
+}
+
+.m3-interval-timer {
+  -fx-alignment: center;
+}
+.m3-interval-timer-round {
+  -fx-text-fill: -md-sys-color-primary;
+}
+
+.m3-workout-hud {
+  -fx-background-color: -md-sys-color-surface-container-lowest;
+  -fx-background-radius: 16px;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 16px;
+  -fx-border-width: 1px;
+}
+
+.m3-gym-floor-map {
+  -fx-background-color: -md-sys-color-surface-container-lowest;
+  -fx-background-radius: 16px;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 16px;
+  -fx-border-width: 1px;
+}
+
+.m3-command-palette-overlay {
+  -fx-alignment: center;
+}
+.m3-command-palette-card {
+  -fx-background-color: -md-sys-color-surface-container-high;
+  -fx-background-radius: 16px;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 16px;
+  -fx-border-width: 1px;
+  -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.35), 24, 0, 0, 8);
+}
+.m3-command-palette-header {
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-width: 0 0 1 0;
+}
+.m3-command-palette-input {
+  -fx-background-color: transparent;
+  -fx-text-fill: -md-sys-color-on-surface;
+  -fx-prompt-text-fill: -md-sys-color-on-surface-variant;
+  -fx-padding: 16px;
+  -fx-background-insets: 0;
+}
+.m3-command-palette-badge {
+  -fx-font-size: 10px;
+  -fx-font-weight: bold;
+  -fx-text-fill: -md-sys-color-on-surface-variant;
+  -fx-background-color: -md-sys-color-surface-container-highest;
+  -fx-background-radius: 4px;
+  -fx-padding: 2px 6px;
+}
+.m3-data-table-header {
+  -fx-background-color: -md-sys-color-surface-container-high;
+  -fx-background-radius: 8px;
+}
+
+/* ============ Advanced Gym Analytics & Data Viz ============ */
+.m3-scatter-plot {
+  -fx-background-color: -md-sys-color-surface-container-low;
+  -fx-background-radius: 16px;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 16px;
+  -fx-border-width: 1px;
+}
+
+.m3-funnel-chart {
+  -fx-background-color: -md-sys-color-surface-container-low;
+  -fx-background-radius: 16px;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 16px;
+  -fx-border-width: 1px;
+}
+
+.m3-activity-calendar {
+  -fx-background-color: -md-sys-color-surface-container-low;
+  -fx-background-radius: 16px;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 16px;
+  -fx-border-width: 1px;
+}
+
+/* ============ M3StatCard ============ */
+.m3-stat-title {
+  -fx-font-size: 13px;
+  -fx-text-fill: -md-sys-color-on-surface-variant;
+}
+.m3-stat-value {
+  -fx-font-size: 26px;
+  -fx-font-weight: bold;
+  -fx-text-fill: -md-sys-color-on-surface;
+}
+.m3-stat-delta {
+  -fx-font-size: 11px;
+  -fx-font-weight: bold;
+  -fx-padding: 2px 8px;
+  -fx-background-radius: 12px;
+}
+.m3-stat-delta.positive {
+  -fx-background-color: -md-sys-color-primary-container;
+  -fx-text-fill: -md-sys-color-on-primary-container;
+}
+.m3-stat-delta.negative {
+  -fx-background-color: -md-sys-color-error-container;
+  -fx-text-fill: -md-sys-color-on-error-container;
+}
+
+/* ============ M3DonutChart ============ */
+.m3-donut-headline {
+  -fx-font-size: 22px;
+  -fx-font-weight: bold;
+  -fx-text-fill: -md-sys-color-on-surface;
+}
+.m3-donut-subtitle {
+  -fx-font-size: 11px;
+  -fx-text-fill: -md-sys-color-on-surface-variant;
+}
+
+/* ============ M3DataTable ============ */
+.m3-data-table-header {
+  -fx-background-color: -md-sys-color-surface-container;
+  -fx-background-radius: 8px;
+}
+.m3-data-table-header-label {
+  -fx-font-size: 13px;
+  -fx-font-weight: bold;
+  -fx-text-fill: -md-sys-color-on-surface;
+}
+.m3-data-table-row {
+  -fx-background-color: transparent;
+  -fx-background-radius: 6px;
+}
+.m3-data-table-row.alt {
+  -fx-background-color: -md-sys-color-surface-container-low;
+}
+.m3-data-table-row:hover {
+  -fx-background-color: -md-sys-color-surface-container-high;
+  -fx-cursor: hand;
+}
+.m3-data-table-cell {
+  -fx-font-size: 13px;
+  -fx-text-fill: -md-sys-color-on-surface;
+}
+.m3-data-table-page-info {
+  -fx-font-size: 12px;
+  -fx-text-fill: -md-sys-color-on-surface-variant;
+}
+.m3-data-table-header-label.sortable:hover { -fx-text-fill: -md-sys-color-primary; }
+
+/* ============ M3CommandPalette ============ */
+.m3-command-palette-card {
+  -fx-background-color: -md-sys-color-surface-container-high;
+  -fx-background-radius: 16px;
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a20, 24, 0, 0, 8);
+}
+.m3-command-palette-header {
+  -fx-border-color: transparent transparent -md-sys-color-outline-variant transparent;
+  -fx-border-width: 0 0 1px 0;
+}
+.m3-command-palette-cat-header {
+  -fx-font-size: 10px;
+  -fx-font-weight: bold;
+  -fx-text-fill: -md-sys-color-primary;
+  -fx-padding: 8px 12px 4px 12px;
+}
+.m3-command-palette-row {
+  -fx-background-color: transparent;
+  -fx-background-radius: 8px;
+  -fx-cursor: hand;
+}
+.m3-command-palette-row.selected {
+  -fx-background-color: -md-sys-color-primary-container;
+}
+.m3-command-palette-row.selected .m3-icon-svg {
+  -fx-fill: -md-sys-color-on-primary-container;
+}
+.m3-command-palette-title {
+  -fx-font-size: 13px;
+  -fx-font-weight: bold;
+  -fx-text-fill: -md-sys-color-on-surface;
+}
+.m3-command-palette-row.selected .m3-command-palette-title {
+  -fx-text-fill: -md-sys-color-on-primary-container;
+}
+.m3-command-palette-sub {
+  -fx-font-size: 11px;
+  -fx-text-fill: -md-sys-color-on-surface-variant;
+}
+.m3-command-palette-row.selected .m3-command-palette-sub {
+  -fx-text-fill: -md-sys-color-on-primary-container;
+}
+.m3-command-palette-run-hint {
+  -fx-font-size: 14px;
+  -fx-text-fill: -md-sys-color-primary;
+}
+
+/* ============ M3Stepper ============ */
+.m3-stepper-circle-completed { -fx-fill: -md-sys-color-primary; }
+.m3-stepper-clickable { -fx-cursor: hand; }
+.m3-stepper-circle-active {
+  -fx-fill: -md-sys-color-primary-container;
+  -fx-stroke: -md-sys-color-primary;
+  -fx-stroke-width: 2px;
+}
+.m3-stepper-num-active {
+  -fx-font-size: 13px;
+  -fx-font-weight: bold;
+  -fx-text-fill: -md-sys-color-on-primary-container;
+}
+.m3-stepper-circle-pending {
+  -fx-fill: transparent;
+  -fx-stroke: -md-sys-color-outline;
+  -fx-stroke-width: 1.5px;
+}
+.m3-stepper-num-pending {
+  -fx-font-size: 12px;
+  -fx-text-fill: -md-sys-color-outline;
+}
+.m3-stepper-title {
+  -fx-font-size: 12px;
+  -fx-text-fill: -md-sys-color-on-surface-variant;
+}
+.m3-stepper-title.active {
+  -fx-font-weight: bold;
+  -fx-text-fill: -md-sys-color-on-surface;
+}
+.m3-stepper-line {
+  -fx-background-color: -md-sys-color-outline-variant;
+}
+.m3-stepper-line.completed {
+  -fx-background-color: -md-sys-color-primary;
+}
+.m3-stepper-icon-completed .m3-icon-svg { -fx-fill: -md-sys-color-on-primary; }
+.m3-stepper-circle-error { -fx-fill: -md-sys-color-error; }
+.m3-stepper-num-error { -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-error; }
+.m3-stepper-title.error { -fx-text-fill: -md-sys-color-error; }
+.m3-stepper-clickable:focused { -fx-effect: dropshadow(gaussian, -md-sys-color-primary, 4, 0.35, 0, 0); }
+
+/* ============ M3Timeline ============ */
+.m3-timeline-line { -fx-background-color: -md-sys-color-outline-variant; }
+.m3-timeline-line.completed { -fx-background-color: -md-sys-color-primary; }
+.m3-timeline-time { -fx-font-size: 11px; -fx-text-fill: -md-sys-color-on-surface-variant; }
+.m3-timeline-title { -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface; }
+.m3-timeline-desc { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface-variant; }
+.m3-timeline-circle-completed { -fx-fill: -md-sys-color-primary; }
+.m3-timeline-icon-completed .m3-icon-svg { -fx-fill: -md-sys-color-on-primary; }
+.m3-timeline-halo-active {
+  -fx-fill: -md-sys-color-primary-container;
+  -fx-stroke: -md-sys-color-primary;
+  -fx-stroke-width: 2px;
+}
+.m3-timeline-core-active { -fx-fill: -md-sys-color-primary; }
+.m3-timeline-circle-pending {
+  -fx-fill: transparent;
+  -fx-stroke: -md-sys-color-outline;
+  -fx-stroke-width: 2px;
+}
+
+
+

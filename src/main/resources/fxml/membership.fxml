@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.carousel.M3Carousel?>
+<?import io.m3fx.controls.chart.M3FunnelChart?>
+<?import io.m3fx.controls.chip.M3Chip?>
+<?import io.m3fx.controls.data.M3DataTable?>
+<?import io.m3fx.controls.sheet.M3SideSheet?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.ColumnConstraints?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.RowConstraints?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane xmlns="http://javafx.com/javafx/21" 
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.MembershipController"
+           styleClass="membership-root">
+
+    <!-- Primary Base Layout -->
+    <BorderPane styleClass="membership-base-pane">
+        <!-- Top App Bar / Command Strip -->
+        <top>
+            <VBox spacing="8.0" styleClass="top-bar-container">
+                <HBox alignment="CENTER_LEFT" spacing="16.0">
+                    <padding>
+                        <Insets top="16.0" right="24.0" bottom="16.0" left="24.0"/>
+                    </padding>
+                    <Label text="MEMBERSHIP PLANS &amp; SUBSCRIPTION TIERS" styleClass="title-large"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <M3TextField fx:id="searchMemberField" labelText="Search member agreements..." prefWidth="280.0"/>
+                    <M3Button fx:id="btnTopSell" text="+ Sell Membership" onAction="#onSell" variant="FILLED" styleClass="m3-button-filled"/>
+                </HBox>
+            </VBox>
+        </top>
+
+        <!-- Main Workspace -->
+        <center>
+            <VBox spacing="16.0">
+                <padding>
+                    <Insets top="16.0" right="20.0" bottom="64.0" left="20.0"/>
+                </padding>
+
+                <!-- Tier Cards Carousel -->
+                <VBox spacing="8.0">
+                    <Label text="MEMBERSHIP TIERS &amp; PACKAGES" styleClass="label-small"/>
+                    <M3Carousel fx:id="tierCarousel" prefHeight="260.0">
+                        <items>
+                            <!-- Monthly Standard Card -->
+                            <M3Card fx:id="cardMonthly" variant="OUTLINED" styleClass="tier-card-standard" prefWidth="300.0">
+                                <padding>
+                                    <Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/>
+                                </padding>
+                                <content>
+                                    <VBox spacing="10.0">
+                                        <Label text="MONTHLY STANDARD" styleClass="title-medium"/>
+                                        <Label text="\$59.00 / Month" styleClass="headline-medium"/>
+                                        <Label text="• Access 06:00 - 23:00&#10;• Full Gym Floor &amp; Lockers&#10;• 1 Guest Pass / Mo" styleClass="body-small"/>
+                                        <Region VBox.vgrow="ALWAYS"/>
+                                        <M3Button text="Select Monthly" variant="OUTLINED" onAction="#onSell" maxWidth="Infinity" styleClass="m3-button-outlined"/>
+                                    </VBox>
+                                </content>
+                            </M3Card>
+
+                            <!-- Yearly Cyber VIP Card (Featured) -->
+                            <M3Card fx:id="cardYearlyVip" variant="ELEVATED" styleClass="tier-card-vip" prefWidth="340.0">
+                                <padding>
+                                    <Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/>
+                                </padding>
+                                <content>
+                                    <VBox spacing="10.0">
+                                        <HBox alignment="CENTER_LEFT">
+                                            <Label text="YEARLY CYBER VIP" styleClass="title-large"/>
+                                            <Region HBox.hgrow="ALWAYS"/>
+                                            <Label text="BEST VALUE" styleClass="badge-featured"/>
+                                        </HBox>
+                                        <Label text="\$499.00 / Year" styleClass="headline-large"/>
+                                        <Label text="• 24/7 Unlimited Turnstile Access&#10;• 2 Personal Training Sessions / Mo&#10;• Sauna &amp; Recovery Lounge Pass&#10;• 60 Days Freeze Privilege" styleClass="body-small"/>
+                                        <Region VBox.vgrow="ALWAYS"/>
+                                        <M3Button text="Sell VIP Agreement" variant="FILLED" onAction="#onSell" maxWidth="Infinity" styleClass="m3-button-filled"/>
+                                    </VBox>
+                                </content>
+                            </M3Card>
+
+                            <!-- Quarterly Pro Card -->
+                            <M3Card fx:id="cardQuarterly" variant="OUTLINED" styleClass="tier-card-standard" prefWidth="300.0">
+                                <padding>
+                                    <Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/>
+                                </padding>
+                                <content>
+                                    <VBox spacing="10.0">
+                                        <Label text="QUARTERLY PRO" styleClass="title-medium"/>
+                                        <Label text="\$149.00 / Quarter" styleClass="headline-medium"/>
+                                        <Label text="• Full Gym Floor + Pool Access&#10;• 1 PT Diagnostic Session / Qtr&#10;• 14 Days Freeze Privilege" styleClass="body-small"/>
+                                        <Region VBox.vgrow="ALWAYS"/>
+                                        <M3Button text="Select Quarterly" variant="OUTLINED" onAction="#onSell" maxWidth="Infinity" styleClass="m3-button-outlined"/>
+                                    </VBox>
+                                </content>
+                            </M3Card>
+                        </items>
+                    </M3Carousel>
+                </VBox>
+
+                <!-- Split Section: Conversion Funnel & Fleet Data Table -->
+                <GridPane hgap="16.0" vgap="16.0" VBox.vgrow="ALWAYS">
+                    <columnConstraints>
+                        <ColumnConstraints percentWidth="38.0"/>
+                        <ColumnConstraints percentWidth="62.0"/>
+                    </columnConstraints>
+                    <rowConstraints>
+                        <RowConstraints percentHeight="100.0"/>
+                    </rowConstraints>
+
+                    <!-- Left Column: Conversion Funnel -->
+                    <VBox spacing="10.0" GridPane.columnIndex="0" styleClass="card-surface">
+                        <padding>
+                            <Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/>
+                        </padding>
+                        <Label text="MEMBER CONVERSION FUNNEL" styleClass="title-medium"/>
+                        <M3FunnelChart fx:id="conversionFunnelChart" VBox.vgrow="ALWAYS"/>
+                    </VBox>
+
+                    <!-- Right Column: Active Memberships Table & Action Toolbar -->
+                    <VBox spacing="10.0" GridPane.columnIndex="1" styleClass="card-surface">
+                        <padding>
+                            <Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/>
+                        </padding>
+                        <HBox alignment="CENTER_LEFT" spacing="12.0">
+                            <Label text="MEMBERSHIP ROSTER" styleClass="title-medium"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <M3Chip fx:id="chipExpiringFilter" text="Expiring in 7 Days" selected="false"/>
+                        </HBox>
+                        <M3DataTable fx:id="membershipDataTable" VBox.vgrow="ALWAYS"/>
+                        <!-- Lifecycle Action Command Bar -->
+                        <HBox spacing="10.0" alignment="CENTER_RIGHT">
+                            <M3Button fx:id="btnRenewAction" text="Renew Agreement" variant="TONAL" onAction="#onRenew" styleClass="m3-button-tonal"/>
+                            <M3Button fx:id="btnFreezeAction" text="Freeze (Pause)" variant="OUTLINED" onAction="#onFreeze" styleClass="m3-button-outlined"/>
+                            <M3Button fx:id="btnUnfreezeAction" text="Unfreeze (Resume)" variant="OUTLINED" onAction="#onUnfreeze" styleClass="m3-button-outlined"/>
+                            <M3Button fx:id="btnCancelAction" text="Cancel Agreement" variant="TEXT" onAction="#onCancel" styleClass="m3-button-text-danger"/>
+                        </HBox>
+                    </VBox>
+                </GridPane>
+            </VBox>
+        </center>
+    </BorderPane>
+
+    <!-- Contextual Inspector SideSheet -->
+    <M3SideSheet fx:id="membershipDetailSheet" visible="false" StackPane.alignment="CENTER_RIGHT" prefWidth="380.0">
+        <content>
+            <VBox spacing="16.0">
+                <padding>
+                    <Insets top="20.0" right="20.0" bottom="20.0" left="20.0"/>
+                </padding>
+                <HBox alignment="CENTER_LEFT">
+                    <Label text="Agreement Inspector" styleClass="headline-small"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <M3Button text="✕" variant="TEXT" onAction="#onCloseDetailSheet"/>
+                </HBox>
+                <Label text="Detailed contract audit trail, freeze logs, and financial association." styleClass="body-small"/>
+                <Separator/>
+                <VBox spacing="8.0" VBox.vgrow="ALWAYS">
+                    <Label text="LIFECYCLE SUMMARY" styleClass="label-small"/>
+                    <Label text="Customer: Selected Athlete" styleClass="body-medium"/>
+                    <Label text="Agreement Status: ACTIVE" styleClass="body-medium"/>
+                    <Label text="Frozen Days Accrued: 0" styleClass="body-medium"/>
+                </VBox>
+            </VBox>
+        </content>
+    </M3SideSheet>
+
+</StackPane>

@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.button.M3SplitButton?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chip.M3Chip?>
+<?import io.m3fx.controls.effect.M3GlassPane?>
+<?import io.m3fx.controls.scene3d.M3AnatomyViewer3D?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane xmlns="http://javafx.com/javafx/21"
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.WorkoutController"
+           prefWidth="1280.0"
+           styleClass="workout-builder-root">
+
+    <BorderPane prefWidth="1280.0">
+        <!-- Top App Bar & Program Metadata Header -->
+        <top>
+            <VBox styleClass="top-bar-container">
+                <HBox alignment="CENTER_LEFT" spacing="16.0" styleClass="app-header-box">
+                    <padding><Insets top="12.0" right="20.0" bottom="12.0" left="20.0"/></padding>
+                    <Label text="Workout Routine Builder" styleClass="header-title-text"/>
+                    <M3Chip fx:id="versionBadgeChip" text="v1 Active" styleClass="version-chip"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <Label text="Customer:" styleClass="meta-label"/>
+                    <ComboBox fx:id="customerSelectorComboBox" prefWidth="220.0" promptText="Select Athlete..."/>
+                    <Label text="Creator:" styleClass="meta-label"/>
+                    <Label fx:id="trainerSignatureLabel" text="Coach Sarah (#12)" styleClass="meta-value-bold"/>
+                </HBox>
+                <HBox spacing="12.0" alignment="CENTER_LEFT" styleClass="routine-name-bar">
+                    <padding><Insets top="8.0" right="20.0" bottom="12.0" left="20.0"/></padding>
+                    <M3TextField fx:id="programNameField" labelText="Program Title (e.g., Meso 1 - Hypertrophy Pull)"
+                                 HBox.hgrow="ALWAYS" styleClass="program-title-field"/>
+                    <M3Button text="History &amp; Versions" onAction="#onNewVersion" styleClass="tonal-button"/>
+                </HBox>
+            </VBox>
+        </top>
+
+        <!-- Main Workspace: Bento 3-Column Arena -->
+        <center>
+            <SplitPane dividerPositions="0.25, 0.73" styleClass="bento-split-pane">
+                <!-- Column 1: Exercise Catalog & Templates Deck -->
+                <VBox spacing="12.0" styleClass="catalog-rail">
+                    <padding><Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/></padding>
+                    <Label text="Exercise Library" styleClass="section-header-title"/>
+                    <M3TextField fx:id="exerciseSearchField" labelText="Search exercises, lifts, drills..."
+                                 styleClass="search-field"/>
+
+                    <!-- Category Filter Chips -->
+                    <FlowPane hgap="6.0" vgap="6.0" styleClass="filter-chip-deck">
+                        <M3Chip text="All" selected="true"/>
+                        <M3Chip text="Chest"/>
+                        <M3Chip text="Back"/>
+                        <M3Chip text="Legs"/>
+                        <M3Chip text="Shoulders"/>
+                        <M3Chip text="Arms"/>
+                        <M3Chip text="Core"/>
+                    </FlowPane>
+
+                    <!-- Scrollable Catalog List -->
+                    <ListView fx:id="exerciseCatalogListView" VBox.vgrow="ALWAYS" styleClass="catalog-list-view"/>
+
+                    <!-- Quick Templates Section -->
+                    <VBox spacing="6.0" styleClass="template-preset-box">
+                        <Label text="Pre-Engineered Mesocycles" styleClass="sub-header-title"/>
+                        <M3Button text="Push / Pull / Legs (6-Day Split)" maxWidth="Infinity" styleClass="text-button-compact"/>
+                        <M3Button text="Upper / Lower Heavy (4-Day)" maxWidth="Infinity" styleClass="text-button-compact"/>
+                    </VBox>
+                </VBox>
+
+                <!-- Column 2: Kinetic Staging Arena Pipeline (Center) -->
+                <VBox spacing="16.0" styleClass="staging-arena">
+                    <padding><Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/></padding>
+                    <HBox alignment="CENTER_LEFT" spacing="12.0" styleClass="staging-header-row">
+                        <Label text="Routine Execution Pipeline" styleClass="section-header-title"/>
+                        <Region HBox.hgrow="ALWAYS"/>
+                        <M3Button text="+ Add Superset Group" onAction="#onBuild" styleClass="outlined-button-compact"/>
+                    </HBox>
+
+                    <!-- Dynamic Exercise Pipeline Stack -->
+                    <ScrollPane fitToWidth="true" VBox.vgrow="ALWAYS" styleClass="pipeline-scroll-pane">
+                        <VBox fx:id="pipelineContainer" spacing="12.0" styleClass="pipeline-card-stack">
+                            <!-- Procedural M3Cards inserted here -->
+                        </VBox>
+                    </ScrollPane>
+                </VBox>
+
+                <!-- Column 3: 3D Biomechanics & Volume Telemetry (Right) -->
+                <VBox spacing="16.0" styleClass="telemetry-rail">
+                    <padding><Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/></padding>
+                    <Label text="Musculoskeletal Impact" styleClass="section-header-title"/>
+
+                    <!-- 3D Anatomy Viewport Container -->
+                    <M3GlassPane prefHeight="320.0" styleClass="anatomy-glass-viewport">
+                        <M3AnatomyViewer3D fx:id="anatomyViewer3D" prefWidth="300.0" prefHeight="300.0"/>
+                    </M3GlassPane>
+
+                    <!-- Load & Volume Metrics Bento Card -->
+                    <M3Card styleClass="telemetry-card" variant="ELEVATED">
+                        <content>
+                            <VBox spacing="8.0" styleClass="telemetry-metrics-box">
+                                <padding><Insets top="14.0" right="14.0" bottom="14.0" left="14.0"/></padding>
+                                <Label text="Session Volume Telemetry" styleClass="card-subhead"/>
+                                <HBox alignment="CENTER_LEFT">
+                                    <Label text="Total Planned Tonnage:" styleClass="metric-label"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Label fx:id="totalTonnageLabel" text="14,250 kg" styleClass="metric-value-accent"/>
+                                </HBox>
+                                <HBox alignment="CENTER_LEFT">
+                                    <Label text="Total Working Sets:" styleClass="metric-label"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Label fx:id="totalSetsLabel" text="18 Sets" styleClass="metric-value"/>
+                                </HBox>
+                                <HBox alignment="CENTER_LEFT">
+                                    <Label text="Average Intensity:" styleClass="metric-label"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Label fx:id="averageRpeLabel" text="RPE 8.2" styleClass="metric-value-warning"/>
+                                </HBox>
+                            </VBox>
+                        </content>
+                    </M3Card>
+
+                    <Region VBox.vgrow="ALWAYS"/>
+
+                    <!-- Client Reassignment Quick Flyout -->
+                    <VBox spacing="8.0" styleClass="reassignment-box">
+                        <Label text="Transfer Routine" styleClass="card-subhead"/>
+                        <ComboBox fx:id="reassignCustomerComboBox" maxWidth="Infinity" promptText="Select Target Client..."/>
+                        <M3Button text="Reassign Routine" onAction="#onReassign" maxWidth="Infinity" styleClass="tonal-button"/>
+                    </VBox>
+                </VBox>
+            </SplitPane>
+        </center>
+
+        <!-- Contextual Action Dock (Bottom Bar) -->
+        <bottom>
+            <HBox alignment="CENTER_RIGHT" spacing="16.0" styleClass="contextual-action-dock">
+                <padding><Insets top="14.0" right="20.0" bottom="14.0" left="20.0"/></padding>
+                <M3Button text="Delete Routine" onAction="#onDelete" styleClass="danger-text-button"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <M3Button text="Duplicate as Draft" onAction="#onNewVersion" styleClass="outlined-button"/>
+                <M3SplitButton fx:id="saveSplitButton" text="Save Routine (v1)" onAction="#onBuild" styleClass="filled-primary-split-button"/>
+            </HBox>
+        </bottom>
+    </BorderPane>
+
+</StackPane>

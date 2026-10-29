@@ -11,6 +11,19 @@ Read this whole file before every task. Also read `PLAN.md` to see the current p
 > separate `m3fx-demo` module (the gym app + `main.fxml` act as the gallery); Java language
 > level is 21 on JDK 27. Follow those files over the details here where they conflict.
 
+> **Gym-app documentation (not m3fx).** The application's docs live in `docs/` (index:
+> `docs/README.md`) and in each layer folder: `src/main/java/com/gym/README.md` plus
+> `model/`, `dao/`, `service/`, `controller/`, `util/README.md` and `src/main/resources/README.md`
+> (with `fxml/`, `db/`, `theme/`, `images/` sub-docs). They are learning material, not task
+> trackers: purpose, OOP concepts, design patterns, per-file rationale, how-to steps, code sketches,
+> verification, common mistakes, review checklists and exercises. **`docs/UML.md` is the single
+> source of truth** for the app's class names, field lists, signatures and 19 business rules;
+> `docs/DECISIONS.md` explains why; `docs/DOCS_STANDARD.md` defines how the folder READMEs must be
+> written (section order, per-file entry template, no invented members, `m3fx` referenced only as an
+> external dependency). When a task touches `com.gym`, read the README of the layer you are editing
+> and keep it in sync in the same change. Everything else in this file — PLAN phases, the component
+> checklists, `docs/SPEC_NOTES/`, `docs/COVERAGE.md` — concerns the `m3fx` library only.
+
 ---
 
 ## 1. Goal

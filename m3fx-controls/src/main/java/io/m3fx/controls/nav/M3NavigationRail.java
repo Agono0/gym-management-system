@@ -20,6 +20,8 @@ import java.util.List;
  */
 public class M3NavigationRail extends VBox {
 
+    private static final String HEADER_KEY = "m3fx.rail-header";
+
     private final IntegerProperty selectedIndex = new SimpleIntegerProperty(this, "selectedIndex", 0);
     private final ToggleGroup group = new ToggleGroup();
     private final VBox items = new VBox(4);
@@ -28,8 +30,11 @@ public class M3NavigationRail extends VBox {
     public M3NavigationRail() {
         getStyleClass().add("m3-navigation-rail");
         setAlignment(Pos.TOP_CENTER);
+        // Spec: container width 80dp (md.comp.navigation-rail.container.width).
         setMinWidth(80);
         items.setAlignment(Pos.TOP_CENTER);
+        items.managedProperty().bind(javafx.beans.binding.Bindings.isNotEmpty(items.getChildren()));
+        items.visibleProperty().bind(javafx.beans.binding.Bindings.isNotEmpty(items.getChildren()));
         getChildren().add(items);
         selectedIndex.addListener((obs, oldV, newV) -> selectInGroup(newV.intValue()));
     }
@@ -50,9 +55,9 @@ public class M3NavigationRail extends VBox {
      * @param header header node, may be {@code null}
      */
     public void setHeader(Node header) {
-        getChildren().removeIf(n -> "m3-rail-header".equals(n.getId()));
+        getChildren().removeIf(n -> n.getProperties().get(HEADER_KEY) == Boolean.TRUE);
         if (header != null) {
-            header.setId("m3-rail-header");
+            header.getProperties().put(HEADER_KEY, Boolean.TRUE);
             getChildren().add(0, header);
         }
     }
@@ -72,6 +77,7 @@ public class M3NavigationRail extends VBox {
             M3NavDestination dest = destinations.get(i);
             StackPane iconBox = new StackPane();
             iconBox.getStyleClass().add("m3-navigation-icon");
+            // Spec: rail active indicator 56x32dp full shape.
             iconBox.setMinSize(56, 32);
             iconBox.setMaxSize(56, 32);
             Label label = new Label(dest.label());
@@ -81,7 +87,13 @@ public class M3NavigationRail extends VBox {
             ToggleButton button = new ToggleButton("", cell);
             button.getStyleClass().add("m3-navigation-item");
             button.setToggleGroup(group);
-            button.setOnAction(e -> setSelectedIndex(index));
+            // M3: one destination is always active; re-select if the group deselects it.
+            button.setOnAction(e -> {
+                if (!button.isSelected()) {
+                    button.setSelected(true);
+                }
+                setSelectedIndex(index);
+            });
             Runnable syncIcon = () -> {
                 boolean active = button.isSelected() || getSelectedIndex() == index;
                 Node graphic =
@@ -92,6 +104,7 @@ public class M3NavigationRail extends VBox {
             };
             button.selectedProperty().addListener((obs, oldV, newV) -> syncIcon.run());
             syncIcon.run();
+            button.setAccessibleText(dest.label());
             items.getChildren().add(button);
         }
         selectInGroup(Math.min(getSelectedIndex(), group.getToggles().size() - 1));

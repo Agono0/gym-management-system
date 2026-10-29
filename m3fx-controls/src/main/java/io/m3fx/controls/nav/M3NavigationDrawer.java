@@ -8,6 +8,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.HBox;
@@ -30,6 +31,7 @@ public class M3NavigationDrawer extends VBox {
     private final BooleanProperty open = new SimpleBooleanProperty(this, "open", true);
     private final ToggleGroup group = new ToggleGroup();
     private final VBox items = new VBox(4);
+    private final ScrollPane scrollPane = new ScrollPane(items);
 
     /** Creates a standard (always open) drawer. */
     public M3NavigationDrawer() {
@@ -38,7 +40,12 @@ public class M3NavigationDrawer extends VBox {
         setPrefWidth(320);
         setPadding(new Insets(12));
         setAlignment(Pos.TOP_LEFT);
-        getChildren().add(items);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setStyle("-fx-background-color: transparent; -fx-padding: 0;");
+        VBox.setVgrow(scrollPane, Priority.ALWAYS);
+        getChildren().add(scrollPane);
         modalProperty().addListener((obs, oldV, isModal) ->
                 pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("modal"), isModal));
         openProperty().addListener((obs, oldV, isOpen) -> {
@@ -94,11 +101,16 @@ public class M3NavigationDrawer extends VBox {
             button.selectedProperty().addListener((obs, oldV, newV) -> syncIcon.run());
             syncIcon.run();
             button.setOnAction(e -> {
+                // M3: one destination is always active; re-select if the group deselects it.
+                if (!button.isSelected()) {
+                    button.setSelected(true);
+                }
                 setSelectedIndex(index);
                 if (isModal()) {
                     setOpen(false);
                 }
             });
+            button.setAccessibleText(dest.label());
             items.getChildren().add(button);
         }
         selectInGroup(Math.min(getSelectedIndex(), group.getToggles().size() - 1));

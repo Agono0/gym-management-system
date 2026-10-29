@@ -9,10 +9,14 @@ import javafx.scene.layout.HBox;
  *
  * <p>See <a href="https://m3.material.io/components/sliders/overview">M3 sliders</a>. Implemented
  * as a composite of two linked {@link M3Slider} thumbs that cannot cross; styling matches the
- * single slider (active track between thumbs via CSS on the container state).
+ * single slider (active track between thumbs via CSS on the container state). The {@code min} and
+ * {@code max} properties mirror the range bounds of both thumbs (FXML-friendly, matching the
+ * {@code M3Slider} attribute set).
  */
 public class M3RangeSlider extends HBox {
 
+    private final DoubleProperty min = new SimpleDoubleProperty(this, "min", 0);
+    private final DoubleProperty max = new SimpleDoubleProperty(this, "max", 100);
     private final DoubleProperty lowValue = new SimpleDoubleProperty(this, "lowValue", 25);
     private final DoubleProperty highValue = new SimpleDoubleProperty(this, "highValue", 75);
 
@@ -38,6 +42,8 @@ public class M3RangeSlider extends HBox {
         lowSlider.setMax(max);
         highSlider.setMin(min);
         highSlider.setMax(max);
+        setMin(min);
+        setMax(max);
         lowSlider.valueProperty().bindBidirectional(lowValue);
         highSlider.valueProperty().bindBidirectional(highValue);
         lowValue.addListener((obs, oldV, newV) -> {
@@ -54,6 +60,48 @@ public class M3RangeSlider extends HBox {
         setHighValue(Math.max(low, high));
         getChildren().addAll(lowSlider, highSlider);
         setSpacing(8);
+    }
+
+    /** Returns the minimum value property (range lower bound of both thumbs). */
+    public DoubleProperty minProperty() {
+        return min;
+    }
+
+    /** Returns the minimum value. */
+    public double getMin() {
+        return min.get();
+    }
+
+    /**
+     * Sets the minimum value for both thumbs.
+     *
+     * @param min the minimum value
+     */
+    public void setMin(double min) {
+        this.min.set(min);
+        lowSlider.setMin(min);
+        highSlider.setMin(min);
+    }
+
+    /** Returns the maximum value property (range upper bound of both thumbs). */
+    public DoubleProperty maxProperty() {
+        return max;
+    }
+
+    /** Returns the maximum value. */
+    public double getMax() {
+        return max.get();
+    }
+
+    /**
+     * Sets the maximum value for both thumbs.
+     *
+     * @param max the maximum value
+     */
+    public void setMax(double max) {
+        this.max.set(max);
+        lowSlider.setMax(max);
+        highSlider.setMax(max);
     }
 
     /** Returns the low value property. */

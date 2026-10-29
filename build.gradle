@@ -32,6 +32,20 @@ dependencies {
     // Local reusable M3 library (separated so it can be reused in many projects).
     implementation(project(':m3fx-core'))
     implementation(project(':m3fx-controls'))
+
+    testImplementation('org.junit.jupiter:junit-jupiter:5.11.3')
+    testRuntimeOnly('org.junit.platform:junit-platform-launcher')
+}
+
+test {
+    useJUnitPlatform()
+    jvmArgs = [
+        '-Xms256m',
+        '-Xmx1024m',
+        '--enable-native-access=ALL-UNNAMED',
+        '--sun-misc-unsafe-memory-access=allow'
+    ]
+    systemProperties System.properties
 }
 
 application {
@@ -44,4 +58,24 @@ tasks.register('runSamples', JavaExec) {
     description = 'Runs the M3Samples all-components test window.'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = 'com.gym.M3Samples'
+    jvmArgs = [
+        '-Xms256m',
+        '-Xmx1024m',
+        '--enable-native-access=ALL-UNNAMED',
+        '--sun-misc-unsafe-memory-access=allow'
+    ]
+}
+
+// Runs the full Gym Management System application shell with all 19 FXML screens
+tasks.register('runGym', JavaExec) {
+    group = 'application'
+    description = 'Runs the Gym Management System full app shell.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.gym.GymApp'
+    jvmArgs = [
+        '-Xms512m',
+        '-Xmx2048m',
+        '--enable-native-access=ALL-UNNAMED',
+        '--sun-misc-unsafe-memory-access=allow'
+    ]
 }

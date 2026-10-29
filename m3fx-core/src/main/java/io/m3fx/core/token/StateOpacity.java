@@ -3,8 +3,11 @@ package io.m3fx.core.token;
 /**
  * M3 state-layer opacities.
  *
- * <p>See <a href="https://m3.material.io/foundations/interaction/states/overview">M3 interaction
- * states</a> and {@code material-web/tokens/_md-sys-state.scss} (v0.192).
+ * <p>See <a href="https://m3.material.io/foundations/interaction/states/state-layers">M3 state
+ * layers</a> and {@code material-web/tokens/versions/latest/sass/_md-sys-state.scss} (v34.0.21:
+ * hover 0.08, focus 0.1, pressed 0.1, dragged 0.16; the older v0.192 release used 0.12 for
+ * focus/pressed). Disabled container 0.12 and disabled content 0.38 match the component disabled
+ * container/label-text opacity tokens (e.g. {@code _md-comp-filled-button.scss}).
  */
 public final class StateOpacity {
 

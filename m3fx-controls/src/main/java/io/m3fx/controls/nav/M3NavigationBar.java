@@ -1,6 +1,8 @@
 package io.m3fx.controls.nav;
 
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -24,12 +26,15 @@ import java.util.List;
 public class M3NavigationBar extends HBox {
 
     private final IntegerProperty selectedIndex = new SimpleIntegerProperty(this, "selectedIndex", 0);
+    private final BooleanProperty hideInactiveLabels =
+            new SimpleBooleanProperty(this, "hideInactiveLabels", false);
     private final ToggleGroup group = new ToggleGroup();
 
     /** Creates an empty navigation bar. */
     public M3NavigationBar() {
         getStyleClass().add("m3-navigation-bar");
         setAlignment(Pos.CENTER);
+        // Spec: container height 80dp (md.comp.navigation-bar.container.height).
         setMinHeight(80);
         selectedIndex.addListener((obs, oldV, newV) -> selectInGroup(newV.intValue()));
     }
@@ -59,6 +64,7 @@ public class M3NavigationBar extends HBox {
             M3NavDestination dest = destinations.get(i);
             StackPane iconBox = new StackPane();
             iconBox.getStyleClass().add("m3-navigation-icon");
+            // Spec: active indicator 64x32dp full shape (radius 16 on 32px height).
             iconBox.setMinSize(64, 32);
             iconBox.setMaxSize(64, 32);
             Label label = new Label(dest.label());
@@ -69,7 +75,19 @@ public class M3NavigationBar extends HBox {
             button.getStyleClass().add("m3-navigation-item");
             button.setToggleGroup(group);
             button.setMaxWidth(Double.MAX_VALUE);
-            button.setOnAction(e -> setSelectedIndex(index));
+            // M3: one destination is always active; JavaFX ToggleGroups allow clicking the
+            // selected toggle off, so re-select it before reporting the index.
+            button.setOnAction(e -> {
+                if (!button.isSelected()) {
+                    button.setSelected(true);
+                }
+                setSelectedIndex(index);
+            });
+            // Labels show on all destinations by default; hideInactiveLabels trims the
+            // inactive ones (spec label behavior "on" vs "on and off").
+            label.visibleProperty().bind(
+                    button.selectedProperty().or(hideInactiveLabels.not()));
+            label.managedProperty().bind(label.visibleProperty());
             Runnable syncIcon = () -> {
                 boolean active = button.isSelected() || getSelectedIndex() == index;
                 Node graphic =
@@ -80,6 +98,7 @@ public class M3NavigationBar extends HBox {
             };
             button.selectedProperty().addListener((obs, oldV, newV) -> syncIcon.run());
             syncIcon.run();
+            button.setAccessibleText(dest.label());
             HBox.setHgrow(button, Priority.ALWAYS);
             getChildren().add(button);
         }
@@ -89,6 +108,26 @@ public class M3NavigationBar extends HBox {
     /** Returns the selected index property. */
     public IntegerProperty selectedIndexProperty() {
         return selectedIndex;
+    }
+
+    /** Returns the hide-inactive-labels property. */
+    public BooleanProperty hideInactiveLabelsProperty() {
+        return hideInactiveLabels;
+    }
+
+    /** Returns whether inactive destination labels are hidden. */
+    public boolean isHideInactiveLabels() {
+        return hideInactiveLabels.get();
+    }
+
+    /**
+     * Hides labels on inactive destinations (spec label behavior "on and off"; default shows all
+     * labels, matching the material-web {@code hideInactiveLabels = false} default).
+     *
+     * @param hide {@code true} to show the label only on the active destination
+     */
+    public void setHideInactiveLabels(boolean hide) {
+        hideInactiveLabels.set(hide);
     }
 
     /** Returns the selected index. */

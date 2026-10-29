@@ -27,7 +27,11 @@ public class M3TopAppBar extends VBox {
 
     private final Label titleLabel = new Label();
     private final Label headlineLabel = new Label();
-    private final HBox row = new HBox();
+    private final HBox row = new HBox(8);
+    private final HBox leadingBox = new HBox();
+    private final HBox trailingBox = new HBox(8);
+    private final Region leftSpacer = new Region();
+    private final Region rightSpacer = new Region();
 
     /** Creates a small top app bar. */
     public M3TopAppBar() {
@@ -47,8 +51,10 @@ public class M3TopAppBar extends VBox {
         headlineLabel.getStyleClass().add("m3-top-app-bar-headline");
         headlineLabel.textProperty().bind(titleProperty());
         headlineLabel.setWrapText(true);
+        leadingBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        trailingBox.setAlignment(javafx.geometry.Pos.CENTER_RIGHT);
         row.getStyleClass().add("m3-top-app-bar-row");
-        row.getChildren().add(titleLabel);
+        row.getChildren().addAll(leadingBox, leftSpacer, titleLabel, rightSpacer, trailingBox);
         setTitle(title);
         setVariant(variant);
         variantProperty().addListener((obs, oldV, newV) -> rebuild(oldV, newV));
@@ -116,10 +122,12 @@ public class M3TopAppBar extends VBox {
      */
     public void setNavigationIcon(Node icon) {
         navigationIcon.set(icon);
-        row.getChildren().removeIf(n -> "m3-appbar-nav".equals(n.getId()));
+        leadingBox.getChildren().clear();
         if (icon != null) {
-            icon.setId("m3-appbar-nav");
-            row.getChildren().add(0, icon);
+            if (icon.getId() == null || icon.getId().isBlank()) {
+                icon.setId("m3-appbar-nav");
+            }
+            leadingBox.getChildren().add(icon);
         }
     }
 
@@ -129,15 +137,11 @@ public class M3TopAppBar extends VBox {
      * @param actions action nodes
      */
     public void setActions(Node... actions) {
-        row.getChildren().removeIf(n -> "m3-appbar-action".equals(n.getId()));
-        Region spacer = new Region();
-        spacer.setId("m3-appbar-action");
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-        row.getChildren().add(spacer);
+        trailingBox.getChildren().clear();
         for (Node action : actions) {
             if (action != null) {
                 action.setId("m3-appbar-action");
-                row.getChildren().add(action);
+                trailingBox.getChildren().add(action);
             }
         }
     }
@@ -156,9 +160,45 @@ public class M3TopAppBar extends VBox {
         if (newV == TopAppBarVariant.MEDIUM || newV == TopAppBarVariant.LARGE) {
             getChildren().add(headlineLabel);
         }
-        row.setAlignment(
-                newV == TopAppBarVariant.CENTER_ALIGNED
-                        ? javafx.geometry.Pos.CENTER
-                        : javafx.geometry.Pos.CENTER_LEFT);
+        // Spec container heights: small/center-aligned 64dp, medium 112dp, large 152dp
+        // (md.comp.top-app-bar.{small|medium|large}.container.height).
+        if (newV != null) {
+            switch (newV) {
+                case MEDIUM -> {
+                    setMinHeight(112);
+                    setPrefHeight(112);
+                }
+                case LARGE -> {
+                    setMinHeight(152);
+                    setPrefHeight(152);
+                }
+                default -> {
+                    setMinHeight(64);
+                    setPrefHeight(64);
+                }
+            }
+        }
+
+        if (newV == TopAppBarVariant.CENTER_ALIGNED) {
+            HBox.setHgrow(leftSpacer, Priority.ALWAYS);
+            leftSpacer.setMinWidth(0);
+            leftSpacer.setPrefWidth(Region.USE_COMPUTED_SIZE);
+            leftSpacer.setMaxWidth(Double.MAX_VALUE);
+            HBox.setHgrow(rightSpacer, Priority.ALWAYS);
+            rightSpacer.setMinWidth(0);
+            rightSpacer.setPrefWidth(Region.USE_COMPUTED_SIZE);
+            rightSpacer.setMaxWidth(Double.MAX_VALUE);
+            row.setAlignment(javafx.geometry.Pos.CENTER);
+        } else {
+            HBox.setHgrow(leftSpacer, Priority.NEVER);
+            leftSpacer.setMinWidth(0);
+            leftSpacer.setPrefWidth(0);
+            leftSpacer.setMaxWidth(0);
+            HBox.setHgrow(rightSpacer, Priority.ALWAYS);
+            rightSpacer.setMinWidth(0);
+            rightSpacer.setPrefWidth(Region.USE_COMPUTED_SIZE);
+            rightSpacer.setMaxWidth(Double.MAX_VALUE);
+            row.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        }
     }
 }
