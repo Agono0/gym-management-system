@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.appbar.M3TopAppBar?>
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chip.M3Chip?>
+<?import io.m3fx.controls.common.M3Divider?>
+<?import io.m3fx.controls.data.M3StatCard?>
+<?import io.m3fx.controls.data.M3Stepper?>
+<?import io.m3fx.controls.effect.M3PulseBeacon?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.scene3d.M3AnatomyViewer3D?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.TextArea?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane fx:id="rootPane" prefWidth="1280.0" styleClass="medical-profile-root"
+           xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.MedicalProfileController">
+
+    <!-- Primary Layout Surface -->
+    <BorderPane fx:id="mainLayout">
+        <!-- Top App Bar -->
+        <top>
+            <HBox alignment="CENTER_LEFT" styleClass="app-bar-container">
+                <M3TopAppBar fx:id="topAppBar" title="ATHLETIC MEDICAL &amp; SAFETY CONSOLE" variant="CENTER_ALIGNED" HBox.hgrow="ALWAYS">
+                    <navigationIcon>
+                        <M3IconButton fx:id="btnBack" onAction="#onNavigateBack">
+                            <graphic><M3Icon symbolName="arrow_back"/></graphic>
+                        </M3IconButton>
+                    </navigationIcon>
+                </M3TopAppBar>
+                <HBox alignment="CENTER_RIGHT" spacing="8">
+                    <padding><Insets right="16"/></padding>
+                    <M3Button fx:id="btnDeleteProfile" text="Delete Record" variant="TEXT" onAction="#onDelete">
+                        <graphic><M3Icon symbolName="delete"/></graphic>
+                    </M3Button>
+                    <M3Button fx:id="btnSaveProfile" text="Save Profile" variant="FILLED" onAction="#onSave">
+                        <graphic><M3Icon symbolName="check"/></graphic>
+                    </M3Button>
+                </HBox>
+            </HBox>
+        </top>
+
+        <!-- Center Scrollable Console -->
+        <center>
+            <ScrollPane fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED">
+                <HBox spacing="20">
+                    <padding><Insets top="20" right="24" bottom="64" left="24"/></padding>
+
+                    <!-- Zone A: Emergency HUD & Allergies -->
+                    <VBox spacing="16" prefWidth="380" minWidth="360">
+                        <!-- Emergency Biometrics Card -->
+                        <M3Card variant="ELEVATED">
+                            <content>
+                                <VBox spacing="12">
+                                    <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                                    <Label text="EMERGENCY BIOMETRICS" styleClass="title-small"/>
+                                    <HBox spacing="12">
+                                        <M3StatCard fx:id="statBloodType" title="BLOOD TYPE" value="O+"
+                                                    deltaText="Rh Positive" HBox.hgrow="ALWAYS"/>
+                                        <M3StatCard fx:id="statPhysician" title="ATTENDING MD" value="Dr. Vance"
+                                                    deltaText="01055443322" HBox.hgrow="ALWAYS"/>
+                                    </HBox>
+                                </VBox>
+                            </content>
+                        </M3Card>
+
+                        <!-- Critical Allergies & Warnings Alert Card -->
+                        <M3Card fx:id="cardAllergiesAlert" variant="OUTLINED" styleClass="allergy-alert-card">
+                            <content>
+                                <VBox spacing="12">
+                                    <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                                    <HBox alignment="CENTER_LEFT" spacing="8">
+                                        <M3PulseBeacon fx:id="beaconAllergyAlert"/>
+                                        <Label text="CRITICAL ALLERGIES &amp; WARNINGS" styleClass="title-small"/>
+                                    </HBox>
+                                    <FlowPane fx:id="paneAllergyChips" hgap="8" vgap="8">
+                                        <M3Chip text="Penicillin" variant="INPUT"/>
+                                        <M3Chip text="NSAIDs (Mild)" variant="INPUT"/>
+                                    </FlowPane>
+                                    <M3Button fx:id="btnAddAllergy" text="+ Add Allergy Tag" variant="TONAL"
+                                              onAction="#onAddAllergyTag"/>
+                                </VBox>
+                            </content>
+                        </M3Card>
+
+                        <!-- Exercise Clearance Stepper Card -->
+                        <M3Card variant="OUTLINED">
+                            <content>
+                                <VBox spacing="12">
+                                    <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                                    <Label text="EXERCISE CLEARANCE STAGE" styleClass="title-small"/>
+                                    <M3Stepper fx:id="stepperClearance" currentStep="3"/>
+                                </VBox>
+                            </content>
+                        </M3Card>
+                    </VBox>
+
+                    <!-- Zone B: 3D Anatomy Viewer -->
+                    <VBox spacing="16" prefWidth="460" HBox.hgrow="ALWAYS">
+                        <M3Card variant="ELEVATED">
+                            <content>
+                                <VBox spacing="12" alignment="CENTER">
+                                    <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                                    <HBox alignment="CENTER_LEFT">
+                                        <Label text="3D MUSCULOSKELETAL INJURY MAPPING" styleClass="title-small"/>
+                                        <Region HBox.hgrow="ALWAYS"/>
+                                        <M3IconButton fx:id="btnResetCamera" onAction="#onReset3DCamera">
+                                            <graphic><M3Icon symbolName="refresh"/></graphic>
+                                        </M3IconButton>
+                                    </HBox>
+                                    <M3AnatomyViewer3D fx:id="anatomyViewer" prefWidth="420" prefHeight="480"/>
+                                    <Label fx:id="lblActiveInjuryDetail" text="Active Hotspot: Right Patellar Tendinitis"
+                                           styleClass="body-small"/>
+                                </VBox>
+                            </content>
+                        </M3Card>
+                    </VBox>
+
+                    <!-- Zone C: Clinical Dossier -->
+                    <VBox spacing="16" prefWidth="420" minWidth="380">
+                        <M3Card variant="OUTLINED">
+                            <content>
+                                <VBox spacing="14">
+                                    <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                                    <Label text="CLINICAL DOSSIER &amp; PROTOCOLS" styleClass="title-small"/>
+                                    <M3TextField fx:id="txtBloodType" labelText="Blood Type" supportingText="e.g., A+, O-, B+"
+                                                 variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtConditions" labelText="Chronic Conditions" supportingText="Comma-separated"
+                                                 variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtAllergies" labelText="Allergies &amp; Contraindications"
+                                                 variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtMedications" labelText="Active Medications &amp; Dosages"
+                                                 variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtInjuries" labelText="Musculoskeletal Injuries History"
+                                                 variant="OUTLINED"/>
+                                    <M3Divider/>
+                                    <Label text="ATTENDING PHYSICIAN" styleClass="label-large"/>
+                                    <M3TextField fx:id="txtDoctorName" labelText="Doctor Full Name" variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtDoctorPhone" labelText="Doctor Emergency Phone" variant="OUTLINED"/>
+                                    <M3Divider/>
+                                    <Label text="CLINICAL REHAB NOTES" styleClass="label-large"/>
+                                    <TextArea fx:id="txtNotes" prefRowCount="4" wrapText="true"
+                                              promptText="Enter detailed physical rehabilitation notes..."/>
+                                </VBox>
+                            </content>
+                        </M3Card>
+                    </VBox>
+                </HBox>
+            </ScrollPane>
+        </center>
+    </BorderPane>
+
+    <!-- On-Demand Empty State Overlay Pane (Rule 3) -->
+    <VBox fx:id="emptyStateContainer" visible="false" alignment="CENTER" spacing="16" styleClass="empty-state-pane">
+        <M3Icon symbolName="favorite" styleClass="large-hero-icon"/>
+        <Label text="No Medical Profile Created Yet" styleClass="headline-medium"/>
+        <Label text="Athletes do not have medical records by default (UML Rule 3). Create one on demand." styleClass="body-large"/>
+        <M3Button fx:id="btnCreateProfile" text="Initialize Medical Profile" variant="FILLED" onAction="#onCreateOnDemand"/>
+    </VBox>
+
+</StackPane>

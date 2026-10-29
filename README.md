@@ -105,7 +105,7 @@ Run the component showcase: `gradlew run` (loads `fxml/main.fxml` through the pl
 | Language   | Java 27 (OpenJDK 27) |
 | UI         | JavaFX 21+ (FXML + CSS) |
 | Design     | Material Design 3 via the in-repo **m3fx** library (`m3fx-core` + `m3fx-controls`, see §2b); M3 expressive motion where supported |
-| Build      | Gradle 8+ (application plugin + JavaFX Gradle plugin) |
+| Build      | Gradle 9.8.0 via the committed wrapper (`gradlew`/`gradlew.bat` — never install Gradle by hand; see [`docs/BUILD_AND_RUN.md`](docs/BUILD_AND_RUN.md)) + `application` and JavaFX plugins |
 | Database   | SQLite (file `gym.db`, via SQLite-JDBC); schema in `src/main/resources/db/` (Week 1) |
 | Error handling | input validation + `DaoException` → user-friendly messages (no stack traces to users) |
 | IDE        | IntelliJ IDEA (project SDK: `openjdk-27`, see `.idea/misc.xml`) |
@@ -129,23 +129,34 @@ src/main/resources/
   images/     logo, icons, placeholders
 ```
 
-Each folder above contains its own `README.md` with purpose, contents,
-task list, owner, and status. **Only `MainApp.java` (a placeholder) exists so far; the other
-packages contain no `.java` files yet — the team writes them following the timeline below.**
+Each folder above contains its own `README.md`. They are no longer bare task trackers: every one now
+teaches its layer — purpose, the OOP concepts practised there, design patterns, the rules with the bug
+each rule prevents, then one detailed entry per file (why it is shaped that way, how to write it step
+by step, a sketch, how to verify it, common mistakes), a review checklist and learning exercises. Start
+from the [docs index](docs/README.md) or the [learning guide](docs/LEARNING_GUIDE.md).
+
+**Only `MainApp.java` (a placeholder) exists so far; the other packages contain no `.java` files yet —
+the team writes them following the timeline below.** The folder docs describe the agreed design in
+[`docs/UML.md`](docs/UML.md), not shipped code; [`docs/COVERAGE.md`](docs/COVERAGE.md) tracks what is
+actually built.
 
 ## 5. Installation & Running
 
-Requirements: JDK 27, Gradle 8+ (`gradlew`/`gradlew.bat` wrapper is committed at the repo root).
+Requirements: **JDK 27** and the **committed Gradle wrapper** (Gradle 9.8.0 — do not install Gradle by
+hand). On Windows use `.\gradlew.bat`; the `.\` is required in PowerShell. Full walkthrough, IntelliJ
+setup and troubleshooting: [`docs/BUILD_AND_RUN.md`](docs/BUILD_AND_RUN.md).
 
 ```bash
 git clone https://github.com/Agono0/gym-management-system.git
 cd gym-management-system
 git checkout main
-gradlew run           # opens the m3fx component showcase (placeholder MainApp)
+.\gradlew.bat build   # POSIX: ./gradlew build
+.\gradlew.bat run     # opens the m3fx component showcase (placeholder MainApp)
 ```
 
-The SQLite file (`gym.db`) is created automatically on first run and is
-git-ignored — never commit it.
+The SQLite file (`gym.db`) is created automatically in the process working directory once the DAO layer
+lands (Week 1) and is git-ignored — never commit it. `schema.sql` is the committed half; see
+[`src/main/resources/db/README.md`](src/main/resources/db/README.md).
 
 ## 6. Timeline (7 weeks)
 
@@ -185,8 +196,8 @@ end-to-end (model → DAO → service → UI) in both branches.
 1. Branch per task: `feat/<module>-<short-desc>` off `main` (or `swing` for ports).
 2. One PR per feature with a screenshot/GIF of the UI change.
 3. The other branch's port is a separate PR — never mix JavaFX and Swing code.
-4. Run `gradle build` before pushing; validate all inputs and handle every failure (DB errors, bad input) with a user-friendly message — never show stack traces to users.
-5. Follow the folder READMEs: update the Status column (`To Do` → `In Progress` → `Done`) when you start/finish a task.
+4. Run `.\gradlew.bat build` (POSIX: `./gradlew build`) before pushing; validate all inputs and handle every failure (DB errors, bad input) with a user-friendly message — never show stack traces to users.
+5. Follow the folder READMEs: update the Status column (`To Do` → `In Progress` → `Done`) when you start/finish a task. When you extend a folder README, follow [`docs/DOCS_STANDARD.md`](docs/DOCS_STANDARD.md) — it fixes the section order, the per-file entry template and the rule that `docs/UML.md` stays the single source of truth for names, types and signatures.
 6. M3 styling is mandatory: reference `-md-sys-color-*` theme lookups (applied in code via `M3Stylesheets.applyTo(scene, M3Theme)`; there is no `theme/material-theme.css` file), no hardcoded colors.
 
 ## 9. Known Limitations / Future Improvements
@@ -200,12 +211,35 @@ end-to-end (model → DAO → service → UI) in both branches.
 
 ## 10. Docs & Folders
 
-Folder-level docs: [`model`](src/main/java/com/gym/model/README.md) ·
-[`dao`](src/main/java/com/gym/dao/README.md) ·
-[`service`](src/main/java/com/gym/service/README.md) ·
-[`controller`](src/main/java/com/gym/controller/README.md) ·
-[`util`](src/main/java/com/gym/util/README.md) ·
-[`resources`](src/main/resources/README.md)
+Start at the [docs index](docs/README.md). It maps every question to the document that answers it and
+states which document wins when two disagree.
+
+| Document | What it is |
+|----------|------------|
+| [`docs/UML.md`](docs/UML.md) | **The design** — domain model, layer diagrams, every class with its fields/signatures, the 19 business rules |
+| [`docs/LEARNING_GUIDE.md`](docs/LEARNING_GUIDE.md) | Study path, OOP concept index (where each concept is practised), glossary, 40 defence questions |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why each non-obvious choice was made (numbered, append-only) |
+| [`docs/BUILD_AND_RUN.md`](docs/BUILD_AND_RUN.md) | `build.gradle`/`settings.gradle` explained, commands, database paths, IntelliJ setup, troubleshooting |
+| [`docs/DOCS_STANDARD.md`](docs/DOCS_STANDARD.md) | The template and authority rules every folder README follows |
+| [`docs/UML_TEAM.md`](docs/UML_TEAM.md) · [`docs/COVERAGE.md`](docs/COVERAGE.md) | Ownership + status; honest built-vs-planned checklist |
+
+**Folder-level docs** — each one teaches its layer: purpose, the OOP concepts practised there, design
+patterns, the rules and the bug each rule prevents, then one detailed entry per file (why it is shaped
+that way, how to write it step by step, a sketch, how to verify it, common mistakes), a review
+checklist and learning exercises:
+
+| Folder | Doc | Covers |
+|--------|-----|--------|
+| `com.gym` | [`README`](src/main/java/com/gym/README.md) | `MainApp`: JavaFX lifecycle, composition root, startup/session flow |
+| `model/` | [`README`](src/main/java/com/gym/model/README.md) | 13 entities + 11 enums: encapsulation, `equals`/`hashCode`, enums with behaviour, why no object graph |
+| `dao/` | [`README`](src/main/java/com/gym/dao/README.md) | 13 interface/impl pairs + JDBC: polymorphism at a seam, prepared statements, exception translation |
+| `service/` | [`README`](src/main/java/com/gym/service/README.md) | 11 services: business rules 1–19, state machine, `BigDecimal` money, validation strategy |
+| `controller/` | [`README`](src/main/java/com/gym/controller/README.md) | 16 screens: MVC in JavaFX, FXML binding, event handling, thin-controller discipline |
+| `util/` | [`README`](src/main/java/com/gym/util/README.md) | 10 helpers: static utilities, `DbConnection` seam, PBKDF2 hashing, ISO date handling, session state |
+| `resources/` | [`README`](src/main/resources/README.md) | Classpath assets, FXML, `schema.sql`, dynamic theming, images — plus one doc per sub-folder: [`fxml/`](src/main/resources/fxml/README.md) · [`db/`](src/main/resources/db/README.md) · [`theme/`](src/main/resources/theme/README.md) · [`images/`](src/main/resources/images/README.md) |
+
+> **New to the project?** Read the root README §1–§4, then
+> [`docs/LEARNING_GUIDE.md`](docs/LEARNING_GUIDE.md) §2 for the 90-minute orientation.
 
 ## 11. Error-Handling Standard (no gym-app test suite — handle errors instead)
 

@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.button.M3SplitButton?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chart.M3BarChart?>
+<?import io.m3fx.controls.chart.M3DonutChart?>
+<?import io.m3fx.controls.chart.M3Sparkline?>
+<?import io.m3fx.controls.chart.M3SplineChart?>
+<?import io.m3fx.controls.chip.M3Chip?>
+<?import io.m3fx.controls.data.M3DataTable?>
+<?import io.m3fx.controls.data.M3SpeedDial?>
+<?import io.m3fx.controls.data.M3StatCard?>
+<?import io.m3fx.controls.effect.M3PulseBeacon?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.scene3d.M3TiltCard3D?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane fx:id="dashboardRoot"
+           styleClass="dashboard-root"
+           xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.DashboardController">
+
+    <!-- Sparkline Definitions for KPI Telemetry Cards -->
+    <fx:define>
+        <M3Sparkline fx:id="memberSparkline" />
+        <M3Sparkline fx:id="revenueSparkline" />
+    </fx:define>
+
+    <!-- Main Bento Grid Container -->
+    <VBox spacing="20.0">
+        <padding>
+            <Insets bottom="112.0" left="24.0" right="24.0" top="20.0" />
+        </padding>
+
+        <!-- TOP: Hero Header Banner -->
+        <M3Card fx:id="heroBannerCard" variant="ELEVATED" prefHeight="84.0" styleClass="hero-banner">
+            <padding>
+                <Insets bottom="16.0" left="24.0" right="24.0" top="16.0" />
+            </padding>
+            <content>
+                <HBox alignment="CENTER_LEFT" spacing="16.0">
+                    <VBox spacing="4.0">
+                        <Label fx:id="welcomeGreetingLabel" text="Good Morning, Administrator" styleClass="greeting-title" />
+                        <HBox alignment="CENTER_LEFT" spacing="12.0">
+                            <M3PulseBeacon fx:id="occupancyBeacon" status="ONLINE" />
+                            <Label fx:id="capacityStatusLabel" text="Floor Occupancy: 82% [Optimal Dynamic Range]"
+                                   styleClass="telemetry-subtitle" />
+                            <Label text="|" styleClass="divider-pipe" />
+                            <Label fx:id="liveTimeLabel" text="10:42 AM" styleClass="telemetry-subtitle" />
+                        </HBox>
+                    </VBox>
+
+                    <Region HBox.hgrow="ALWAYS" />
+
+                    <!-- Action Controls Bar -->
+                    <HBox alignment="CENTER_RIGHT" spacing="12.0">
+                        <M3Button fx:id="refreshButton" variant="TONAL" onAction="#refreshData"
+                                  text="REFRESH TELEMETRY">
+                            <graphic>
+                                <M3Icon fx:id="refreshIcon" symbolName="refresh" />
+                            </graphic>
+                        </M3Button>
+                        <M3SplitButton fx:id="quickActionSplitBtn" variant="FILLED" text="QUICK CHECK-IN" />
+                        <M3Button fx:id="logoutButton" variant="OUTLINED" onAction="#onLogout" text="END SHIFT">
+                            <graphic>
+                                <M3Icon symbolName="close" />
+                            </graphic>
+                        </M3Button>
+                    </HBox>
+                </HBox>
+            </content>
+        </M3Card>
+
+        <!-- BENTO ROW 1: 4 Key Metric Stat Cards -->
+        <HBox spacing="16.0">
+            <M3StatCard fx:id="statActiveMembers" title="ACTIVE MEMBERS" value="1,428"
+                        deltaText="+4.2% vs last month" HBox.hgrow="ALWAYS" styleClass="stat-card-teal" />
+            <M3StatCard fx:id="statDailyRevenue" title="TODAY'S REVENUE" value="\$3,840.00"
+                        deltaText="Target: \$4,500.00 (85%)" HBox.hgrow="ALWAYS" styleClass="stat-card-azure" />
+            <M3StatCard fx:id="statTodaySessions" title="TODAY'S SESSIONS" value="38 / 46"
+                        deltaText="8 Pending Confirmation" HBox.hgrow="ALWAYS" styleClass="stat-card-purple" />
+            <M3StatCard fx:id="statEquipmentHealth" title="EQUIPMENT OPERATIONAL" value="94.2%"
+                        deltaText="2 Units in Maintenance" HBox.hgrow="ALWAYS" styleClass="stat-card-coral" />
+        </HBox>
+
+        <!-- BENTO ROW 2: Core Visualizations (Spline Chart & Agenda Table) -->
+        <HBox spacing="16.0" VBox.vgrow="ALWAYS">
+            <!-- Col 1: Live Hourly Traffic Spline -->
+            <M3Card variant="ELEVATED" prefWidth="640.0" minWidth="320.0" HBox.hgrow="ALWAYS" styleClass="chart-bento-card">
+                <padding>
+                    <Insets bottom="20.0" left="24.0" right="24.0" top="20.0" />
+                </padding>
+                <content>
+                    <VBox spacing="16.0">
+                        <HBox alignment="CENTER_LEFT">
+                            <VBox spacing="4.0">
+                                <Label text="Hourly Attendance &amp; Floor Traffic" styleClass="card-section-title" />
+                                <Label text="Real-time check-in density plotted against 14-day rolling average"
+                                       styleClass="card-section-subtitle" />
+                            </VBox>
+                            <Region HBox.hgrow="ALWAYS" />
+                            <M3Chip text="LIVE VELOCITY: +8/MIN" variant="ASSIST" />
+                        </HBox>
+                        <M3SplineChart fx:id="trafficSplineChart" prefHeight="260.0" VBox.vgrow="ALWAYS" />
+                    </VBox>
+                </content>
+            </M3Card>
+
+            <!-- Col 2: Today's Scheduled Sessions Table -->
+            <M3Card variant="ELEVATED" prefWidth="600.0" minWidth="320.0" HBox.hgrow="ALWAYS" styleClass="table-bento-card">
+                <padding>
+                    <Insets bottom="20.0" left="24.0" right="24.0" top="20.0" />
+                </padding>
+                <content>
+                    <VBox spacing="16.0">
+                        <HBox alignment="CENTER_LEFT">
+                            <VBox spacing="4.0">
+                                <Label text="Today's Session Schedule" styleClass="card-section-title" />
+                                <Label text="Live agenda tracking trainer bookings and slot capacity"
+                                       styleClass="card-section-subtitle" />
+                            </VBox>
+                            <Region HBox.hgrow="ALWAYS" />
+                            <M3Chip text="RULE 1 &amp; 17 COMPLIANT" variant="ASSIST" />
+                        </HBox>
+                        <M3DataTable fx:id="agendaTable" prefHeight="260.0" VBox.vgrow="ALWAYS" />
+                    </VBox>
+                </content>
+            </M3Card>
+        </HBox>
+
+        <!-- BENTO ROW 3: Secondary Facility Diagnostics -->
+        <HBox spacing="16.0">
+            <!-- Equipment Condition Donut -->
+            <M3Card variant="ELEVATED" prefWidth="400.0" minWidth="240.0" HBox.hgrow="ALWAYS" styleClass="mini-bento-card">
+                <padding>
+                    <Insets bottom="16.0" left="20.0" right="20.0" top="16.0" />
+                </padding>
+                <content>
+                    <VBox spacing="12.0">
+                        <Label text="Equipment Health Distribution" styleClass="card-section-title" />
+                        <M3DonutChart fx:id="equipmentDonutChart" prefHeight="140.0" />
+                    </VBox>
+                </content>
+            </M3Card>
+
+            <!-- Membership Plan Split Bar Chart -->
+            <M3Card variant="ELEVATED" prefWidth="400.0" minWidth="240.0" HBox.hgrow="ALWAYS" styleClass="mini-bento-card">
+                <padding>
+                    <Insets bottom="16.0" left="20.0" right="20.0" top="16.0" />
+                </padding>
+                <content>
+                    <VBox spacing="12.0">
+                        <Label text="Active Membership Plans" styleClass="card-section-title" />
+                        <M3BarChart fx:id="planBarChart" prefHeight="140.0" />
+                    </VBox>
+                </content>
+            </M3Card>
+
+            <!-- 3D Kinetic Facility Radar Card -->
+            <M3TiltCard3D fx:id="facilityRadarCard" prefWidth="400.0" prefHeight="180.0" minWidth="240.0" HBox.hgrow="ALWAYS" styleClass="mini-bento-card">
+                <padding>
+                    <Insets bottom="16.0" left="20.0" right="20.0" top="16.0" />
+                </padding>
+                <content>
+                    <VBox spacing="8.0">
+                        <Label text="Floor Density Radar" styleClass="card-section-title" />
+                        <Label text="Cardio: 90% | Free Weights: 75% | Studio: 40%" styleClass="telemetry-subtitle" />
+                        <Region VBox.vgrow="ALWAYS" />
+                        <HBox alignment="CENTER">
+                            <Label text="[3D GYM RADAR SIMULATION ACTIVE]" styleClass="hologram-text" />
+                        </HBox>
+                    </VBox>
+                </content>
+            </M3TiltCard3D>
+        </HBox>
+    </VBox>
+
+    <!-- FLOATING ACTIONS & TOASTS -->
+    <M3SpeedDial fx:id="quickActionSpeedDial" StackPane.alignment="BOTTOM_RIGHT"
+                 maxWidth="56.0" maxHeight="56.0" pickOnBounds="false">
+        <StackPane.margin>
+            <Insets bottom="32.0" right="32.0" />
+        </StackPane.margin>
+    </M3SpeedDial>
+
+    <StackPane fx:id="dashboardSnackbar" StackPane.alignment="BOTTOM_CENTER"
+               pickOnBounds="false" mouseTransparent="true" maxWidth="480.0" maxHeight="48.0">
+        <StackPane.margin>
+            <Insets bottom="24.0" />
+        </StackPane.margin>
+    </StackPane>
+</StackPane>

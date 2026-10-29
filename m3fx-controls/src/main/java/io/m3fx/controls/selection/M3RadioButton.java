@@ -6,9 +6,12 @@ import javafx.scene.control.RadioButton;
  * M3 radio button with all states (enabled, hovered, focused, pressed, disabled, error).
  *
  * <p>See <a href="https://m3.material.io/components/radio-button/overview">M3 radio button</a>.
- * Container 20dp, selected dot uses primary, touch target 48dp.
+ * Container 20dp circle, selected dot uses primary, 48dp minimum touch target.
  */
 public class M3RadioButton extends RadioButton {
+
+    /** Minimum touch target in px (spec: 48dp). */
+    public static final double TOUCH_TARGET = 48;
 
     /** Creates an unselected radio button. */
     public M3RadioButton() {
@@ -23,6 +26,7 @@ public class M3RadioButton extends RadioButton {
     public M3RadioButton(String text) {
         super(text == null ? "" : text);
         getStyleClass().add("m3-radio");
+        setMinHeight(TOUCH_TARGET);
         setFocusTraversable(true);
     }
 

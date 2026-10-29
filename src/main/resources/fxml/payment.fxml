@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.button.M3SplitButton?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chip.M3Chip?>
+<?import io.m3fx.controls.data.M3DataTable?>
+<?import io.m3fx.controls.data.M3StatCard?>
+<?import io.m3fx.controls.sheet.M3BottomSheet?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.RadioButton?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.ToggleGroup?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane xmlns="http://javafx.com/javafx/21" 
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.PaymentController"
+           styleClass="billing-root">
+
+    <fx:define>
+        <ToggleGroup fx:id="itemGroup"/>
+    </fx:define>
+
+    <!-- Primary Base Layout -->
+    <BorderPane styleClass="billing-base-pane">
+        <!-- Top App Bar -->
+        <top>
+            <VBox spacing="8.0" styleClass="top-bar-container">
+                <HBox alignment="CENTER_LEFT" spacing="16.0">
+                    <padding>
+                        <Insets top="16.0" right="24.0" bottom="16.0" left="24.0"/>
+                    </padding>
+                    <Label text="CASHLESS POS REGISTER &amp; BILLING" styleClass="title-large"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <TextField fx:id="txtSearchReceipt" promptText="Search Receipt # (e.g. R-8801)" prefWidth="250.0"/>
+                    <M3Button text="Lookup Receipt" onAction="#onReceiptLookupClick" variant="TONAL" styleClass="m3-button-tonal"/>
+                </HBox>
+            </VBox>
+        </top>
+
+        <!-- Main Workspace Split -->
+        <center>
+            <SplitPane dividerPositions="0.44">
+                <!-- Left Half: Cash Register & Tender Engine -->
+                <VBox spacing="16.0" styleClass="register-pane">
+                    <padding>
+                        <Insets top="16.0" right="16.0" bottom="64.0" left="16.0"/>
+                    </padding>
+
+                    <!-- Member Lookup & Balance Card -->
+                    <M3Card variant="OUTLINED" styleClass="customer-balance-card">
+                        <padding>
+                            <Insets top="12.0" right="12.0" bottom="12.0" left="12.0"/>
+                        </padding>
+                        <content>
+                            <VBox spacing="8.0">
+                                <Label text="CUSTOMER LOOKUP" styleClass="label-small"/>
+                                <HBox spacing="8.0">
+                                    <M3TextField fx:id="txtCustomerLookup" labelText="Enter Customer ID or Phone" HBox.hgrow="ALWAYS"/>
+                                    <M3Button text="Check Balance" onAction="#onCheckBalanceClick" variant="OUTLINED" styleClass="m3-button-outlined"/>
+                                </HBox>
+                                <HBox alignment="CENTER_LEFT">
+                                    <Label fx:id="lblCustomerName" text="Athlete: Not Selected" styleClass="title-medium"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Label fx:id="lblCustomerBalance" text="Unpaid Balance: $0.00" styleClass="headline-small"/>
+                                </HBox>
+                            </VBox>
+                        </content>
+                    </M3Card>
+
+                    <!-- Single Item Link Selector (Rule 12) -->
+                    <VBox spacing="8.0">
+                        <Label text="SELECT ITEM TO SETTLE (EXACTLY ONE)" styleClass="label-small"/>
+                        <RadioButton fx:id="rbMembership" text="Membership Agreement Due" toggleGroup="$itemGroup" selected="true"/>
+                        <RadioButton fx:id="rbSubscription" text="Trainer Subscription Due" toggleGroup="$itemGroup"/>
+                        <RadioButton fx:id="rbSession" text="Single Ad-hoc Session Fee" toggleGroup="$itemGroup"/>
+                    </VBox>
+
+                    <!-- Payment Method Selector -->
+                    <VBox spacing="8.0">
+                        <Label text="PAYMENT METHOD" styleClass="label-small"/>
+                        <HBox spacing="8.0">
+                            <M3Chip fx:id="chipMethodCard" text="Card / NFC" selected="true"/>
+                            <M3Chip fx:id="chipMethodCash" text="Cash" selected="false"/>
+                            <M3Chip fx:id="chipMethodTransfer" text="Wire Transfer" selected="false"/>
+                        </HBox>
+                    </VBox>
+
+                    <!-- Amount Field & Tender Pads -->
+                    <VBox spacing="10.0">
+                        <Label text="CHARGE AMOUNT (BIGDECIMAL)" styleClass="label-small"/>
+                        <M3TextField fx:id="txtPaymentAmount" text="499.00" styleClass="currency-hero-field"/>
+                        <HBox spacing="8.0">
+                            <M3Button text="\$20" onAction="#onTender20" variant="TONAL" styleClass="m3-button-tonal"/>
+                            <M3Button text="\$50" onAction="#onTender50" variant="TONAL" styleClass="m3-button-tonal"/>
+                            <M3Button text="\$100" onAction="#onTender100" variant="TONAL" styleClass="m3-button-tonal"/>
+                            <M3Button text="Exact Amount" onAction="#onTenderExact" variant="OUTLINED" styleClass="m3-button-outlined"/>
+                        </HBox>
+                    </VBox>
+
+                    <Region VBox.vgrow="ALWAYS"/>
+
+                    <!-- Primary Record SplitButton -->
+                    <M3SplitButton fx:id="actionSplitButton" text="RECORD PAYMENT (ENTER)" onAction="#onRecord" 
+                                   styleClass="m3-split-button-filled" maxWidth="Infinity"/>
+                </VBox>
+
+                <!-- Right Half: Financial Ledger Table -->
+                <VBox spacing="16.0">
+                    <padding>
+                        <Insets top="16.0" right="16.0" bottom="64.0" left="16.0"/>
+                    </padding>
+                    <!-- Telemetry Row -->
+                    <HBox spacing="16.0">
+                        <M3StatCard fx:id="statRevenueCard" title="Today's Revenue" value="\$4,850.00" deltaText="Voided excluded" HBox.hgrow="ALWAYS"/>
+                        <M3StatCard fx:id="statUnpaidCard" title="Accounts Receivable" value="\$320.00" deltaText="Pending settlement" HBox.hgrow="ALWAYS"/>
+                    </HBox>
+
+                    <!-- Ledger Data Table -->
+                    <M3DataTable fx:id="paymentDataTable" VBox.vgrow="ALWAYS"/>
+
+                    <!-- Action Toolbar -->
+                    <HBox spacing="12.0" alignment="CENTER_RIGHT">
+                        <M3Button fx:id="btnShowReceipt" text="View / Print Receipt" onAction="#onShowReceiptClick" variant="TONAL" styleClass="m3-button-tonal"/>
+                        <M3Button fx:id="btnVoidPayment" text="Void Payment" onAction="#onVoidClick" variant="TEXT" styleClass="m3-button-text-danger"/>
+                    </HBox>
+                </VBox>
+            </SplitPane>
+        </center>
+    </BorderPane>
+
+    <!-- Bottom Digital Receipt Drawer (M3BottomSheet) -->
+    <M3BottomSheet fx:id="receiptBottomSheet" visible="false" StackPane.alignment="BOTTOM_CENTER">
+        <content>
+            <VBox spacing="12.0" styleClass="receipt-paper-surface">
+                <padding>
+                    <Insets top="20.0" right="24.0" bottom="20.0" left="24.0"/>
+                </padding>
+                <Label text="DIGITAL FISCAL RECEIPT" styleClass="title-large"/>
+                <Label fx:id="lblReceiptDetails" text="Receipt Details..." styleClass="body-medium"/>
+                <HBox spacing="12.0" alignment="CENTER_RIGHT">
+                    <M3Button text="Print Thermal Copy" variant="FILLED" styleClass="m3-button-filled"/>
+                    <M3Button text="Close" onAction="#onCloseReceiptClick" variant="OUTLINED" styleClass="m3-button-outlined"/>
+                </HBox>
+            </VBox>
+        </content>
+    </M3BottomSheet>
+
+</StackPane>

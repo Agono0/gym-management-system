@@ -11,7 +11,11 @@ class M3IconsTest {
 
     @Test
     void catalogHasCoreIcons() {
-        for (String name : new String[] {"menu", "close", "search", "add", "home", "check"}) {
+        for (String name : new String[] {
+            "menu", "close", "search", "add", "home", "check",
+            "arrow_drop_down", "arrow_back", "arrow_forward",
+            "settings", "keyboard_arrow_down", "chevron_left", "chevron_right"
+        }) {
             assertNotNull(M3Icons.pathFor(name), "missing icon: " + name);
         }
         assertNull(M3Icons.pathFor("no-such-icon"));

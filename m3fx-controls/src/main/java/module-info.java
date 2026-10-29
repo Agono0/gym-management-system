@@ -9,9 +9,13 @@ module io.m3fx.controls {
     exports io.m3fx.controls.appbar;
     exports io.m3fx.controls.button;
     exports io.m3fx.controls.card;
+    exports io.m3fx.controls.carousel;
+    exports io.m3fx.controls.chart;
     exports io.m3fx.controls.chip;
     exports io.m3fx.controls.common;
+    exports io.m3fx.controls.data;
     exports io.m3fx.controls.dialog;
+    exports io.m3fx.controls.effect;
     exports io.m3fx.controls.fab;
     exports io.m3fx.controls.icon;
     exports io.m3fx.controls.iconbutton;
@@ -19,14 +23,18 @@ module io.m3fx.controls {
     exports io.m3fx.controls.list;
     exports io.m3fx.controls.menu;
     exports io.m3fx.controls.nav;
+    exports io.m3fx.controls.overlay;
     exports io.m3fx.controls.picker;
     exports io.m3fx.controls.progress;
+    exports io.m3fx.controls.scene3d;
     exports io.m3fx.controls.search;
     exports io.m3fx.controls.segmented;
     exports io.m3fx.controls.selection;
+    exports io.m3fx.controls.shape;
     exports io.m3fx.controls.sheet;
     exports io.m3fx.controls.slider;
     exports io.m3fx.controls.snackbar;
     exports io.m3fx.controls.tabs;
     exports io.m3fx.controls.textfield;
+    exports io.m3fx.controls.toolbar;
 }

@@ -21,8 +21,8 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 
 /**
- * M3 icon button: a 48x48 touch target with an icon, in standard/filled/tonal/outlined variants,
- * with toggle support.
+ * M3 icon button: a 48x48 touch target with a 40dp container circle and an icon, in
+ * standard/filled/tonal/outlined variants, with toggle support.
  *
  * <p>See <a href="https://m3.material.io/components/icon-buttons/overview">M3 icon buttons</a>. A
  * real {@code Control} + {@code Skin} with live ripple, state-layer overlays and spring
@@ -157,6 +157,9 @@ public class M3IconButton extends PressableControl {
 
     /** Skin: circular background + state layer + centered icon + clipped ripple. */
     static final class IconButtonSkin extends SkinBase<M3IconButton> {
+        /** Spec container size: a 40dp circle inside the 48dp touch target. */
+        private static final double CONTAINER_SIZE = 40;
+
         private final StackPane root = new StackPane();
         private final Region background = new Region();
         private final Region stateLayer = new Region();
@@ -165,6 +168,7 @@ public class M3IconButton extends PressableControl {
         private final javafx.event.EventHandler<MouseEvent> pressHandler;
         private final javafx.event.EventHandler<MouseEvent> releaseHandler;
         private final javafx.event.EventHandler<KeyEvent> keyHandler;
+        private final javafx.beans.value.ChangeListener<Node> graphicListener;
 
         IconButtonSkin(M3IconButton control) {
             super(control);
@@ -176,11 +180,19 @@ public class M3IconButton extends PressableControl {
             iconSlot.setMouseTransparent(true);
             ripplePane.getStyleClass().add("m3-icon-button-ripple");
             root.setAlignment(Pos.CENTER);
+            // Spec: filled/tonal/outlined container is 40dp inside the 48dp touch target. Pref +
+            // max (no min) so composite hosts (e.g. M3SplitButton's smaller trailing half) can
+            // still shrink it below 40.
+            background.setPrefSize(CONTAINER_SIZE, CONTAINER_SIZE);
+            background.setMaxSize(CONTAINER_SIZE, CONTAINER_SIZE);
+            stateLayer.setPrefSize(CONTAINER_SIZE, CONTAINER_SIZE);
+            stateLayer.setMaxSize(CONTAINER_SIZE, CONTAINER_SIZE);
             // Paint order: background, ripple, icon, state layer — ripple never covers the icon.
             root.getChildren().addAll(background, ripplePane, iconSlot, stateLayer);
             getChildren().add(root);
             syncGraphic();
-            control.graphicProperty().addListener((obs, oldV, newV) -> syncGraphic());
+            graphicListener = (obs, oldV, newV) -> syncGraphic();
+            control.graphicProperty().addListener(graphicListener);
             Rectangle clip = new Rectangle();
             clip.setArcWidth(48);
             clip.setArcHeight(48);
@@ -205,6 +217,7 @@ public class M3IconButton extends PressableControl {
                 control.removeEventHandler(MouseEvent.MOUSE_PRESSED, pressHandler);
                 control.removeEventHandler(MouseEvent.MOUSE_RELEASED, releaseHandler);
                 control.removeEventHandler(KeyEvent.KEY_PRESSED, keyHandler);
+                control.graphicProperty().removeListener(graphicListener);
                 MotionUtil.removePressScale(control);
                 StateLayer.unbind(control, stateLayer);
                 Ripple.detach(control, ripplePane);

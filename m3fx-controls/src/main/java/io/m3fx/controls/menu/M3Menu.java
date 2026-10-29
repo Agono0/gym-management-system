@@ -74,6 +74,25 @@ public class M3Menu {
     }
 
     /**
+     * Adds a cascading submenu (spec cascading menu support).
+     *
+     * @param text submenu label
+     * @param submenu the menu to open from this item; its current items are moved into the submenu
+     * @return this menu, for chaining
+     */
+    public M3Menu submenu(String text, M3Menu submenu) {
+        javafx.scene.control.Menu menu =
+                new javafx.scene.control.Menu(text == null ? "" : text);
+        menu.getStyleClass().add("m3-menu-item");
+        if (submenu != null) {
+            menu.getItems().addAll(submenu.popup().getItems());
+            submenu.popup().getItems().clear();
+        }
+        popup.getItems().add(menu);
+        return this;
+    }
+
+    /**
      * Shows the menu anchored to a node.
      *
      * @param owner the anchor node

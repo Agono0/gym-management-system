@@ -21,7 +21,16 @@ public final class M3Stylesheets {
     /** Classpath location of the bundled component stylesheet. */
     public static final String M3FX_CSS = "/io/m3fx/css/m3fx.css";
 
-    private static volatile M3Theme latestTheme;
+    private static volatile M3Theme latestTheme = M3Theme.baseline(true);
+
+    /**
+     * Sets the latest active theme for the application.
+     *
+     * @param theme the theme to set
+     */
+    public static void setLatestTheme(M3Theme theme) {
+        latestTheme = theme;
+    }
 
     /**
      * Applies a theme to a scene: writes the theme CSS to a temp file, adds it before the

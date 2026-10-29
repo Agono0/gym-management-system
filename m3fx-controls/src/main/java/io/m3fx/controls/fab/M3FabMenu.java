@@ -95,6 +95,18 @@ public class M3FabMenu extends StackPane {
         return this;
     }
 
+    /**
+     * Adds an action row with a symbol icon name.
+     *
+     * @param label action label
+     * @param iconName Material Symbol name
+     * @param handler click handler
+     * @return this menu, for chaining
+     */
+    public M3FabMenu addAction(String label, String iconName, Runnable handler) {
+        return addAction(label, iconName == null ? null : M3Icon.symbol(iconName), handler);
+    }
+
     /** Returns the expanded property. */
     public BooleanProperty expandedProperty() {
         return expanded;

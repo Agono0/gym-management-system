@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chip.M3Chip?>
+<?import io.m3fx.controls.effect.M3GlassPane?>
+<?import io.m3fx.controls.effect.M3ParticleCanvas?>
+<?import io.m3fx.controls.effect.M3PulseBeacon?>
+<?import io.m3fx.controls.effect.M3Scanline?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.progress.M3CircularProgress?>
+<?import io.m3fx.controls.scene3d.M3GyroRing3D?>
+<?import io.m3fx.controls.selection.M3CheckBox?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.PasswordField?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane fx:id="rootPane"
+           styleClass="login-root auth-root"
+           xmlns="http://javafx.com/javafx/21"
+           xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.LoginController">
+
+    <!-- Layer 0: Ambient Kinetic Particles Background -->
+    <M3ParticleCanvas fx:id="particleBackdrop" particleCount="35" styleClass="ambient-particles" />
+
+    <!-- Layer 1: Glass Acrylic Backdrop Blur Canopy -->
+    <M3GlassPane fx:id="glassCanopy" blurRadius="24.0" styleClass="acrylic-blur" />
+
+    <!-- Layer 2: Main Split Workspace Layout -->
+    <HBox fx:id="mainHBox" alignment="CENTER" spacing="32.0">
+        <padding>
+            <Insets bottom="32.0" left="24.0" right="24.0" top="32.0" />
+        </padding>
+
+        <!-- Column 1: Hero Viewport with 3D Gyro Centerpiece -->
+        <VBox fx:id="heroViewport" alignment="CENTER_LEFT" spacing="24.0"
+              HBox.hgrow="ALWAYS" styleClass="hero-container">
+            <HBox alignment="CENTER_LEFT" spacing="12.0">
+                <M3Icon symbolName="stats" styleClass="brand-logo-icon" />
+                <Label text="GYM-OS // ATHLETIC ENGINE" styleClass="brand-heading" />
+            </HBox>
+
+            <!-- 3D Gyro Kinetic Centerpiece with Scanline (fills the hero column, shrinks with it) -->
+            <StackPane alignment="CENTER" prefHeight="440.0" styleClass="gyro-wrapper">
+                <M3GyroRing3D fx:id="kineticGyro" prefHeight="380.0" prefWidth="380.0" />
+                <M3Scanline fx:id="hologramScanline" styleClass="hero-scanline" />
+            </StackPane>
+
+            <!-- Telemetry Footer Bar -->
+            <HBox alignment="CENTER_LEFT" spacing="16.0" styleClass="telemetry-bar">
+                <M3PulseBeacon fx:id="statusBeacon" status="ONLINE" />
+                <Label text="STATION: FRONT_DESK_01" styleClass="telemetry-label" />
+                <Region HBox.hgrow="ALWAYS" />
+                <M3Chip fx:id="securityBadgeChip" text="TLS 1.3 / WAL ACTIVE" variant="ASSIST" />
+            </HBox>
+        </VBox>
+
+        <!-- Column 2: Authentication Bento Card -->
+        <StackPane fx:id="cardGlow" styleClass="neon-halo">
+            <M3Card fx:id="authCard" variant="ELEVATED" prefWidth="480.0" styleClass="auth-card">
+                <padding>
+                    <Insets bottom="40.0" left="40.0" right="40.0" top="40.0" />
+                </padding>
+                <content>
+                    <VBox spacing="20.0">
+                    <!-- Title Header -->
+                    <VBox spacing="6.0">
+                        <Label text="Operator Authentication" styleClass="card-title" />
+                        <Label text="Enter credentials to initialize shift console" styleClass="card-subtitle" />
+                    </VBox>
+
+                    <!-- Feedback Alert Tray (Dynamic Error/Warning Box) -->
+                    <StackPane fx:id="feedbackContainer" managed="false" visible="false">
+                        <HBox fx:id="feedbackBox" alignment="CENTER_LEFT" spacing="12.0" styleClass="feedback-tray-error">
+                            <M3Icon fx:id="feedbackIcon" symbolName="close" />
+                            <Label fx:id="feedbackLabel" text="Invalid credentials" wrapText="true" />
+                        </HBox>
+                    </StackPane>
+
+                    <!-- Staff ID Field -->
+                    <VBox spacing="6.0">
+                        <Label text="Staff Identifier" styleClass="field-label" />
+                        <M3TextField fx:id="usernameField" labelText="Staff Identifier" variant="OUTLINED" prefHeight="56.0" />
+                        <Label fx:id="usernameHelper" text="Case-sensitive unique employee ID" styleClass="helper-label" />
+                    </VBox>
+
+                    <!-- Password Field & Reveal Toggle -->
+                    <VBox spacing="6.0">
+                        <Label text="Master Password" styleClass="field-label" />
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <PasswordField fx:id="passwordField" promptText="Enter secure passphrase"
+                                           styleClass="app-password-field" prefHeight="56.0" HBox.hgrow="ALWAYS" />
+                            <M3IconButton fx:id="passwordToggleBtn" variant="STANDARD" onAction="#onTogglePasswordVisibility">
+                                <graphic>
+                                    <M3Icon symbolName="search" />
+                                </graphic>
+                            </M3IconButton>
+                        </HBox>
+                        <Label fx:id="capsLockAlert" text="[!] Caps Lock is ON" managed="false"
+                               styleClass="caps-alert-label" visible="false" />
+                    </VBox>
+
+                    <!-- Session Persistence -->
+                    <HBox alignment="CENTER_LEFT" spacing="8.0">
+                        <M3CheckBox fx:id="rememberMeCheckBox" text="Keep active for full 12h shift" />
+                    </HBox>
+
+                    <!-- Submit Button with Spinner -->
+                    <StackPane alignment="CENTER" prefHeight="56.0">
+                        <M3Button fx:id="loginButton" variant="FILLED"
+                                  maxWidth="Infinity" onAction="#onLogin"
+                                  prefHeight="56.0" styleClass="btn-primary-action" text="INITIALIZE CONSOLE">
+                            <graphic>
+                                <M3Icon symbolName="arrow_forward" />
+                            </graphic>
+                        </M3Button>
+                        <M3CircularProgress fx:id="loginSpinner" managed="false" prefHeight="24.0"
+                                            prefWidth="24.0" visible="false" />
+                    </StackPane>
+
+                    <!-- Forgot Password Link -->
+                    <HBox alignment="CENTER">
+                        <M3Button fx:id="forgotPasswordButton" variant="TEXT"
+                                  onAction="#onForgotPassword" styleClass="btn-tertiary-link"
+                                  text="Trouble signing in? Contact Administrator / Reset" />
+                    </HBox>
+                </VBox>
+                </content>
+            </M3Card>
+        </StackPane>
+    </HBox>
+
+    <!-- Layer 3: System Notification & Toast Host Container -->
+    <StackPane fx:id="authSnackbar" StackPane.alignment="BOTTOM_CENTER">
+        <StackPane.margin>
+            <Insets bottom="32.0" />
+        </StackPane.margin>
+    </StackPane>
+</StackPane>

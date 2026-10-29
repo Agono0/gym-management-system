@@ -213,6 +213,11 @@ public class M3Button extends PressableControl {
         private final javafx.event.EventHandler<MouseEvent> pressHandler;
         private final javafx.event.EventHandler<MouseEvent> releaseHandler;
         private final javafx.event.EventHandler<KeyEvent> keyHandler;
+        private final javafx.beans.value.ChangeListener<Boolean> hoverListener;
+        private final javafx.beans.value.ChangeListener<Boolean> pressedListener;
+        private final javafx.beans.value.ChangeListener<ButtonVariant> variantListener;
+        private final javafx.beans.value.ChangeListener<Boolean> disabledListener;
+        private final javafx.beans.value.ChangeListener<Node> graphicListener;
 
         ButtonSkin(M3Button control) {
             super(control);
@@ -234,7 +239,6 @@ public class M3Button extends PressableControl {
             root.getChildren().addAll(background, ripplePane, content, stateLayer);
             getChildren().add(root);
             syncGraphic();
-            control.graphicProperty().addListener((obs, oldV, newV) -> syncGraphic());
             Rectangle clip = new Rectangle();
             clip.setArcWidth(40);
             clip.setArcHeight(40);
@@ -244,10 +248,16 @@ public class M3Button extends PressableControl {
             StateLayer.bind(control, stateLayer);
             Ripple.attach(control, ripplePane, this::resolveInk);
             MotionUtil.addPressScale(control);
-            control.hoverProperty().addListener((obs, oldV, hover) -> updateElevation(true));
-            control.pressedProperty().addListener((obs, oldV, pressed) -> updateElevation(true));
-            control.variantProperty().addListener((obs, oldV, newV) -> updateElevation(false));
-            control.disabledProperty().addListener((obs, oldV, disabled) -> updateElevation(false));
+            hoverListener = (obs, oldV, hover) -> updateElevation(true);
+            pressedListener = (obs, oldV, pressed) -> updateElevation(true);
+            variantListener = (obs, oldV, newV) -> updateElevation(false);
+            disabledListener = (obs, oldV, disabled) -> updateElevation(false);
+            graphicListener = (obs, oldV, newV) -> syncGraphic();
+            control.hoverProperty().addListener(hoverListener);
+            control.pressedProperty().addListener(pressedListener);
+            control.variantProperty().addListener(variantListener);
+            control.disabledProperty().addListener(disabledListener);
+            control.graphicProperty().addListener(graphicListener);
             updateElevation(false);
             pressHandler = control::pressBegin;
             releaseHandler = control::pressEnd;
@@ -264,6 +274,12 @@ public class M3Button extends PressableControl {
                 control.removeEventHandler(MouseEvent.MOUSE_PRESSED, pressHandler);
                 control.removeEventHandler(MouseEvent.MOUSE_RELEASED, releaseHandler);
                 control.removeEventHandler(KeyEvent.KEY_PRESSED, keyHandler);
+                control.hoverProperty().removeListener(hoverListener);
+                control.pressedProperty().removeListener(pressedListener);
+                control.variantProperty().removeListener(variantListener);
+                control.disabledProperty().removeListener(disabledListener);
+                control.graphicProperty().removeListener(graphicListener);
+                label.textProperty().unbind();
                 MotionUtil.removePressScale(control);
                 StateLayer.unbind(control, stateLayer);
                 Ripple.detach(control, ripplePane);

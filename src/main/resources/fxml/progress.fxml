@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.appbar.M3TopAppBar?>
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chart.M3ActivityCalendar?>
+<?import io.m3fx.controls.chart.M3DonutChart?>
+<?import io.m3fx.controls.chart.M3ScatterPlot?>
+<?import io.m3fx.controls.chart.M3SplineChart?>
+<?import io.m3fx.controls.common.M3Badge?>
+<?import io.m3fx.controls.data.M3StatCard?>
+<?import io.m3fx.controls.data.M3Timeline?>
+<?import io.m3fx.controls.effect.M3ParticleCanvas?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.segmented.M3SegmentedButton?>
+<?import io.m3fx.controls.sheet.M3BottomSheet?>
+<?import io.m3fx.controls.slider.M3Slider?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+<?import java.lang.String?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane fx:id="rootPane" prefWidth="1280.0" styleClass="member-progress-root"
+           xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.ProgressController">
+
+    <!-- Primary Layout Shell -->
+    <BorderPane fx:id="mainLayout">
+        <!-- Top App Bar -->
+        <top>
+            <HBox alignment="CENTER_LEFT" styleClass="app-bar-container">
+                <M3TopAppBar fx:id="topAppBar" title="BIOMECHANICAL PROGRESS &amp; ANALYTICS" variant="CENTER_ALIGNED" HBox.hgrow="ALWAYS">
+                    <navigationIcon>
+                        <M3IconButton fx:id="btnBack" onAction="#onNavigateBack">
+                            <graphic><M3Icon symbolName="arrow_back"/></graphic>
+                        </M3IconButton>
+                    </navigationIcon>
+                </M3TopAppBar>
+                <HBox alignment="CENTER_RIGHT" spacing="12">
+                    <padding><Insets right="16"/></padding>
+                    <M3SegmentedButton fx:id="segTimeHorizon" selectedIndex="1">
+                        <segments>
+                            <String fx:value="1M"/>
+                            <String fx:value="3M"/>
+                            <String fx:value="6M"/>
+                            <String fx:value="1Y"/>
+                            <String fx:value="ALL"/>
+                        </segments>
+                    </M3SegmentedButton>
+                    <M3Button fx:id="btnLogEntry" text="Log Entry" variant="FILLED" onAction="#onOpenLogDialog">
+                        <graphic><M3Icon symbolName="stats"/></graphic>
+                    </M3Button>
+                </HBox>
+            </HBox>
+        </top>
+
+        <!-- Center Scrollable Analytics Workspace -->
+        <center>
+            <ScrollPane fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED">
+                <VBox spacing="20">
+                    <padding><Insets top="20" right="24" bottom="64" left="24"/></padding>
+
+                    <!-- Telemetry Ribbon Cards -->
+                    <HBox spacing="16" fillHeight="true">
+                        <M3StatCard fx:id="statCurrentWeight" title="CURRENT WEIGHT" value="-- kg"
+                                    deltaText="Target: 80.0 kg" HBox.hgrow="ALWAYS"/>
+                        <M3StatCard fx:id="statBodyFat" title="BODY FAT %" value="-- %"
+                                    deltaText="Optimal Range" HBox.hgrow="ALWAYS"/>
+                        <M3StatCard fx:id="statLeanMass" title="LEAN MUSCLE MASS" value="-- kg"
+                                    deltaText="86.1% of Total" HBox.hgrow="ALWAYS"/>
+                        <M3StatCard fx:id="statVbtMax" title="ESTIMATED 1RM (VBT)" value="-- kg"
+                                    deltaText="Back Squat (R²=0.98)" HBox.hgrow="ALWAYS"/>
+                    </HBox>
+
+                    <!-- Mid Row: Spline Chart & Heatmap + Donut -->
+                    <HBox spacing="20">
+                        <!-- Dual Spline Biometrics Card -->
+                        <M3Card variant="ELEVATED" HBox.hgrow="ALWAYS">
+                            <content>
+                                <VBox spacing="12">
+                                    <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                                    <HBox alignment="CENTER_LEFT">
+                                        <Label text="BIOMETRIC TRAJECTORY (WEIGHT &amp; BODY FAT)" styleClass="title-small"/>
+                                        <Region HBox.hgrow="ALWAYS"/>
+                                        <M3Badge text="DUAL SPLINE"/>
+                                    </HBox>
+                                    <M3SplineChart fx:id="splineBiometrics" prefHeight="320"/>
+                                </VBox>
+                            </content>
+                        </M3Card>
+
+                        <!-- Training Density and Body Composition -->
+                        <VBox spacing="16" prefWidth="420" minWidth="380">
+                            <!-- 52-Week Training Density Card -->
+                            <M3Card variant="OUTLINED">
+                                <content>
+                                    <VBox spacing="10">
+                                        <padding><Insets top="14" right="14" bottom="14" left="14"/></padding>
+                                        <HBox alignment="CENTER_LEFT">
+                                            <Label text="52-WEEK TRAINING DENSITY" styleClass="title-small"/>
+                                            <Region HBox.hgrow="ALWAYS"/>
+                                            <Label text="184 Workouts" styleClass="label-small"/>
+                                        </HBox>
+                                        <M3ActivityCalendar fx:id="activityHeatmap" prefHeight="130"/>
+                                    </VBox>
+                                </content>
+                            </M3Card>
+
+                            <!-- Body Composition Donut Card -->
+                            <M3Card variant="OUTLINED">
+                                <content>
+                                    <HBox alignment="CENTER" spacing="16">
+                                        <padding><Insets top="12" right="14" bottom="12" left="14"/></padding>
+                                        <M3DonutChart fx:id="donutComposition" prefWidth="140" prefHeight="140"/>
+                                        <VBox spacing="6" alignment="CENTER_LEFT">
+                                            <Label text="BODY COMPOSITION" styleClass="title-small"/>
+                                            <Label text="Lean Mass: 72.5 kg" styleClass="body-small"/>
+                                            <Label text="Fat Mass: 11.7 kg" styleClass="body-small"/>
+                                            <Label text="Water: 52.4 L" styleClass="body-small"/>
+                                        </VBox>
+                                    </HBox>
+                                </content>
+                            </M3Card>
+                        </VBox>
+                    </HBox>
+
+                    <!-- Lower Row: VBT Scatter Plot & Timeline -->
+                    <HBox spacing="20">
+                        <!-- VBT Load-Velocity Scatter Plot Card -->
+                        <M3Card variant="ELEVATED" HBox.hgrow="ALWAYS">
+                            <content>
+                                <VBox spacing="12">
+                                    <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                                    <HBox alignment="CENTER_LEFT">
+                                        <Label text="VELOCITY-BASED TRAINING (VBT) LOAD-VELOCITY PROFILE" styleClass="title-small"/>
+                                        <Region HBox.hgrow="ALWAYS"/>
+                                        <Label fx:id="lblRegressionStats" text="v = -0.0094L + 1.71 | R² = 0.982" styleClass="label-small"/>
+                                    </HBox>
+                                    <M3ScatterPlot fx:id="scatterVbt" prefHeight="280"/>
+                                </VBox>
+                            </content>
+                        </M3Card>
+
+                        <!-- Anthropometric Tape Timeline Card -->
+                        <M3Card variant="OUTLINED" prefWidth="420" minWidth="380">
+                            <content>
+                                <VBox spacing="12">
+                                    <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                                    <Label text="ANTHROPOMETRIC TAPE TIMELINE" styleClass="title-small"/>
+                                    <M3Timeline fx:id="timelineAnthropometrics" prefHeight="260"/>
+                                </VBox>
+                            </content>
+                        </M3Card>
+                    </HBox>
+                </VBox>
+            </ScrollPane>
+        </center>
+    </BorderPane>
+
+    <!-- Celebration Confetti Particle Canvas -->
+    <M3ParticleCanvas fx:id="celebrationCanvas" visible="false" mouseTransparent="true"/>
+
+    <!-- Bottom Sheet for Logging Biometric Entries -->
+    <M3BottomSheet fx:id="sheetLogEntry" visible="false" StackPane.alignment="BOTTOM_CENTER">
+        <content>
+            <VBox spacing="16" prefWidth="480">
+                <padding><Insets top="20" right="24" bottom="24" left="24"/></padding>
+                <HBox alignment="CENTER_LEFT">
+                    <Label text="LOG BIOMETRIC TELEMETRY" styleClass="title-medium"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <M3IconButton onAction="#onCloseLogSheet">
+                        <graphic><M3Icon symbolName="close"/></graphic>
+                    </M3IconButton>
+                </HBox>
+                <M3TextField fx:id="txtEntryDate" labelText="Entry Date" supportingText="YYYY-MM-DD" variant="OUTLINED"/>
+                <M3TextField fx:id="txtWeight" labelText="Weight (kg)" supportingText="e.g., 84.2" variant="OUTLINED"/>
+                <M3Slider fx:id="sliderWeight" min="40" max="160" value="84.2"/>
+                <M3TextField fx:id="txtBodyFat" labelText="Body Fat (%)" supportingText="e.g., 13.8" variant="OUTLINED"/>
+                <M3TextField fx:id="txtTargetWeight" labelText="Target Goal Weight (kg)" variant="OUTLINED"/>
+                <M3TextField fx:id="txtMeasurements" labelText="Circumferences (JSON/Notes)" supportingText="Chest, Waist, Arms" variant="OUTLINED"/>
+                <M3Button text="Save Telemetry Entry" variant="FILLED" maxWidth="Infinity" onAction="#onSaveRecord"/>
+            </VBox>
+        </content>
+    </M3BottomSheet>
+
+</StackPane>

@@ -27,6 +27,7 @@ public class M3SegmentedButton extends HBox {
     private final ToggleGroup group = new ToggleGroup();
     private final ObservableList<String> segments = FXCollections.observableArrayList();
     private final List<ToggleButton> segmentButtons = new ArrayList<>();
+    private final List<M3Icon> checkIcons = new ArrayList<>();
 
     /** Creates an empty segmented button. */
     public M3SegmentedButton() {
@@ -46,13 +47,19 @@ public class M3SegmentedButton extends HBox {
     }
 
     /**
-     * Sets the segment labels (rebuilds segments, 2-5 expected).
+     * Sets the segment labels (rebuilds segments, 2-5 expected) and restores the selection.
      *
      * @param segments labels
      */
     public void setSegments(List<String> segments) {
+        // Detach old toggles first: ToggleGroup holds strong references, and stale detached
+        // buttons would shift every group index and break selection restore below.
+        for (ToggleButton old : segmentButtons) {
+            old.setToggleGroup(null);
+        }
         getChildren().clear();
         segmentButtons.clear();
+        checkIcons.clear();
         this.segments.setAll(segments == null ? List.of() : segments);
         for (int i = 0; i < this.segments.size(); i++) {
             final int index = i;
@@ -69,9 +76,12 @@ public class M3SegmentedButton extends HBox {
             HBox.setHgrow(segment, Priority.ALWAYS);
             segment.setOnAction(e -> setSelectedIndex(index));
             segmentButtons.add(segment);
+            checkIcons.add(buildCheckIcon());
             getChildren().add(segment);
         }
-        refreshCheckmarks();
+        // Re-apply the current selection to the freshly built toggles (a rebuild clears
+        // the group's selected toggle, so refreshCheckmarks alone would lose the state).
+        selectInGroup(getSelectedIndex());
     }
 
     /** Returns the segment labels. */
@@ -107,19 +117,20 @@ public class M3SegmentedButton extends HBox {
         refreshCheckmarks();
     }
 
-    /** Shows the M3 check icon on the selected segment only. */
+    /** Shows the M3 check icon (18px box, spec with-icon-icon-size) on the selected segment only. */
     private void refreshCheckmarks() {
         for (int i = 0; i < segmentButtons.size(); i++) {
             ToggleButton segment = segmentButtons.get(i);
-            if (i == getSelectedIndex()) {
-                M3Icon check = M3Icon.symbol("check");
-                check.setMinSize(18, 18);
-                check.setPrefSize(18, 18);
-                check.setMaxSize(18, 18);
-                segment.setGraphic(check);
-            } else {
-                segment.setGraphic(null);
-            }
+            segment.setGraphic(i == getSelectedIndex() ? checkIcons.get(i) : null);
         }
+    }
+
+    /** Builds one 18x18 check icon per segment (reused across selection changes). */
+    private M3Icon buildCheckIcon() {
+        M3Icon check = M3Icon.symbol("check");
+        check.setMinSize(18, 18);
+        check.setPrefSize(18, 18);
+        check.setMaxSize(18, 18);
+        return check;
     }
 }

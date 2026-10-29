@@ -72,8 +72,13 @@ public abstract class PressableControl extends Control implements Toggle {
     @Override
     public void setSelected(boolean selected) {
         this.selected.set(selected);
-        if (selected && getToggleGroup() != null && getToggleGroup().getSelectedToggle() != this) {
-            getToggleGroup().selectToggle(this);
+        if (getToggleGroup() != null) {
+            if (selected && getToggleGroup().getSelectedToggle() != this) {
+                getToggleGroup().selectToggle(this);
+            } else if (!selected && getToggleGroup().getSelectedToggle() == this) {
+                // Keep the group's selectedToggle in sync with a programmatic deselect.
+                getToggleGroup().selectToggle(null);
+            }
         }
     }
 

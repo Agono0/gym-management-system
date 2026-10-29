@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.appbar.M3TopAppBar?>
+<?import io.m3fx.controls.button.M3SplitButton?>
+<?import io.m3fx.controls.chip.M3Chip?>
+<?import io.m3fx.controls.command.M3CommandPalette?>
+<?import io.m3fx.controls.effect.M3PulseBeacon?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.nav.M3NavigationRail?>
+<?import io.m3fx.controls.selection.M3Switch?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.control.Separator?>
+<?import javafx.scene.control.ToggleButton?>
+<?import javafx.scene.control.ToggleGroup?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane styleClass="app-shell-root"
+           xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.AppShellController">
+
+    <!-- Primary Application Shell Layout Surface -->
+    <BorderPane fx:id="rootShellPane">
+
+        <!-- TOP: Glass Canopy Top App Bar -->
+        <top>
+            <StackPane styleClass="glass-app-bar-container">
+                <M3TopAppBar fx:id="topAppBar" title="GYM-OS // ENTERPRISE 2026" variant="SMALL" prefHeight="64.0" styleClass="glass-app-bar">
+                    <navigationIcon>
+                        <M3IconButton fx:id="railToggleBtn" variant="STANDARD" onAction="#onToggleRail">
+                            <graphic>
+                                <M3Icon symbolName="menu" />
+                            </graphic>
+                        </M3IconButton>
+                    </navigationIcon>
+                </M3TopAppBar>
+
+                <!-- Center + Right: Search trigger and system controls share ONE row so the search
+                     field can never slide underneath the telemetry/user cluster at narrow widths -->
+                <HBox alignment="CENTER_LEFT" pickOnBounds="false" spacing="16.0">
+                    <padding>
+                        <Insets left="300.0" right="16.0" />
+                    </padding>
+                    <HBox fx:id="searchTriggerBar" alignment="CENTER_LEFT" onMouseClicked="#onOpenCommandPalette"
+                          spacing="12.0" styleClass="global-search-trigger" maxWidth="380.0" HBox.hgrow="ALWAYS">
+                        <M3Icon symbolName="search" />
+                        <Label text="Quick Command or Search..." styleClass="search-placeholder" />
+                        <Region HBox.hgrow="ALWAYS" />
+                        <Label text="Ctrl + K" styleClass="shortcut-badge" />
+                    </HBox>
+                    <Region HBox.hgrow="ALWAYS" />
+                    <HBox alignment="CENTER_RIGHT" spacing="16.0">
+                        <HBox alignment="CENTER" spacing="8.0" styleClass="telemetry-pill">
+                            <M3PulseBeacon fx:id="dbSyncBeacon" status="ONLINE" />
+                            <Label text="DB: WAL ONLINE" styleClass="telemetry-text" />
+                        </HBox>
+                        <M3Switch fx:id="themeModeSwitch" selected="true" onMouseClicked="#onToggleThemeMode" />
+                        <M3Chip fx:id="userRoleChip" text="Alex Carter [ADMIN]" variant="ASSIST" onAction="#onOpenUserMenu" />
+                        <M3IconButton fx:id="logoutBtn" variant="STANDARD" onAction="#onLogout">
+                            <graphic>
+                                <M3Icon symbolName="close" />
+                            </graphic>
+                        </M3IconButton>
+                    </HBox>
+                </HBox>
+            </StackPane>
+        </top>
+
+        <!-- LEFT: Expandable M3 Navigation Rail -->
+        <left>
+            <M3NavigationRail fx:id="navigationRail" prefWidth="220.0" styleClass="side-nav-rail">
+                <!-- Header Fast Action Split Button -->
+                <VBox alignment="CENTER" styleClass="rail-action-container">
+                    <padding>
+                        <Insets top="16.0" bottom="16.0" left="8.0" right="8.0" />
+                    </padding>
+                    <M3SplitButton fx:id="globalActionSplitBtn" onAction="#onFastCheckIn" variant="FILLED" text="FAST CHECK-IN" maxWidth="Infinity" />
+                </VBox>
+
+                <!-- Navigation Destination Items (Smooth Scrollable Rail) -->
+                <ScrollPane fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED" VBox.vgrow="ALWAYS"
+                            styleClass="rail-scroll-pane"
+                            style="-fx-background-color: transparent; -fx-padding: 0;">
+                    <VBox spacing="4.0" alignment="TOP_CENTER">
+                        <padding>
+                            <Insets bottom="64.0" left="4.0" right="4.0" />
+                        </padding>
+                        <fx:define>
+                            <ToggleGroup fx:id="railNavGroup" />
+                        </fx:define>
+                        <ToggleButton fx:id="navDashboard" text="Dashboard" toggleGroup="$railNavGroup" selected="true"
+                                      styleClass="m3-navigation-item" maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#onNavDashboard">
+                            <graphic>
+                                <M3Icon symbolName="home" />
+                            </graphic>
+                        </ToggleButton>
+                        <ToggleButton fx:id="navCustomers" text="Members" toggleGroup="$railNavGroup"
+                                      styleClass="m3-navigation-item" maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#onNavCustomers">
+                            <graphic>
+                                <M3Icon symbolName="group" />
+                            </graphic>
+                        </ToggleButton>
+                        <ToggleButton fx:id="navTrainers" text="Trainers" toggleGroup="$railNavGroup"
+                                      styleClass="m3-navigation-item" maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#onNavTrainers">
+                            <graphic>
+                                <M3Icon symbolName="person" />
+                            </graphic>
+                        </ToggleButton>
+                        <ToggleButton fx:id="navSchedule" text="Schedule" toggleGroup="$railNavGroup"
+                                      styleClass="m3-navigation-item" maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#onNavSchedule">
+                            <graphic>
+                                <M3Icon symbolName="calendar" />
+                            </graphic>
+                        </ToggleButton>
+                        <ToggleButton fx:id="navMemberships" text="Plans" toggleGroup="$railNavGroup"
+                                      styleClass="m3-navigation-item" maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#onNavMemberships">
+                            <graphic>
+                                <M3Icon symbolName="favorite" />
+                            </graphic>
+                        </ToggleButton>
+                        <ToggleButton fx:id="navEquipment" text="Equipment" toggleGroup="$railNavGroup"
+                                      styleClass="m3-navigation-item" maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#onNavEquipment">
+                            <graphic>
+                                <M3Icon symbolName="stats" />
+                            </graphic>
+                        </ToggleButton>
+                        <ToggleButton fx:id="navAttendance" text="Attendance" toggleGroup="$railNavGroup"
+                                      styleClass="m3-navigation-item" maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#onNavAttendance">
+                            <graphic>
+                                <M3Icon symbolName="check" />
+                            </graphic>
+                        </ToggleButton>
+                        <ToggleButton fx:id="navPayments" text="Finance" toggleGroup="$railNavGroup"
+                                      styleClass="m3-navigation-item" maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#onNavPayments">
+                            <graphic>
+                                <M3Icon symbolName="money" />
+                            </graphic>
+                        </ToggleButton>
+                        <Separator />
+                        <ToggleButton fx:id="navStaff" text="Staff &amp; Admin" toggleGroup="$railNavGroup"
+                                      styleClass="m3-navigation-item" maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#onNavStaff">
+                            <graphic>
+                                <M3Icon symbolName="settings" />
+                            </graphic>
+                        </ToggleButton>
+                        <ToggleButton fx:id="navHelp" text="Documentation" toggleGroup="$railNavGroup"
+                                      styleClass="m3-navigation-item" maxWidth="Infinity" alignment="CENTER_LEFT" onAction="#onNavHelp">
+                            <graphic>
+                                <M3Icon symbolName="info" />
+                            </graphic>
+                        </ToggleButton>
+                    </VBox>
+                </ScrollPane>
+            </M3NavigationRail>
+        </left>
+
+        <!-- CENTER: Main Dynamic Workspace Viewport -->
+        <center>
+            <StackPane fx:id="contentArea" styleClass="workspace-container">
+                <!-- Dynamically injected active module views -->
+            </StackPane>
+        </center>
+    </BorderPane>
+
+    <!-- FLOATING OVERLAYS -->
+    <M3CommandPalette fx:id="commandPalette" visible="false" managed="false" />
+    <StackPane fx:id="globalSnackbar" StackPane.alignment="BOTTOM_CENTER"
+               pickOnBounds="false" mouseTransparent="true" maxWidth="480.0" maxHeight="48.0">
+        <StackPane.margin>
+            <Insets bottom="24.0" />
+        </StackPane.margin>
+    </StackPane>
+</StackPane>

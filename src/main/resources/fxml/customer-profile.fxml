@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.appbar.M3TopAppBar?>
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.card.M3Card?>
+<?import io.m3fx.controls.chart.M3RadarChart?>
+<?import io.m3fx.controls.common.M3Badge?>
+<?import io.m3fx.controls.common.M3Divider?>
+<?import io.m3fx.controls.data.M3StatCard?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.scene3d.M3TiltCard3D?>
+<?import io.m3fx.controls.textfield.M3TextField?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane fx:id="rootPane" styleClass="customer-profile-root"
+           xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.CustomerProfileController">
+
+    <!-- Primary Screen Layout Surface -->
+    <BorderPane fx:id="mainLayout">
+        <!-- Top App Bar -->
+        <top>
+            <HBox alignment="CENTER_LEFT" styleClass="app-bar-container">
+                <M3TopAppBar fx:id="topAppBar" title="ATHLETE PROFILE" variant="CENTER_ALIGNED" HBox.hgrow="ALWAYS">
+                    <navigationIcon>
+                        <M3IconButton fx:id="btnBack" onAction="#onNavigateBack">
+                            <graphic><M3Icon symbolName="arrow_back"/></graphic>
+                        </M3IconButton>
+                    </navigationIcon>
+                </M3TopAppBar>
+                <HBox alignment="CENTER_RIGHT" spacing="8">
+                    <padding><Insets right="16"/></padding>
+                    <M3Button fx:id="btnSaveProfile" text="Save Changes" variant="FILLED" onAction="#onSave">
+                        <graphic><M3Icon symbolName="check"/></graphic>
+                    </M3Button>
+                </HBox>
+            </HBox>
+        </top>
+
+        <!-- Center Scrollable Cockpit -->
+        <center>
+            <ScrollPane fitToWidth="true" hbarPolicy="NEVER" vbarPolicy="AS_NEEDED">
+                <HBox spacing="20">
+                    <padding><Insets top="20" right="24" bottom="64" left="24"/></padding>
+
+                    <!-- Zone A: Identity & Biometrics -->
+                    <VBox spacing="16" prefWidth="360" minWidth="300">
+                        <!-- 3D Holographic Membership Pass -->
+                        <M3TiltCard3D fx:id="holographicPass"/>
+
+                        <!-- Biometric Telemetry Card -->
+                        <M3Card variant="OUTLINED">
+                            <content>
+                                <VBox spacing="12">
+                                    <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                                    <Label text="BIOMETRIC TELEMETRY" styleClass="title-small"/>
+                                    <GridPane hgap="12" vgap="12">
+                                        <M3StatCard fx:id="statWeight" title="WEIGHT" value="-- kg"
+                                                    GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                                        <M3StatCard fx:id="statBodyFat" title="BODY FAT" value="-- %"
+                                                    GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+                                        <M3StatCard fx:id="statTarget" title="TARGET" value="-- kg"
+                                                    GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                                        <M3StatCard fx:id="statVbt" title="VBT 1RM" value="-- kg"
+                                                    GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+                                    </GridPane>
+                                    <M3Button fx:id="btnLogBiometric" text="Log New Biometric" variant="TONAL"
+                                              maxWidth="Infinity" onAction="#onLogBiometric"/>
+                                </VBox>
+                            </content>
+                        </M3Card>
+
+                        <!-- Medical & Safety Alert Callout -->
+                        <M3Card fx:id="cardMedicalAlert" variant="ELEVATED">
+                            <content>
+                                <VBox spacing="8">
+                                    <padding><Insets top="14" right="14" bottom="14" left="14"/></padding>
+                                    <HBox alignment="CENTER_LEFT" spacing="8">
+                                        <M3Icon symbolName="favorite"/>
+                                        <Label text="MEDICAL &amp; SAFETY" styleClass="title-small"/>
+                                    </HBox>
+                                    <Label fx:id="lblMedicalSummary" text="No active contraindications recorded."
+                                           wrapText="true" styleClass="body-small"/>
+                                    <M3Button fx:id="btnOpenMedical" text="Open Medical Console" variant="TEXT"
+                                              onAction="#onOpenMedicalProfile"/>
+                                </VBox>
+                            </content>
+                        </M3Card>
+                    </VBox>
+
+                    <!-- Zone B: Performance & Program -->
+                    <VBox spacing="16" prefWidth="480" HBox.hgrow="ALWAYS">
+                        <!-- Athlete Capacity Polygon -->
+                        <M3Card variant="ELEVATED">
+                            <content>
+                                <VBox spacing="12" alignment="CENTER">
+                                    <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                                    <HBox alignment="CENTER_LEFT">
+                                        <Label text="ATHLETE CAPACITY POLYGON" styleClass="title-small"/>
+                                        <Region HBox.hgrow="ALWAYS"/>
+                                        <M3Badge text="6-AXIS VBT"/>
+                                    </HBox>
+                                    <M3RadarChart fx:id="radarAthleteCapacity" prefWidth="420" prefHeight="300"/>
+                                </VBox>
+                            </content>
+                        </M3Card>
+
+                        <!-- Active Workout Program -->
+                        <M3Card variant="OUTLINED">
+                            <content>
+                                <VBox spacing="12">
+                                    <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                                    <HBox alignment="CENTER_LEFT">
+                                        <Label text="ACTIVE WORKOUT PROGRAM" styleClass="title-small"/>
+                                        <Region HBox.hgrow="ALWAYS"/>
+                                        <M3Badge fx:id="badgeProgramVersion" text="v1"/>
+                                    </HBox>
+                                    <Label fx:id="lblProgramName" text="No Program Assigned" styleClass="title-medium"/>
+                                    <Label fx:id="lblProgramDetails" text="Exercises will appear when assigned by head coach."
+                                           styleClass="body-small"/>
+                                    <HBox spacing="8">
+                                        <M3Button fx:id="btnViewProgram" text="View Workout" variant="TONAL"
+                                                  onAction="#onViewProgram"/>
+                                        <M3Button fx:id="btnAssignProgram" text="Assign Program" variant="TEXT"
+                                                  onAction="#onAssignProgram"/>
+                                    </HBox>
+                                </VBox>
+                            </content>
+                        </M3Card>
+                    </VBox>
+
+                    <!-- Zone C: Lifecycle, Coach & Demographics -->
+                    <VBox spacing="16" prefWidth="440" minWidth="320">
+                        <!-- Membership Plan Lifecycle Card -->
+                        <M3Card variant="ELEVATED">
+                            <content>
+                                <VBox spacing="12">
+                                    <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                                    <HBox alignment="CENTER_LEFT">
+                                        <Label text="MEMBERSHIP PLAN" styleClass="title-small"/>
+                                        <Region HBox.hgrow="ALWAYS"/>
+                                        <M3Badge fx:id="badgeMembershipStatus" text="ACTIVE"/>
+                                    </HBox>
+                                    <Label fx:id="lblPlanType" text="Plan: Monthly Standard" styleClass="headline-small"/>
+                                    <Label fx:id="lblPlanDates" text="Valid: 2026-01-01 -> 2026-12-31" styleClass="body-medium"/>
+                                    <HBox spacing="8">
+                                        <M3Button fx:id="btnFreezePlan" text="Freeze" variant="TONAL"
+                                                  onAction="#onFreezeMembership"/>
+                                        <M3Button fx:id="btnUnfreezePlan" text="Unfreeze" variant="TONAL"
+                                                  onAction="#onUnfreezeMembership"/>
+                                        <M3Button fx:id="btnRenewPlan" text="Renew" variant="FILLED"
+                                                  onAction="#onRenewMembership"/>
+                                    </HBox>
+                                </VBox>
+                            </content>
+                        </M3Card>
+
+                        <!-- Assigned Coach Card -->
+                        <M3Card variant="OUTLINED">
+                            <content>
+                                <VBox spacing="10">
+                                    <padding><Insets top="14" right="14" bottom="14" left="14"/></padding>
+                                    <Label text="ASSIGNED COACH" styleClass="title-small"/>
+                                    <HBox alignment="CENTER_LEFT" spacing="12">
+                                        <M3Icon symbolName="person"/>
+                                        <VBox>
+                                            <Label fx:id="lblTrainerName" text="Unassigned" styleClass="body-large"/>
+                                            <Label fx:id="lblTrainerSpecialization" text="Strength &amp; Conditioning"
+                                                   styleClass="body-small"/>
+                                        </VBox>
+                                        <Region HBox.hgrow="ALWAYS"/>
+                                        <M3Button fx:id="btnChangeTrainer" text="Change" variant="TEXT"
+                                                  onAction="#onChangeTrainer"/>
+                                    </HBox>
+                                </VBox>
+                            </content>
+                        </M3Card>
+
+                        <!-- Biographical & Emergency Form Card -->
+                        <M3Card variant="OUTLINED">
+                            <content>
+                                <VBox spacing="12">
+                                    <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
+                                    <Label text="BIOGRAPHICAL DOSSIER" styleClass="title-small"/>
+                                    <M3TextField fx:id="txtFullName" labelText="Full Name" supportingText="Required"
+                                                 variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtPhone" labelText="Phone Number" supportingText="Format: 01xxxxxxxxx"
+                                                 variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtEmail" labelText="Email Address" variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtAddress" labelText="Physical Address" variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtDateOfBirth" labelText="Date of Birth" supportingText="YYYY-MM-DD"
+                                                 variant="OUTLINED"/>
+                                    <M3Divider/>
+                                    <Label text="EMERGENCY CONTACT" styleClass="label-large"/>
+                                    <M3TextField fx:id="txtEmergencyName" labelText="Contact Name" variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtEmergencyPhone" labelText="Emergency Phone" variant="OUTLINED"/>
+                                </VBox>
+                            </content>
+                        </M3Card>
+                    </VBox>
+                </HBox>
+            </ScrollPane>
+        </center>
+    </BorderPane>
+
+</StackPane>

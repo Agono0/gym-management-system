@@ -1,28 +1,46 @@
 package io.m3fx.controls.selection;
 
+import io.m3fx.controls.internal.StateLayer;
+import io.m3fx.controls.internal.ThemeColors;
+import io.m3fx.core.theme.ColorRole;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.css.PseudoClass;
+import javafx.geometry.Insets;
 import javafx.scene.AccessibleRole;
 import javafx.scene.control.Control;
 import javafx.scene.control.Skin;
 import javafx.scene.control.SkinBase;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.Background;
+import javafx.scene.layout.BackgroundFill;
+import javafx.scene.layout.CornerRadii;
 import javafx.scene.layout.StackPane;
+import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 
 /**
  * M3 switch with all states and an optional icon thumb in the selected state.
  *
- * <p>See <a href="https://m3.material.io/components/switch/overview">M3 switch</a>. Track 52x32dp,
- * thumb 16dp (24dp when selected with icon). Keyboard operable via Space/Enter; announces
- * on/off through the accessible role.
+ * <p>See <a href="https://m3.material.io/components/switch/overview">M3 switch</a>. Track 52x32dp
+ * with a 2dp full-radius outline, handle 16dp unselected, 24dp selected, 28dp pressed, with a
+ * 40dp circular state layer behind the handle (hover 8% / focus 10% / pressed 10%). Keyboard
+ * operable via Space/Enter; announces on/off through the accessible role.
  */
 public class M3Switch extends Control {
 
     private static final PseudoClass SELECTED_PC = PseudoClass.getPseudoClass("selected");
+
+    /** Handle radius in px for the unselected state (16dp diameter). */
+    private static final double RADIUS_UNSELECTED = 8;
+    /** Handle radius in px for the selected state (24dp diameter). */
+    private static final double RADIUS_SELECTED = 12;
+    /** Handle radius in px while pressed (28dp diameter, spec pressed-handle). */
+    private static final double RADIUS_PRESSED = 14;
+    /** State-layer circle size in px (spec state-layer-size 40dp). */
+    private static final double STATE_LAYER_SIZE = 40;
 
     private final BooleanProperty selected = new SimpleBooleanProperty(this, "selected", false);
     private final BooleanProperty showIcon = new SimpleBooleanProperty(this, "showIcon", false);
@@ -106,8 +124,10 @@ public class M3Switch extends Control {
     static final class SwitchSkin extends SkinBase<M3Switch> {
         private final Rectangle track = new Rectangle(52, 32);
         private final StackPane thumbHolder = new StackPane();
+        private final javafx.scene.layout.Region stateLayer = new javafx.scene.layout.Region();
         private final Circle thumb = new Circle(8);
-        private final Circle iconDot = new Circle(4);
+        private final io.m3fx.controls.icon.M3Icon iconCheck =
+                io.m3fx.controls.icon.M3Icon.symbol("check");
 
         SwitchSkin(M3Switch control) {
             super(control);
@@ -115,15 +135,28 @@ public class M3Switch extends Control {
             track.setArcWidth(32);
             track.setArcHeight(32);
             thumb.getStyleClass().add("m3-switch-thumb");
-            iconDot.getStyleClass().add("m3-switch-thumb-icon");
-            iconDot.setVisible(control.isShowIcon() && control.isSelected());
-            thumbHolder.getChildren().addAll(thumb, iconDot);
+            iconCheck.getStyleClass().add("m3-switch-thumb-icon");
+            iconCheck.setScaleX(0.55);
+            iconCheck.setScaleY(0.55);
+            iconCheck.setMouseTransparent(true);
+            iconCheck.setVisible(control.isShowIcon() && control.isSelected());
+            // 40dp circular state layer behind the handle, moving with it (spec state-layer-size).
+            stateLayer.getStyleClass().add("m3-switch-state-layer");
+            stateLayer.setMinSize(STATE_LAYER_SIZE, STATE_LAYER_SIZE);
+            stateLayer.setMaxSize(STATE_LAYER_SIZE, STATE_LAYER_SIZE);
+            thumbHolder.getChildren().addAll(stateLayer, thumb, iconCheck);
             StackPane root = new StackPane(track, thumbHolder);
             root.getStyleClass().add("m3-switch-root");
             getChildren().add(root);
+            applyStateLayerColor();
+            StateLayer.bind(control, stateLayer);
             layoutThumb(false);
-            control.selectedProperty().addListener((obs, oldV, newV) -> layoutThumb(true));
+            control.selectedProperty().addListener((obs, oldV, newV) -> {
+                applyStateLayerColor();
+                layoutThumb(true);
+            });
             control.showIconProperty().addListener((obs, oldV, newV) -> layoutThumb(false));
+            control.pressedProperty().addListener((obs, oldV, pressed) -> applyHandleRadius(true));
             control.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
                 if (!control.isDisabled()) {
                     control.toggle();
@@ -132,37 +165,70 @@ public class M3Switch extends Control {
             control.addEventHandler(
                     javafx.scene.input.KeyEvent.KEY_PRESSED,
                     e -> {
-                        if (!control.isDisabled() && (e.getCode() == KeyCode.SPACE || e.getCode() == KeyCode.ENTER)) {
+                        if (!control.isDisabled()
+                                && (e.getCode() == KeyCode.SPACE || e.getCode() == KeyCode.ENTER)) {
                             control.toggle();
                             e.consume();
                         }
                     });
-            control.disabledProperty().addListener((obs, oldV, nowDisabled) -> root.setOpacity(nowDisabled ? 0.38 : 1.0));
-            if (control.isDisabled()) {
-                root.setOpacity(0.38);
+        }
+
+        @Override
+        public void dispose() {
+            M3Switch control = getSkinnable();
+            if (control != null) {
+                StateLayer.unbind(control, stateLayer);
             }
+            super.dispose();
+        }
+
+        /** Re-tints the state layer with the current state's layer color (spec on/off colors). */
+        private void applyStateLayerColor() {
+            M3Switch control = getSkinnable();
+            if (control == null) {
+                return;
+            }
+            Color layerColor =
+                    ThemeColors.resolve(
+                            control,
+                            control.isSelected() ? ColorRole.ON_PRIMARY : ColorRole.ON_SURFACE);
+            stateLayer.setBackground(
+                    new Background(
+                            new BackgroundFill(
+                                    layerColor, new CornerRadii(STATE_LAYER_SIZE / 2), Insets.EMPTY)));
         }
 
         private void layoutThumb(boolean animate) {
             M3Switch control = getSkinnable();
             double targetX = control.isSelected() ? 12 : -12;
-            double targetRadius = control.isSelected() ? 12 : 8;
-            iconDot.setVisible(control.isShowIcon() && control.isSelected());
+            iconCheck.setVisible(control.isShowIcon() && control.isSelected());
             if (animate) {
-                // Real spring for both translation and expansion so thumb smoothly glides and grows
+                // Real spring for translation (M3 Expressive spatial default) so the thumb glides.
                 io.m3fx.controls.internal.SpringAnimation.animate(
                         thumbHolder.translateXProperty(),
                         targetX,
-                        new io.m3fx.controls.internal.SpringAnimation.SpringParams(500, 0.75),
-                        null);
-                io.m3fx.controls.internal.SpringAnimation.animate(
-                        thumb.radiusProperty(),
-                        targetRadius,
-                        new io.m3fx.controls.internal.SpringAnimation.SpringParams(450, 0.8),
+                        io.m3fx.controls.internal.SpringAnimation.DEFAULT,
                         null);
             } else {
                 thumbHolder.setTranslateX(targetX);
-                thumb.setRadius(targetRadius);
+            }
+            applyHandleRadius(animate);
+        }
+
+        private void applyHandleRadius(boolean animate) {
+            M3Switch control = getSkinnable();
+            double target =
+                    control.isPressed()
+                            ? RADIUS_PRESSED
+                            : control.isSelected() ? RADIUS_SELECTED : RADIUS_UNSELECTED;
+            if (animate) {
+                io.m3fx.controls.internal.SpringAnimation.animate(
+                        thumb.radiusProperty(),
+                        target,
+                        io.m3fx.controls.internal.SpringAnimation.GENTLE,
+                        null);
+            } else {
+                thumb.setRadius(target);
             }
         }
     }

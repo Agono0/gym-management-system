@@ -2,9 +2,11 @@ package io.m3fx.controls.snackbar;
 
 import io.m3fx.controls.internal.OverlayLayer;
 import io.m3fx.core.token.MotionTokens;
+import javafx.animation.FadeTransition;
 import javafx.animation.PauseTransition;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
@@ -18,9 +20,9 @@ import java.util.Deque;
  * M3 snackbar with a message queue, optional action and close button.
  *
  * <p>See <a href="https://m3.material.io/components/snackbar/overview">M3 snackbar</a>.
- * Inverse-surface container, inverse-on-surface text, 4dp... actually small shape with 48dp
- * minimum height. Messages queue FIFO; each shows for {@link #DEFAULT_DURATION_MS} unless it has
- * an action (10s per spec).
+ * Inverse-surface container (small shape, 4dp), 48dp minimum height; text inverse-on-surface,
+ * action inverse-primary. Messages queue FIFO; each shows for {@link #DEFAULT_DURATION_MS} unless
+ * it has an action ({@link #ACTION_DURATION_MS} per spec).
  */
 public class M3Snackbar {
 
@@ -34,6 +36,10 @@ public class M3Snackbar {
 
     private final Deque<Message> queue = new ArrayDeque<>();
     private final OverlayLayer layer;
+    private final PauseTransition gap = new PauseTransition(
+            Duration.millis(MotionTokens.DURATION_SHORT_2));
+    private PauseTransition autoDismiss;
+    private Node current;
     private boolean showing;
 
     /**
@@ -46,6 +52,7 @@ public class M3Snackbar {
             throw new IllegalArgumentException("layer must not be null");
         }
         this.layer = layer;
+        gap.setOnFinished(e -> pump());
     }
 
     /**
@@ -106,24 +113,46 @@ public class M3Snackbar {
         javafx.scene.layout.VBox wrapper =
                 new javafx.scene.layout.VBox(bar, bottomMargin);
         wrapper.setAlignment(Pos.BOTTOM_CENTER);
+        current = wrapper;
         layer.showTransient(wrapper);
-        PauseTransition pause =
-                new PauseTransition(
-                        Duration.millis(
-                                message.actionText() != null
-                                        ? ACTION_DURATION_MS
-                                        : DEFAULT_DURATION_MS));
-        pause.setOnFinished(e -> dismiss());
-        pause.play();
         bar.setAccessibleText(message.text());
+        autoDismiss = new PauseTransition(
+                Duration.millis(
+                        message.actionText() != null
+                                ? ACTION_DURATION_MS
+                                : DEFAULT_DURATION_MS));
+        autoDismiss.setOnFinished(e -> dismiss());
+        autoDismiss.play();
     }
 
-    /** Dismisses the current message and shows the next queued one. */
+    /** Dismisses the current message with a fade-out and shows the next queued one. */
     public void dismiss() {
-        layer.hide();
+        if (!showing) {
+            return;
+        }
         showing = false;
-        PauseTransition gap = new PauseTransition(Duration.millis(MotionTokens.DURATION_SHORT_2));
-        gap.setOnFinished(e -> pump());
-        gap.play();
+        if (autoDismiss != null) {
+            autoDismiss.stop();
+            autoDismiss = null;
+        }
+        Node node = current;
+        current = null;
+        if (node == null || node.getScene() == null) {
+            layer.hideTransient();
+            gap.playFromStart();
+            return;
+        }
+        FadeTransition fade =
+                new FadeTransition(Duration.millis(MotionTokens.DURATION_SHORT_4), node);
+        fade.setToValue(0);
+        fade.setInterpolator(MotionTokens.emphasizedAccelerate());
+        fade.setOnFinished(e -> {
+            // Only clear the layer if no newer message replaced this one mid-fade.
+            if (current == null) {
+                layer.hideTransient();
+                gap.playFromStart();
+            }
+        });
+        fade.play();
     }
 }

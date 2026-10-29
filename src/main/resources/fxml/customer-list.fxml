@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import io.m3fx.controls.appbar.M3TopAppBar?>
+<?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.chip.M3Chip?>
+<?import io.m3fx.controls.data.M3DataTable?>
+<?import io.m3fx.controls.data.M3SpeedDial?>
+<?import io.m3fx.controls.data.M3StatCard?>
+<?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.iconbutton.M3IconButton?>
+<?import io.m3fx.controls.progress.M3LinearProgress?>
+<?import io.m3fx.controls.scene3d.M3TiltCard3D?>
+<?import io.m3fx.controls.search.M3SearchBar?>
+<?import io.m3fx.controls.sheet.M3SideSheet?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.FlowPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Region?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<StackPane fx:id="rootContainer" styleClass="customer-list-root"
+           xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
+           fx:controller="com.gym.controller.CustomerListController">
+
+    <!-- Column Declarations for Controller Binding (wired onto the M3DataTable in initialize(),
+         because M3DataTable.Column is not FXML-constructible) -->
+    <fx:define>
+        <TableColumn fx:id="colId" text="ID" prefWidth="70"/>
+        <TableColumn fx:id="colFullName" text="Athlete Full Name" prefWidth="220"/>
+        <TableColumn fx:id="colPhone" text="Phone Number" prefWidth="140"/>
+        <TableColumn fx:id="colEmail" text="Email Address" prefWidth="200"/>
+        <TableColumn fx:id="colStatus" text="Status" prefWidth="120"/>
+        <TableColumn fx:id="colTrainer" text="Assigned Coach" prefWidth="160"/>
+        <TableColumn fx:id="colAttendanceSpark" text="8-Wk Activity" prefWidth="110"/>
+        <TableColumn fx:id="colActions" text="Actions" prefWidth="120"/>
+    </fx:define>
+
+    <!-- Primary Screen Layout Surface -->
+    <BorderPane fx:id="mainLayout">
+        <!-- Top App Bar -->
+        <top>
+            <VBox spacing="0">
+                <HBox alignment="CENTER_LEFT" styleClass="app-bar-container">
+                    <M3TopAppBar fx:id="topAppBar" title="ATHLETE &amp; MEMBER ROSTER" variant="CENTER_ALIGNED" HBox.hgrow="ALWAYS">
+                        <navigationIcon>
+                            <M3IconButton fx:id="btnNavMenu" onAction="#onToggleNavRail">
+                                <graphic><M3Icon symbolName="menu"/></graphic>
+                            </M3IconButton>
+                        </navigationIcon>
+                    </M3TopAppBar>
+                    <HBox alignment="CENTER_RIGHT" spacing="8">
+                        <padding><Insets right="16"/></padding>
+                        <M3IconButton fx:id="btnExport" onAction="#onExportData">
+                            <graphic><M3Icon symbolName="arrow_drop_down"/></graphic>
+                        </M3IconButton>
+                        <M3IconButton fx:id="btnHelp" onAction="#onShowHelp">
+                            <graphic><M3Icon symbolName="info"/></graphic>
+                        </M3IconButton>
+                    </HBox>
+                </HBox>
+                <M3LinearProgress fx:id="loadingBar" visible="false" managed="false"/>
+            </VBox>
+        </top>
+
+        <!-- Main Bento Workspace -->
+        <center>
+            <VBox spacing="16">
+                <padding><Insets top="16" right="24" bottom="64" left="24"/></padding>
+
+                <!-- Bento KPI Summary Cards -->
+                <HBox spacing="16" fillHeight="true">
+                    <M3StatCard fx:id="cardTotalActive" title="TOTAL ACTIVE" value="1,428"
+                                deltaText="84% Operating Capacity" HBox.hgrow="ALWAYS"/>
+                    <M3StatCard fx:id="cardExpiringSoon" title="EXPIRING (&lt; 7 DAYS)" value="38"
+                                deltaText="Requires Follow-Up" HBox.hgrow="ALWAYS"/>
+                    <M3StatCard fx:id="cardSuspended" title="SUSPENDED / HOLD" value="14"
+                                deltaText="Memberships Frozen" HBox.hgrow="ALWAYS"/>
+                    <M3StatCard fx:id="cardNewThisMonth" title="NEW THIS MONTH" value="+86"
+                                deltaText="+12% vs Previous Mo" HBox.hgrow="ALWAYS"/>
+                </HBox>
+
+                <!-- Search and Filter Bar -->
+                <HBox spacing="12" alignment="CENTER_LEFT">
+                    <M3SearchBar fx:id="searchBar" onKeyReleased="#onSearch" HBox.hgrow="ALWAYS"/>
+                    <M3Button fx:id="btnAddMember" text="Add Member" variant="FILLED" onAction="#onAdd">
+                        <graphic><M3Icon symbolName="add"/></graphic>
+                    </M3Button>
+                </HBox>
+
+                <!-- Filter Chips Flow -->
+                <FlowPane hgap="8" vgap="8">
+                    <M3Chip fx:id="chipFilterAll" text="All Members" variant="FILTER" selected="true" onAction="#onFilterChanged"/>
+                    <M3Chip fx:id="chipFilterActive" text="Active Only" variant="FILTER" onAction="#onFilterChanged"/>
+                    <M3Chip fx:id="chipFilterSuspended" text="Suspended" variant="FILTER" onAction="#onFilterChanged"/>
+                    <M3Chip fx:id="chipFilterInactive" text="Inactive" variant="FILTER" onAction="#onFilterChanged"/>
+                    <M3Chip fx:id="chipFilterExpiring" text="Expiring Soon" variant="FILTER" onAction="#onFilterChanged"/>
+                </FlowPane>
+
+                <!-- Virtualized Master Data Table -->
+                <M3DataTable fx:id="customerTable" VBox.vgrow="ALWAYS"/>
+            </VBox>
+        </center>
+    </BorderPane>
+
+    <!-- Contextual Quick-Peek Side Sheet (Collapsible Drawer) -->
+    <M3SideSheet fx:id="sideSheetQuickPeek" visible="false" StackPane.alignment="CENTER_RIGHT">
+        <content>
+            <VBox spacing="16" prefWidth="380">
+                <padding><Insets top="20" right="20" bottom="20" left="20"/></padding>
+                <HBox alignment="CENTER_LEFT">
+                    <Label text="ATHLETE QUICK PEEK" styleClass="title-medium"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <M3IconButton fx:id="btnCloseSideSheet" onAction="#onCloseSideSheet">
+                        <graphic><M3Icon symbolName="close"/></graphic>
+                    </M3IconButton>
+                </HBox>
+                
+                <!-- 3D Holographic Identity Pass -->
+                <M3TiltCard3D fx:id="holographicPassCard"/>
+
+                <!-- Fast Biometric HUD -->
+                <VBox fx:id="biometricHudBox" spacing="8" styleClass="biometric-hud-pane"/>
+
+                <!-- Action Triggers -->
+                <HBox spacing="8">
+                    <M3Button fx:id="btnOpenFullProfile" text="Open Full Profile" variant="FILLED"
+                              HBox.hgrow="ALWAYS" onAction="#onOpenSelectedProfile"/>
+                    <M3IconButton fx:id="btnDeleteCustomer" onAction="#onDeleteSelectedCustomer">
+                        <graphic><M3Icon symbolName="delete"/></graphic>
+                    </M3IconButton>
+                </HBox>
+            </VBox>
+        </content>
+    </M3SideSheet>
+
+    <!-- Floating Action Speed Dial -->
+    <M3SpeedDial fx:id="speedDial" StackPane.alignment="BOTTOM_RIGHT"
+                 maxWidth="56.0" maxHeight="56.0" pickOnBounds="false">
+        <StackPane.margin><Insets right="32" bottom="32"/></StackPane.margin>
+    </M3SpeedDial>
+
+</StackPane>

@@ -14,6 +14,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 
 /**
@@ -25,6 +26,9 @@ import javafx.scene.layout.VBox;
  * counter sit below the input; error state recolors the indicator, label and supporting text.
  */
 public class M3TextField extends VBox {
+
+    /** Container height in px (spec: 56dp). */
+    public static final double CONTAINER_HEIGHT = 56;
 
     private final ObjectProperty<TextFieldVariant> variant =
             new SimpleObjectProperty<>(this, "variant", TextFieldVariant.FILLED);
@@ -63,11 +67,16 @@ public class M3TextField extends VBox {
         input.getStyleClass().add("m3-text-field-input");
         inputRow.getChildren().add(input);
         inputRow.getStyleClass().add("m3-text-field-box");
+        // Spec container height: 56dp for both filled and outlined variants.
+        inputRow.setMinHeight(CONTAINER_HEIGHT);
         HBox.setHgrow(input, Priority.ALWAYS);
         input.textProperty().addListener((obs, oldV, newV) -> refreshStates());
         input.focusedProperty().addListener((obs, oldV, newV) -> refreshStates());
 
-        HBox bottomRow = new HBox(supportLabel, counterLabel);
+        // Supporting text left, counter pinned to the end (spec layout).
+        Region counterSpacer = new Region();
+        HBox.setHgrow(counterSpacer, Priority.ALWAYS);
+        HBox bottomRow = new HBox(supportLabel, counterSpacer, counterLabel);
         bottomRow.getStyleClass().add("m3-text-field-bottom");
         supportLabel.getStyleClass().add("m3-text-field-support");
         supportLabel.textProperty().bind(supportingTextProperty());

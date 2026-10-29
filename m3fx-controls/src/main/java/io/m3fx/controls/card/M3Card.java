@@ -149,6 +149,9 @@ public class M3Card extends Control {
                 io.m3fx.core.token.ElevationLevel.LEVEL1;
         private final javafx.event.EventHandler<javafx.scene.input.MouseEvent> clickHandler;
         private final javafx.event.EventHandler<javafx.scene.input.KeyEvent> keyHandler;
+        private final javafx.beans.value.ChangeListener<Boolean> hoverListener;
+        private final javafx.beans.value.ChangeListener<CardVariant> variantListener;
+        private final javafx.beans.value.ChangeListener<Boolean> clickableListener;
 
         CardSkin(M3Card card) {
             super(card);
@@ -169,9 +172,22 @@ public class M3Card extends Control {
                     ripplePane,
                     () -> io.m3fx.controls.internal.ThemeColors.resolve(
                             card, io.m3fx.core.theme.ColorRole.ON_SURFACE));
-            card.hoverProperty().addListener((obs, oldV, hover) -> updateElevation());
-            card.variantProperty().addListener((obs, oldV, newV) -> updateElevation());
-            card.clickableProperty().addListener((obs, oldV, newV) -> updateElevation());
+            hoverListener = (obs, oldV, hover) -> updateElevation();
+            variantListener = (obs, oldV, newV) -> updateElevation();
+            clickableListener = (obs, oldV, nowClickable) -> {
+                updateElevation();
+                if (nowClickable) {
+                    io.m3fx.controls.internal.MotionUtil.addPressScale(card);
+                } else {
+                    io.m3fx.controls.internal.MotionUtil.removePressScale(card);
+                }
+            };
+            card.hoverProperty().addListener(hoverListener);
+            card.variantProperty().addListener(variantListener);
+            card.clickableProperty().addListener(clickableListener);
+            if (card.isClickable()) {
+                io.m3fx.controls.internal.MotionUtil.addPressScale(card);
+            }
             updateElevation();
             clickHandler = e -> {
                 if (card.isClickable()) {
@@ -196,6 +212,10 @@ public class M3Card extends Control {
             if (card != null) {
                 card.removeEventHandler(javafx.scene.input.MouseEvent.MOUSE_CLICKED, clickHandler);
                 card.removeEventHandler(javafx.scene.input.KeyEvent.KEY_PRESSED, keyHandler);
+                card.hoverProperty().removeListener(hoverListener);
+                card.variantProperty().removeListener(variantListener);
+                card.clickableProperty().removeListener(clickableListener);
+                io.m3fx.controls.internal.MotionUtil.removePressScale(card);
                 io.m3fx.controls.internal.Ripple.detach(card, ripplePane);
             }
             super.dispose();
@@ -203,12 +223,20 @@ public class M3Card extends Control {
 
         private void updateElevation() {
             M3Card card = getSkinnable();
-            io.m3fx.core.token.ElevationLevel next =
-                    card.getVariant() == CardVariant.ELEVATED
-                            ? ((card.isClickable() && card.isHover())
-                                    ? io.m3fx.core.token.ElevationLevel.LEVEL2
-                                    : io.m3fx.core.token.ElevationLevel.LEVEL1)
-                            : io.m3fx.core.token.ElevationLevel.LEVEL0;
+            io.m3fx.core.token.ElevationLevel next;
+            if (card.getVariant() == CardVariant.ELEVATED) {
+                // Spec: elevated card level 1 at rest, level 2 on hover, level 1 pressed
+                // (docs/SPEC_NOTES/card-field-selection-chips.md).
+                if (card.isClickable() && card.isPressed()) {
+                    next = io.m3fx.core.token.ElevationLevel.LEVEL1;
+                } else if (card.isClickable() && card.isHover()) {
+                    next = io.m3fx.core.token.ElevationLevel.LEVEL2;
+                } else {
+                    next = io.m3fx.core.token.ElevationLevel.LEVEL1;
+                }
+            } else {
+                next = io.m3fx.core.token.ElevationLevel.LEVEL0;
+            }
             javafx.scene.paint.Color shadow =
                     io.m3fx.controls.internal.ThemeColors.resolve(
                             card, io.m3fx.core.theme.ColorRole.SHADOW);

@@ -37,47 +37,13 @@ public final class ThemeColors {
                 return theme.get(role);
             }
         }
-        Color found = probe(context, role);
-        if (found != null) {
-            return found;
+        M3Theme latest = io.m3fx.controls.M3Stylesheets.getLatestTheme();
+        if (latest != null) {
+            return latest.get(role);
         }
         if (fallback == null) {
-            fallback = M3Theme.baseline(false);
+            fallback = M3Theme.baseline(true);
         }
         return fallback.get(role);
-    }
-
-    private static Color probe(Node context, ColorRole role) {
-        try {
-            if (context == null || context.getScene() == null) {
-                return null;
-            }
-            Region probe = new Region();
-            probe.setStyle("-fx-background-color: " + role.cssVariable() + ";");
-            probe.setManaged(false);
-            probe.setVisible(false);
-            javafx.scene.Parent parent =
-                    context.getParent() != null
-                            ? context.getParent()
-                            : (context instanceof javafx.scene.Parent p ? p : null);
-            boolean attached = false;
-            if (parent instanceof javafx.scene.layout.Pane pane) {
-                pane.getChildren().add(probe);
-                attached = true;
-            }
-            if (!attached) {
-                return null;
-            }
-            probe.applyCss();
-            Background background = probe.getBackground();
-            ((javafx.scene.layout.Pane) parent).getChildren().remove(probe);
-            if (background == null || background.getFills().isEmpty()) {
-                return null;
-            }
-            BackgroundFill fill = background.getFills().get(0);
-            return fill.getFill() instanceof Color color ? color : null;
-        } catch (Exception ignored) {
-            return null;
-        }
     }
 }
