@@ -38,6 +38,7 @@ public class M3SpeedDial extends StackPane {
         private final String label;
         private final Node icon;
         private final Runnable onAction;
+        private boolean enabled = true;
 
         /**
          * Creates an action item.
@@ -60,6 +61,17 @@ public class M3SpeedDial extends StackPane {
 
         /** @return the activation callback, or {@code null} */
         public Runnable getOnAction() { return onAction; }
+
+        /** @return whether the action can be activated (default {@code true}) */
+        public boolean isEnabled() { return enabled; }
+
+        /**
+         * Enables or disables the action; disabled items render as disabled buttons that
+         * cannot be activated.
+         *
+         * @param enabled {@code false} to disable
+         */
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
     }
 
     private final BooleanProperty expanded = new SimpleBooleanProperty(this, "expanded", false);
@@ -92,6 +104,51 @@ public class M3SpeedDial extends StackPane {
         getChildren().addAll(dialPane, triggerButton);
 
         expandedProperty().addListener((obs, o, exp) -> animateDial(exp));
+
+        // Lifecycle: when the dial leaves the scene, kill pending stagger timers and transform
+        // springs so nothing keeps animating a detached node, and snap items to the rest state
+        // of the current expanded flag (nothing resumes half-open on re-add).
+        sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene == null) {
+                cancelDialMotion();
+                snapDialToRest();
+            }
+        });
+    }
+
+    /** Stops every pending stagger and running dial spring. */
+    private void cancelDialMotion() {
+        for (javafx.animation.PauseTransition pending : pendingStaggers) {
+            pending.stop();
+        }
+        pendingStaggers.clear();
+        SpringAnimation.stop(triggerRotate.angleProperty());
+        for (Node btn : dialPane.getChildren()) {
+            SpringAnimation.stopTransforms(btn);
+            SpringAnimation.stop(btn.opacityProperty());
+        }
+    }
+
+    /** Instantly places every dial item and the trigger at their rest state (no animation). */
+    private void snapDialToRest() {
+        boolean open = isExpanded();
+        int n = actions.size();
+        double radius = getDialRadius();
+        double startAngle = Math.PI;
+        double endAngle = 2 * Math.PI;
+        double step = n > 1 ? (endAngle - startAngle) / (n - 1) : 0;
+        for (int i = 0; i < n && i < dialPane.getChildren().size(); i++) {
+            Node btn = dialPane.getChildren().get(i);
+            double angle = n == 1 ? (3 * Math.PI / 2) : (startAngle + i * step);
+            btn.setTranslateX(open ? radius * Math.cos(angle) : 0);
+            btn.setTranslateY(open ? radius * Math.sin(angle) : 0);
+            btn.setScaleX(open ? 1.0 : 0.0);
+            btn.setScaleY(open ? 1.0 : 0.0);
+            btn.setOpacity(open ? 1.0 : 0.0);
+            btn.setVisible(open);
+        }
+        triggerRotate.setAngle(open ? 45.0 : 0.0);
+        triggerButton.setAccessibleText(open ? "Collapse Speed Dial" : "Expand Speed Dial");
     }
 
     /** Whether the dial is currently expanded. */
@@ -132,6 +189,23 @@ public class M3SpeedDial extends StackPane {
         rebuildActionButtons();
     }
 
+    /**
+     * Enables or disables the action at the given index; disabled actions render as disabled
+     * buttons that cannot be activated.
+     *
+     * @param index action index
+     * @param enabled {@code false} to disable
+     */
+    public void setActionEnabled(int index, boolean enabled) {
+        if (index < 0 || index >= actions.size()) {
+            return;
+        }
+        actions.get(index).setEnabled(enabled);
+        if (index < dialPane.getChildren().size()) {
+            dialPane.getChildren().get(index).setDisable(!enabled);
+        }
+    }
+
     private void rebuildActionButtons() {
         dialPane.getChildren().clear();
         int n = actions.size();
@@ -141,6 +215,7 @@ public class M3SpeedDial extends StackPane {
         for (ActionItem item : actions) {
             M3IconButton btn = new M3IconButton(item.getIcon(), IconButtonVariant.TONAL);
             btn.setAccessibleText(item.getLabel());
+            btn.setDisable(!item.isEnabled());
             btn.setOnAction(e -> {
                 if (item.getOnAction() != null) {
                     item.getOnAction().run();

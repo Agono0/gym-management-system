@@ -51,6 +51,12 @@
 
 .m3-button-elevated .m3-button-bg {
   -fx-background-color: -md-sys-color-surface-container-low;
+  /* Elevation level 1 (per ElevationLevel: radius 6, alpha 0.15, offsetY 2). */
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a15, 6, 0, 0, 2);
+}
+/* Elevated buttons rise one level on hover (level 2: radius 8, alpha 0.16, offsetY 4). */
+.m3-button-elevated:hover .m3-button-bg {
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a16, 8, 0, 0, 4);
 }
 .m3-button-elevated .m3-button-label { -fx-text-fill: -md-sys-color-primary; }
 .m3-button-elevated .m3-button-state { -fx-background-color: -md-sys-color-primary; }
@@ -63,6 +69,9 @@
 .m3-button-text .m3-button-state { -fx-background-color: -md-sys-color-primary; }
 .m3-button-text:selected .m3-button-label { -fx-text-fill: -md-sys-color-primary; }
 
+.m3-button:disabled {
+  -fx-cursor: default;
+}
 .m3-button:disabled .m3-button-bg {
   -fx-background-color: -md-sys-color-on-surface-a12;
   -fx-border-color: transparent;
@@ -74,6 +83,8 @@
   -fx-border-color: -md-sys-color-primary;
   -fx-border-width: 2px;
 }
+/* Keyboard-press feedback: pressed state-layer while Space/Enter is held. */
+.m3-button:key-armed .m3-button-state { -fx-opacity: 0.1; }
 
 /* ============ icon buttons (Control+Skin: bg + state + icon + ripple) ============ */
 .m3-icon-button { -fx-cursor: hand; }
@@ -96,15 +107,21 @@
 .m3-icon-button-outlined .m3-icon-button-state { -fx-background-color: -md-sys-color-on-surface-variant; }
 .m3-icon-button:selected .m3-icon-button-bg { -fx-background-color: -md-sys-color-primary; -fx-border-color: transparent; }
 .m3-icon-button:selected .m3-icon-button-state { -fx-background-color: -md-sys-color-on-primary; }
+.m3-icon-button:disabled {
+  -fx-cursor: default;
+}
 .m3-icon-button:disabled .m3-icon-button-bg {
   -fx-background-color: -md-sys-color-on-surface-a12;
   -fx-border-color: transparent;
 }
+.m3-icon-button:disabled .m3-icon-svg { -fx-fill: -md-sys-color-on-surface-a38; }
 .m3-icon-button-standard:disabled .m3-icon-button-bg { -fx-background-color: transparent; }
 .m3-icon-button:focused .m3-icon-button-bg {
   -fx-border-color: -md-sys-color-primary;
   -fx-border-width: 2px;
 }
+/* Keyboard-press feedback for icon buttons while Space/Enter is held. */
+.m3-icon-button:key-armed .m3-icon-button-state { -fx-opacity: 0.1; }
 
 /* ============ FAB ============ */
 .m3-fab {
@@ -129,8 +146,15 @@
   -fx-background-color: -md-sys-color-on-surface-a12;
   -fx-text-fill: -md-sys-color-on-surface-a38;
   -fx-effect: null;
+  -fx-cursor: default;
 }
+.m3-fab:disabled .m3-icon-svg { -fx-fill: -md-sys-color-on-surface-a38; }
 .m3-fab:focused { -fx-border-color: -md-sys-color-primary; -fx-border-width: 2px; }
+/* Keyboard activation: stock Button arms on Space/Enter; mirror the pressed layer. */
+.m3-fab:armed {
+  -fx-background-color: -md-sys-color-on-primary-container-a10, -md-sys-color-primary-container;
+  -fx-background-insets: 0, 0;
+}
 
 /* ============ cards ============ */
 .m3-card {
@@ -232,20 +256,62 @@
 }
 .m3-text-field-support { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface-variant; }
 .m3-text-field-counter { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface-variant; }
+/* Counter at/over the maxLength limit. */
+.m3-text-field-counter.over { -fx-text-fill: -md-sys-color-error; }
+/* M3 selection colors for M3 text inputs. */
+.m3-text-field-input, .m3-command-palette-input {
+  -fx-highlight-fill: -md-sys-color-secondary-container;
+  -fx-highlight-text-fill: -md-sys-color-on-secondary-container;
+}
 .m3-text-field-bottom { -fx-padding: 4px 16px 0 16px; -fx-spacing: 8px; -fx-alignment: center-left; }
+/* Outlined hover (md.comp.outlined-text-field.hover: outline on-surface). Declared before the
+   error rules so an error indicator always wins the border color cascade. */
+.m3-text-field-outlined:hover .m3-text-field-box { -fx-border-color: -md-sys-color-on-surface; }
 .m3-text-field:error .m3-text-field-box {
   -fx-border-color: -md-sys-color-error;
 }
 .m3-text-field:error .m3-text-field-label,
 .m3-text-field:error .m3-text-field-support { -fx-text-fill: -md-sys-color-error; }
+.m3-text-field-filled:error .m3-text-field-box { -fx-border-width: 0 0 2px 0; }
+/* Disabled field (md.comp.filled/outlined-text-field disabled tokens): container 12% (4% in the
+   web tokens; a12 keeps it visible on every surface), text/label/support 38%, indicator 38%. */
+.m3-text-field:disabled .m3-text-field-box {
+  -fx-background-color: -md-sys-color-on-surface-a12;
+  -fx-border-color: transparent transparent -md-sys-color-on-surface-a38 transparent;
+  -fx-border-width: 0 0 1px 0;
+}
+.m3-text-field-outlined:disabled .m3-text-field-box {
+  -fx-border-color: -md-sys-color-on-surface-a12;
+  -fx-border-width: 1px;
+}
+.m3-text-field:disabled .m3-text-field-label,
+.m3-text-field:disabled .m3-text-field-support,
+.m3-text-field:disabled .m3-text-field-counter { -fx-text-fill: -md-sys-color-on-surface-a38; }
+.m3-text-field:disabled .m3-text-field-input {
+  -fx-text-fill: -md-sys-color-on-surface-a38;
+  -fx-opacity: 1;
+}
 .m3-text-field:floated .m3-text-field-label { -fx-text-fill: -md-sys-color-primary; }
 
 /* ============ selection ============ */
 .m3-checkbox, .m3-radio { -fx-text-fill: -md-sys-color-on-surface; -fx-font-size: 14px; }
 .m3-checkbox:hover .box { -fx-border-color: -md-sys-color-primary; }
+.m3-checkbox:pressed .box { -fx-border-color: -md-sys-color-primary; }
 .m3-checkbox:focused .box { -fx-border-color: -md-sys-color-primary; -fx-border-width: 2px; }
 .m3-radio:hover .radio { -fx-border-color: -md-sys-color-primary; }
+.m3-radio:pressed .radio { -fx-border-color: -md-sys-color-primary; }
 .m3-radio:focused .radio { -fx-border-color: -md-sys-color-primary; }
+/* Disabled (md.comp.checkbox/radio disabled tokens: on-surface at 38%). */
+.m3-checkbox:disabled, .m3-radio:disabled { -fx-text-fill: -md-sys-color-on-surface-a38; }
+.m3-checkbox:disabled .box, .m3-radio:disabled .radio {
+  -fx-border-color: -md-sys-color-on-surface-a38;
+}
+.m3-checkbox:selected:disabled .box {
+  -fx-background-color: -md-sys-color-on-surface-a38;
+  -fx-border-color: transparent;
+}
+.m3-checkbox:selected:disabled .mark { -fx-background-color: -md-sys-color-surface; }
+.m3-radio:selected:disabled .dot { -fx-background-color: -md-sys-color-on-surface-a38; }
 .m3-checkbox .box {
   -fx-background-color: transparent;
   -fx-border-color: -md-sys-color-on-surface-variant;
@@ -269,6 +335,8 @@
 .m3-radio:selected .dot { -fx-background-color: -md-sys-color-primary; }
 
 .m3-switch-root { -fx-alignment: center; }
+.m3-switch { -fx-cursor: hand; }
+.m3-switch:disabled { -fx-cursor: default; }
 .m3-switch-track { -fx-fill: -md-sys-color-surface-container-highest; -fx-stroke: -md-sys-color-outline; -fx-stroke-width: 2; }
 .m3-switch:hover .m3-switch-track { -fx-stroke: -md-sys-color-on-surface; }
 .m3-switch:focused .m3-switch-track { -fx-stroke: -md-sys-color-primary; }
@@ -309,8 +377,14 @@
   -fx-border-width: 1px;
   -fx-text-fill: -md-sys-color-on-surface-variant;
 }
-.m3-chip-assist:hover, .m3-chip-suggestion:hover {
+.m3-chip-suggestion:hover {
   -fx-background-color: -md-sys-color-on-surface-a08;
+}
+/* Elevated assist chip keeps its container color under the hover state layer. */
+.m3-chip-assist:hover {
+  -fx-background-color: -md-sys-color-on-surface-a08, -md-sys-color-surface-container-low;
+  -fx-background-insets: 0, 0;
+  -fx-background-radius: 8, 8;
 }
 .m3-chip-filter:hover, .m3-chip-input:hover {
   -fx-background-color: -md-sys-color-on-surface-a08, -md-sys-color-surface-container-low;
@@ -337,7 +411,9 @@
   -fx-border-color: -md-sys-color-on-surface-a12;
   -fx-text-fill: -md-sys-color-on-surface-a38;
   -fx-effect: null;
+  -fx-cursor: default;
 }
+.m3-chip:disabled .m3-icon-svg { -fx-fill: -md-sys-color-on-surface-a38; }
 .m3-chip:focused { -fx-border-color: -md-sys-color-primary; -fx-border-width: 2px; }
 .m3-chip:selected:focused { -fx-border-color: -md-sys-color-primary; }
 .m3-chip-content { -fx-alignment: CENTER; }
@@ -387,13 +463,28 @@
   -fx-background-color: -md-sys-color-surface-container-highest;
   -fx-pref-height: 16px;
   -fx-background-radius: 8px;
+  -fx-background-insets: 0;
 }
 .m3-slider .thumb {
   -fx-background-color: -md-sys-color-primary;
   -fx-pref-width: 4px; -fx-pref-height: 44px;
   -fx-background-radius: 2px;
+  -fx-background-insets: 0;
+}
+.m3-slider:hover .thumb {
+  -fx-background-color: -md-sys-color-on-primary-a08, -md-sys-color-primary;
+  -fx-background-insets: 0, 0;
+}
+.m3-slider:pressed .thumb {
+  -fx-background-color: -md-sys-color-on-primary-a10, -md-sys-color-primary;
+  -fx-background-insets: 0, 0;
 }
 .m3-slider:disabled { -fx-opacity: 0.38; }
+/* Keyboard focus indicator on the handle (mirrors the pressed layer). */
+.m3-slider:focused .thumb {
+  -fx-background-color: -md-sys-color-on-primary-a10, -md-sys-color-primary;
+  -fx-background-insets: 0, 0;
+}
 .m3-range-slider { -fx-spacing: 8px; }
 
 /* ============ top app bar ============ */
@@ -418,6 +509,10 @@
 .m3-navigation-item:selected .m3-navigation-icon { -fx-background-color: -md-sys-color-secondary-container; }
 .m3-navigation-label { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface-variant; }
 .m3-navigation-item:selected .m3-navigation-label { -fx-text-fill: -md-sys-color-on-surface; -fx-font-weight: bold; }
+.m3-navigation-item:disabled { -fx-cursor: default; }
+.m3-navigation-item:disabled .m3-navigation-label { -fx-text-fill: -md-sys-color-on-surface-a38; }
+.m3-navigation-item:disabled .m3-icon-svg { -fx-fill: -md-sys-color-on-surface-a38; }
+.m3-navigation-item:disabled .m3-icon-glyph { -fx-text-fill: -md-sys-color-on-surface-a38; }
 
 .m3-navigation-rail {
   -fx-background-color: -md-sys-color-surface;
@@ -433,6 +528,9 @@
 .m3-drawer-item:hover { -fx-background-color: -md-sys-color-on-surface-a08; }
 .m3-drawer-item:focused { -fx-background-color: -md-sys-color-on-surface-a10; }
 .m3-drawer-item:selected { -fx-background-color: -md-sys-color-secondary-container; -fx-text-fill: -md-sys-color-on-secondary-container; }
+.m3-drawer-item:disabled { -fx-text-fill: -md-sys-color-on-surface-a38; -fx-cursor: default; }
+.m3-drawer-item:disabled .m3-icon-svg { -fx-fill: -md-sys-color-on-surface-a38; }
+.m3-drawer-item:disabled .m3-icon-glyph { -fx-text-fill: -md-sys-color-on-surface-a38; }
 
 /* ============ tabs (48px container, 3px primary / 2px secondary indicator) ============ */
 .m3-tabs { -fx-tab-min-height: 48px; -fx-tab-max-height: 48px; }
@@ -453,10 +551,11 @@
   -fx-faint-focus-color: transparent;
 }
 .m3-tabs .tab-label { -fx-text-fill: -md-sys-color-on-surface-variant; -fx-font-size: 14px; }
-.m3-tabs .tab:hover { -fx-background-color: -md-sys-color-primary-a08; }
+.m3-tabs .tab:hover { -fx-background-color: -md-sys-color-on-surface-a08; }
+.m3-tabs .tab:pressed { -fx-background-color: -md-sys-color-on-surface-a10; }
 .m3-tabs .tab:selected { -fx-border-color: transparent transparent -md-sys-color-primary transparent; -fx-border-width: 0 0 3px 0; }
 .m3-tabs .tab:selected .tab-label { -fx-text-fill: -md-sys-color-primary; -fx-font-weight: bold; }
-.m3-tabs .tab:focused { -fx-background-color: -md-sys-color-primary-a10; }
+.m3-tabs .tab:focused { -fx-background-color: -md-sys-color-on-surface-a10; }
 .m3-tabs .tab:disabled .tab-label { -fx-text-fill: -md-sys-color-on-surface-a38; }
 .m3-tabs > .tab-content-area {
   -fx-background-color: -md-sys-color-surface;
@@ -487,8 +586,26 @@
   -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a25, 8, 0, 0, 3);
 }
 .m3-snackbar-text { -fx-text-fill: -md-sys-color-inverse-on-surface; -fx-font-size: 14px; }
-.m3-snackbar-action { -fx-background-color: transparent; -fx-text-fill: -md-sys-color-inverse-primary; -fx-font-weight: bold; }
-.m3-snackbar-close { -fx-background-color: transparent; -fx-text-fill: -md-sys-color-inverse-on-surface; }
+.m3-snackbar-action {
+  -fx-background-color: transparent;
+  -fx-text-fill: -md-sys-color-inverse-primary;
+  -fx-font-weight: bold;
+  -fx-cursor: hand;
+}
+.m3-snackbar-close {
+  -fx-background-color: transparent;
+  -fx-text-fill: -md-sys-color-inverse-on-surface;
+  -fx-cursor: hand;
+}
+.m3-snackbar-close:hover { -fx-background-color: -md-sys-color-inverse-on-surface-a08; }
+.m3-snackbar-close:pressed { -fx-background-color: -md-sys-color-inverse-on-surface-a10; }
+.m3-snackbar-action:focused, .m3-snackbar-close:focused {
+  -fx-border-color: -md-sys-color-inverse-primary;
+  -fx-border-width: 2px;
+  -fx-background-radius: 4px;
+  -fx-focus-color: transparent;
+  -fx-faint-focus-color: transparent;
+}
 
 .m3-bottom-sheet {
   -fx-background-color: -md-sys-color-surface-container-low;
@@ -508,6 +625,12 @@
 .m3-menu .menu-item { -fx-min-height: 48px; -fx-padding: 6px 12px 6px 12px; }
 .m3-menu-item .label { -fx-text-fill: -md-sys-color-on-surface; -fx-font-size: 14px; }
 .m3-menu-item:focused { -fx-background-color: -md-sys-color-secondary-container; }
+.m3-menu-item:focused .label { -fx-text-fill: -md-sys-color-on-secondary-container; }
+.m3-menu-item:disabled .label { -fx-text-fill: -md-sys-color-on-surface-a38; }
+.m3-menu .separator .line {
+  -fx-border-color: -md-sys-color-outline-variant transparent transparent transparent;
+  -fx-border-width: 1px 0 0 0;
+}
 .m3-select {
   -fx-background-color: -md-sys-color-surface-container-highest;
   -fx-background-radius: 4px 4px 0 0;
@@ -515,11 +638,32 @@
   -fx-min-height: 56px;
 }
 .m3-select .list-cell { -fx-text-fill: -md-sys-color-on-surface; -fx-font-size: 16px; }
+/* Dropdown arrow + focus/disabled treatments (mirrors the date-picker field rules). */
+.m3-select > .arrow-button { -fx-background-color: transparent; }
+.m3-select > .arrow-button > .arrow { -fx-background-color: -md-sys-color-on-surface-variant; }
+.m3-select:hover > .arrow-button > .arrow { -fx-background-color: -md-sys-color-on-surface; }
+.m3-select:focused {
+  -fx-border-color: transparent transparent -md-sys-color-primary transparent;
+  -fx-border-width: 0 0 2px 0;
+}
+.m3-select:focused > .arrow-button > .arrow { -fx-background-color: -md-sys-color-primary; }
+.m3-select:disabled {
+  -fx-background-color: -md-sys-color-on-surface-a12;
+  -fx-border-color: transparent;
+}
+.m3-select:disabled .list-cell { -fx-text-fill: -md-sys-color-on-surface-a38; }
 
 /* ============ lists ============ */
-.m3-list-item { -fx-background-color: transparent; -fx-padding: 8px 16px 8px 16px; }
+/* Row heights per M3 lists spec: one-line 56, two-line 72, three-line 88. */
+.m3-list-item { -fx-background-color: transparent; -fx-padding: 8px 16px 8px 16px; -fx-min-height: 56px; }
+.m3-list-item:two-lines { -fx-min-height: 72px; }
+.m3-list-item:three-lines { -fx-min-height: 88px; }
 .m3-list-item:hover { -fx-background-color: -md-sys-color-on-surface-a08; }
+.m3-list-item:pressed { -fx-background-color: -md-sys-color-on-surface-a10; }
 .m3-list-item:focused { -fx-background-color: -md-sys-color-on-surface-a10; }
+.m3-list-item:disabled .m3-list-headline,
+.m3-list-item:disabled .m3-list-supporting,
+.m3-list-item:disabled .m3-list-overline { -fx-text-fill: -md-sys-color-on-surface-a38; }
 .m3-list-overline { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface-variant; }
 .m3-list-headline { -fx-font-size: 16px; -fx-text-fill: -md-sys-color-on-surface; }
 .m3-list-supporting { -fx-font-size: 14px; -fx-text-fill: -md-sys-color-on-surface-variant; }
@@ -570,6 +714,7 @@
 .m3-date-picker > .arrow-button { -fx-background-color: transparent; }
 .m3-date-picker > .arrow-button > .arrow { -fx-background-color: -md-sys-color-on-surface-variant; }
 .m3-date-picker:focused > .arrow-button > .arrow { -fx-background-color: -md-sys-color-primary; }
+.m3-date-picker:hover > .arrow-button > .arrow { -fx-background-color: -md-sys-color-on-surface; }
 .date-picker-popup {
   -fx-background-color: -md-sys-color-surface-container-high;
   -fx-background-radius: 28px;
@@ -670,7 +815,16 @@
   -fx-padding: 0 16px 0 16px;
   -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a16, 8, 0, 0, 4);
 }
-.m3-search-input { -fx-background-color: transparent; -fx-font-size: 16px; -fx-text-fill: -md-sys-color-on-surface; }
+.m3-search-input,
+.m3-search-input:focused {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-border-color: transparent;
+  -fx-focus-color: transparent;
+  -fx-faint-focus-color: transparent;
+  -fx-font-size: 16px;
+  -fx-text-fill: -md-sys-color-on-surface;
+}
 .m3-search-suggestions { -fx-background-color: -md-sys-color-surface-container; }
 
 /* ============ segmented ============ */
@@ -690,7 +844,13 @@
   -fx-border-color: transparent -md-sys-color-outline transparent transparent;
   -fx-border-width: 0 1px 0 0;
   -fx-padding: 0 16px 0 12px;
+  -fx-cursor: hand;
 }
+.m3-segmented-segment:disabled {
+  -fx-text-fill: -md-sys-color-on-surface-a38;
+  -fx-cursor: default;
+}
+.m3-segmented-segment:disabled .m3-icon-svg { -fx-fill: -md-sys-color-on-surface-a38; }
 .m3-segmented-first {
   -fx-background-radius: 19 0 0 19;
   -fx-border-radius: 19 0 0 19;
@@ -709,18 +869,42 @@
 .m3-segmented-segment:selected .m3-icon-svg { -fx-fill: -md-sys-color-on-secondary-container; }
 .m3-segmented-segment:hover { -fx-background-color: -md-sys-color-on-surface-a08; }
 .m3-segmented-segment:focused { -fx-background-color: -md-sys-color-on-surface-a10; }
+.m3-segmented-segment:selected:hover {
+  -fx-background-color: -md-sys-color-on-secondary-container-a08, -md-sys-color-secondary-container;
+  -fx-background-insets: 0, 0;
+  -fx-background-radius: 8, 8;
+}
 
 /* ============ gallery section titles (also used by the demo apps) ============ */
 .m3-section-title { -fx-text-fill: -md-sys-color-on-surface; }
 
 /* ============ scroll panes (gallery chrome) ============ */
 .scroll-pane, .scroll-pane > .viewport { -fx-background-color: transparent; }
+/* Thin rounded M3 scrollbars: transparent track/buttons, thumb brightens on hover. */
+.scroll-pane .scroll-bar:vertical { -fx-pref-width: 8px; }
+.scroll-pane .scroll-bar:horizontal { -fx-pref-height: 8px; }
 .scroll-pane .scroll-bar:vertical, .scroll-pane .scroll-bar:horizontal {
   -fx-background-color: transparent;
+}
+.scroll-pane .scroll-bar .track {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+}
+.scroll-pane .scroll-bar .increment-button, .scroll-pane .scroll-bar .decrement-button {
+  -fx-background-color: transparent;
+  -fx-padding: 2px;
+}
+.scroll-pane .scroll-bar .increment-arrow, .scroll-pane .scroll-bar .decrement-arrow {
+  -fx-background-color: transparent;
+  -fx-shape: null;
 }
 .scroll-pane .scroll-bar:vertical .thumb, .scroll-pane .scroll-bar:horizontal .thumb {
   -fx-background-color: -md-sys-color-outline-variant;
   -fx-background-radius: 4px;
+  -fx-background-insets: 0;
+}
+.scroll-pane .scroll-bar:vertical .thumb:hover, .scroll-pane .scroll-bar:horizontal .thumb:hover {
+  -fx-background-color: -md-sys-color-surface-container-high;
 }
 
 /* ============ icons ============ */
@@ -799,6 +983,7 @@
   -fx-font-size: 14px;
   -fx-background-radius: 20px;
   -fx-min-width: 40px; -fx-min-height: 40px;
+  -fx-cursor: hand;
 }
 .m3-calendar-day:hover { -fx-background-color: -md-sys-color-surface-container-high; }
 .m3-calendar-day:selected {
@@ -806,6 +991,14 @@
   -fx-text-fill: -md-sys-color-on-primary;
 }
 .m3-calendar-day:today { -fx-text-fill: -md-sys-color-primary; -fx-font-weight: bold; }
+/* Today on the selected day must stay readable (on-primary over the primary circle). */
+.m3-calendar-day:selected:today { -fx-text-fill: -md-sys-color-on-primary; -fx-font-weight: bold; }
+.m3-calendar-day:selected:hover {
+  -fx-background-color: -md-sys-color-on-primary-a08, -md-sys-color-primary;
+  -fx-background-insets: 0, 0;
+  -fx-background-radius: 20, 20;
+}
+.m3-calendar-day:disabled { -fx-text-fill: -md-sys-color-on-surface-a38; -fx-cursor: default; }
 .m3-date-dialog { -fx-min-width: 360px; }
 
 /* ============ search panel (overlay mode) ============ */
@@ -909,7 +1102,9 @@
   -fx-background-insets: 0, 0;
   -fx-background-radius: 8, 8;
 }
-.m3-tabs .tab:selected, .m3-tabs .tab:hover, .m3-tabs .tab:disabled {
+/* Selected/disabled tabs: neutralize any inherited modena layer (hover/pressed keep their own
+   on-surface state layers, declared in the tabs section). */
+.m3-tabs .tab:selected, .m3-tabs .tab:disabled {
   -fx-background-color: transparent;
 }
 .m3-tabs .focus-indicator, .m3-tabs .tab .focus-indicator {
@@ -999,11 +1194,6 @@
 .m3-shape-morph {
   -fx-alignment: center;
 }
-.m3-shape-morph-path {
-  -fx-fill: -md-sys-color-primary-container;
-  -fx-stroke: -md-sys-color-primary;
-  -fx-stroke-width: 1.5px;
-}
 
 /* ============ cyber charts & analytics ============ */
 .m3-spline-chart,
@@ -1012,12 +1202,6 @@
 .m3-sparkline,
 .m3-heatmap {
   -fx-background-color: transparent;
-}
-.m3-donut-headline {
-  -fx-text-fill: -md-sys-color-on-surface;
-}
-.m3-donut-subtitle {
-  -fx-text-fill: -md-sys-color-on-surface-variant;
 }
 
 /* ============ 3d hardware-accelerated scenes ============ */
@@ -1100,7 +1284,7 @@
 }
 .m3-hologram-badge {
   -fx-text-fill: -md-sys-color-primary;
-  -fx-font-size: 10px;
+  -fx-font-size: 11px;
   -fx-font-weight: bold;
   -fx-padding: 2px 8px;
   -fx-background-color: -md-sys-color-surface-container-high;
@@ -1168,30 +1352,30 @@
   -fx-border-color: -md-sys-color-outline-variant;
   -fx-border-radius: 16px;
   -fx-border-width: 1px;
-  -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.35), 24, 0, 0, 8);
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a25, 24, 0, 0, 8);
 }
 .m3-command-palette-header {
-  -fx-border-color: -md-sys-color-outline-variant;
-  -fx-border-width: 0 0 1 0;
+  -fx-border-color: transparent transparent -md-sys-color-outline-variant transparent;
+  -fx-border-width: 0 0 1px 0;
 }
-.m3-command-palette-input {
+.m3-command-palette-input,
+.m3-command-palette-input:focused {
   -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-border-color: transparent;
+  -fx-focus-color: transparent;
+  -fx-faint-focus-color: transparent;
   -fx-text-fill: -md-sys-color-on-surface;
   -fx-prompt-text-fill: -md-sys-color-on-surface-variant;
   -fx-padding: 16px;
-  -fx-background-insets: 0;
 }
 .m3-command-palette-badge {
-  -fx-font-size: 10px;
+  -fx-font-size: 11px;
   -fx-font-weight: bold;
   -fx-text-fill: -md-sys-color-on-surface-variant;
   -fx-background-color: -md-sys-color-surface-container-highest;
   -fx-background-radius: 4px;
   -fx-padding: 2px 6px;
-}
-.m3-data-table-header {
-  -fx-background-color: -md-sys-color-surface-container-high;
-  -fx-background-radius: 8px;
 }
 
 /* ============ Advanced Gym Analytics & Data Viz ============ */
@@ -1221,7 +1405,7 @@
 
 /* ============ M3StatCard ============ */
 .m3-stat-title {
-  -fx-font-size: 13px;
+  -fx-font-size: 12px;
   -fx-text-fill: -md-sys-color-on-surface-variant;
 }
 .m3-stat-value {
@@ -1230,7 +1414,7 @@
   -fx-text-fill: -md-sys-color-on-surface;
 }
 .m3-stat-delta {
-  -fx-font-size: 11px;
+  -fx-font-size: 12px;
   -fx-font-weight: bold;
   -fx-padding: 2px 8px;
   -fx-background-radius: 12px;
@@ -1251,7 +1435,7 @@
   -fx-text-fill: -md-sys-color-on-surface;
 }
 .m3-donut-subtitle {
-  -fx-font-size: 11px;
+  -fx-font-size: 12px;
   -fx-text-fill: -md-sys-color-on-surface-variant;
 }
 
@@ -1261,7 +1445,7 @@
   -fx-background-radius: 8px;
 }
 .m3-data-table-header-label {
-  -fx-font-size: 13px;
+  -fx-font-size: 12px;
   -fx-font-weight: bold;
   -fx-text-fill: -md-sys-color-on-surface;
 }
@@ -1274,30 +1458,24 @@
 }
 .m3-data-table-row:hover {
   -fx-background-color: -md-sys-color-surface-container-high;
-  -fx-cursor: hand;
 }
 .m3-data-table-cell {
-  -fx-font-size: 13px;
+  -fx-font-size: 14px;
   -fx-text-fill: -md-sys-color-on-surface;
 }
 .m3-data-table-page-info {
   -fx-font-size: 12px;
   -fx-text-fill: -md-sys-color-on-surface-variant;
 }
+/* Sortable headers are clickable: hand cursor + primary text on hover. */
+.m3-data-table-header-label.sortable { -fx-cursor: hand; }
 .m3-data-table-header-label.sortable:hover { -fx-text-fill: -md-sys-color-primary; }
+/* Empty/filtered placeholder row. */
+.m3-data-table-empty { -fx-font-size: 14px; -fx-text-fill: -md-sys-color-on-surface-variant; -fx-alignment: center; }
 
-/* ============ M3CommandPalette ============ */
-.m3-command-palette-card {
-  -fx-background-color: -md-sys-color-surface-container-high;
-  -fx-background-radius: 16px;
-  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a20, 24, 0, 0, 8);
-}
-.m3-command-palette-header {
-  -fx-border-color: transparent transparent -md-sys-color-outline-variant transparent;
-  -fx-border-width: 0 0 1px 0;
-}
+/* ============ M3CommandPalette (card/header live in the Smart Gym section above) ============ */
 .m3-command-palette-cat-header {
-  -fx-font-size: 10px;
+  -fx-font-size: 11px;
   -fx-font-weight: bold;
   -fx-text-fill: -md-sys-color-primary;
   -fx-padding: 8px 12px 4px 12px;
@@ -1307,14 +1485,26 @@
   -fx-background-radius: 8px;
   -fx-cursor: hand;
 }
+.m3-command-palette-row:hover { -fx-background-color: -md-sys-color-on-surface-a08; }
+.m3-command-palette-row:pressed { -fx-background-color: -md-sys-color-on-surface-a10; }
 .m3-command-palette-row.selected {
   -fx-background-color: -md-sys-color-primary-container;
+}
+.m3-command-palette-row.selected:hover {
+  -fx-background-color: -md-sys-color-on-primary-container-a08, -md-sys-color-primary-container;
+  -fx-background-insets: 0, 0;
+  -fx-background-radius: 8, 8;
+}
+.m3-command-palette-row.selected:pressed {
+  -fx-background-color: -md-sys-color-on-primary-container-a10, -md-sys-color-primary-container;
+  -fx-background-insets: 0, 0;
+  -fx-background-radius: 8, 8;
 }
 .m3-command-palette-row.selected .m3-icon-svg {
   -fx-fill: -md-sys-color-on-primary-container;
 }
 .m3-command-palette-title {
-  -fx-font-size: 13px;
+  -fx-font-size: 14px;
   -fx-font-weight: bold;
   -fx-text-fill: -md-sys-color-on-surface;
 }
@@ -1322,7 +1512,7 @@
   -fx-text-fill: -md-sys-color-on-primary-container;
 }
 .m3-command-palette-sub {
-  -fx-font-size: 11px;
+  -fx-font-size: 12px;
   -fx-text-fill: -md-sys-color-on-surface-variant;
 }
 .m3-command-palette-row.selected .m3-command-palette-sub {
@@ -1342,7 +1532,7 @@
   -fx-stroke-width: 2px;
 }
 .m3-stepper-num-active {
-  -fx-font-size: 13px;
+  -fx-font-size: 12px;
   -fx-font-weight: bold;
   -fx-text-fill: -md-sys-color-on-primary-container;
 }
@@ -1371,14 +1561,16 @@
 }
 .m3-stepper-icon-completed .m3-icon-svg { -fx-fill: -md-sys-color-on-primary; }
 .m3-stepper-circle-error { -fx-fill: -md-sys-color-error; }
-.m3-stepper-num-error { -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-error; }
+.m3-stepper-num-error { -fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-error; }
 .m3-stepper-title.error { -fx-text-fill: -md-sys-color-error; }
+/* Clickable step nodes: hover tints the pending circle outline; focus glow is declared above. */
+.m3-stepper-clickable:hover .m3-stepper-circle-pending { -fx-stroke: -md-sys-color-primary; }
 .m3-stepper-clickable:focused { -fx-effect: dropshadow(gaussian, -md-sys-color-primary, 4, 0.35, 0, 0); }
 
 /* ============ M3Timeline ============ */
 .m3-timeline-line { -fx-background-color: -md-sys-color-outline-variant; }
 .m3-timeline-line.completed { -fx-background-color: -md-sys-color-primary; }
-.m3-timeline-time { -fx-font-size: 11px; -fx-text-fill: -md-sys-color-on-surface-variant; }
+.m3-timeline-time { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface-variant; }
 .m3-timeline-title { -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface; }
 .m3-timeline-desc { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface-variant; }
 .m3-timeline-circle-completed { -fx-fill: -md-sys-color-primary; }

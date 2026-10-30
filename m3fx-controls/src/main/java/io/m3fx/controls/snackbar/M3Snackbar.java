@@ -9,6 +9,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.input.KeyCode;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -122,6 +123,24 @@ public class M3Snackbar {
                                 ? ACTION_DURATION_MS
                                 : DEFAULT_DURATION_MS));
         autoDismiss.setOnFinished(e -> dismiss());
+        // Hovering pauses the countdown (the user is reading or reaching for the action);
+        // leaving resumes it. Escape dismisses when the bar or one of its buttons has focus.
+        bar.setOnMouseEntered(e -> {
+            if (autoDismiss != null) {
+                autoDismiss.pause();
+            }
+        });
+        bar.setOnMouseExited(e -> {
+            if (autoDismiss != null) {
+                autoDismiss.play();
+            }
+        });
+        bar.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ESCAPE) {
+                e.consume();
+                dismiss();
+            }
+        });
         autoDismiss.play();
     }
 

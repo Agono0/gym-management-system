@@ -51,6 +51,9 @@ public final class M3Tooltip {
         Tooltip tooltip = new Tooltip();
         tooltip.setGraphic(box);
         tooltip.getStyleClass().add("m3-tooltip-rich");
+        // Same timing as the plain variant so both tooltip flavors feel identical.
+        tooltip.setShowDelay(Duration.millis(500));
+        tooltip.setShowDuration(Duration.seconds(5));
         return tooltip;
     }
 

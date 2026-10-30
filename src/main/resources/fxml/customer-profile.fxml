@@ -32,7 +32,8 @@
             <HBox alignment="CENTER_LEFT" styleClass="app-bar-container">
                 <M3TopAppBar fx:id="topAppBar" title="ATHLETE PROFILE" variant="CENTER_ALIGNED" HBox.hgrow="ALWAYS">
                     <navigationIcon>
-                        <M3IconButton fx:id="btnBack" onAction="#onNavigateBack">
+                        <M3IconButton fx:id="btnBack" onAction="#onNavigateBack"
+                                      accessibleText="Back to member roster">
                             <graphic><M3Icon symbolName="arrow_back"/></graphic>
                         </M3IconButton>
                     </navigationIcon>
@@ -157,7 +158,7 @@
                                                   onAction="#onFreezeMembership"/>
                                         <M3Button fx:id="btnUnfreezePlan" text="Unfreeze" variant="TONAL"
                                                   onAction="#onUnfreezeMembership"/>
-                                        <M3Button fx:id="btnRenewPlan" text="Renew" variant="FILLED"
+                                        <M3Button fx:id="btnRenewPlan" text="Renew" variant="TONAL"
                                                   onAction="#onRenewMembership"/>
                                     </HBox>
                                 </VBox>
@@ -195,14 +196,19 @@
                                                  variant="OUTLINED"/>
                                     <M3TextField fx:id="txtPhone" labelText="Phone Number" supportingText="Format: 01xxxxxxxxx"
                                                  variant="OUTLINED"/>
-                                    <M3TextField fx:id="txtEmail" labelText="Email Address" variant="OUTLINED"/>
-                                    <M3TextField fx:id="txtAddress" labelText="Physical Address" variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtEmail" labelText="Email Address"
+                                                 supportingText="Used for session reminders"
+                                                 variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtAddress" labelText="Physical Address"
+                                                 supportingText="Street, city" variant="OUTLINED"/>
                                     <M3TextField fx:id="txtDateOfBirth" labelText="Date of Birth" supportingText="YYYY-MM-DD"
                                                  variant="OUTLINED"/>
                                     <M3Divider/>
                                     <Label text="EMERGENCY CONTACT" styleClass="label-large"/>
                                     <M3TextField fx:id="txtEmergencyName" labelText="Contact Name" variant="OUTLINED"/>
-                                    <M3TextField fx:id="txtEmergencyPhone" labelText="Emergency Phone" variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtEmergencyPhone" labelText="Emergency Phone"
+                                                 supportingText="Called for gym incidents only"
+                                                 variant="OUTLINED"/>
                                 </VBox>
                             </content>
                         </M3Card>

@@ -10,9 +10,11 @@ import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Label;
+import javafx.scene.control.TextInputControl;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
@@ -35,6 +37,8 @@ public class M3Dialog extends VBox {
     private OverlayLayer host;
     private Node previousFocus;
     private FadeTransition exitTransition;
+    private final ObjectProperty<Runnable> defaultAction =
+            new SimpleObjectProperty<>(this, "defaultAction");
 
     /** Creates an empty dialog. */
     public M3Dialog() {
@@ -58,6 +62,30 @@ public class M3Dialog extends VBox {
             if (e.getCode() == KeyCode.ESCAPE && host != null) {
                 e.consume();
                 hide();
+            }
+        });
+        // Enter runs the default action, but never while a text field owns focus (it needs Enter
+        // for newlines and inline commit).
+        addEventHandler(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.ENTER && !e.isConsumed()) {
+                Scene scene = getScene();
+                Node focusOwner = scene != null ? scene.getFocusOwner() : null;
+                if (focusOwner instanceof TextInputControl) {
+                    return;
+                }
+                Runnable action = defaultAction.get();
+                if (action != null) {
+                    e.consume();
+                    action.run();
+                }
+            }
+        });
+        // A scrim click removes this dialog from the layer without calling hide(); still return
+        // focus to whoever opened the dialog.
+        sceneProperty().addListener((obs, oldV, scene) -> {
+            if (scene == null && host != null) {
+                host = null;
+                restoreFocus();
             }
         });
     }
@@ -163,6 +191,7 @@ public class M3Dialog extends VBox {
         previousFocus = scene != null ? scene.getFocusOwner() : null;
         this.host = layer;
         layer.showModal(this);
+        focusFirstControl();
     }
 
     /** Hides this dialog with a short fade-out, then restores the previous focus owner. */
@@ -195,5 +224,53 @@ public class M3Dialog extends VBox {
         if (owner != null && owner.getScene() != null) {
             owner.requestFocus();
         }
+    }
+
+    /** Moves initial focus into the dialog: first focusable content control, else first action. */
+    private void focusFirstControl() {
+        Node target = firstFocusable(contentBox);
+        if (target == null) {
+            target = firstFocusable(actionsBox);
+        }
+        if (target != null) {
+            target.requestFocus();
+        }
+    }
+
+    /** Depth-first search for the first visible, managed, enabled, focus-traversable node. */
+    private static Node firstFocusable(Node node) {
+        if (node == null || !node.isVisible() || !node.isManaged()) {
+            return null;
+        }
+        if (node instanceof Pane pane) {
+            for (Node child : pane.getChildren()) {
+                Node found = firstFocusable(child);
+                if (found != null) {
+                    return found;
+                }
+            }
+            return null;
+        }
+        return !node.isDisabled() && node.isFocusTraversable() ? node : null;
+    }
+
+    /** Returns the default action property (run by Enter, unless a text field owns focus). */
+    public ObjectProperty<Runnable> defaultActionProperty() {
+        return defaultAction;
+    }
+
+    /** Returns the default action, may be {@code null}. */
+    public Runnable getDefaultAction() {
+        return defaultAction.get();
+    }
+
+    /**
+     * Sets the default action run by Enter (unless focus is in a text input). Wire it to the
+     * confirming button, e.g. {@code dialog.setDefaultAction(okButton::activate)}.
+     *
+     * @param action the default action, may be {@code null}
+     */
+    public void setDefaultAction(Runnable action) {
+        defaultAction.set(action);
     }
 }

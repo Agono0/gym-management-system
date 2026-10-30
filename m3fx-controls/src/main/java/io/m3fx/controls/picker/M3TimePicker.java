@@ -44,6 +44,9 @@ public class M3TimePicker extends HBox {
         hourSpinner.getStyleClass().add("m3-time-spinner");
         minuteSpinner.getStyleClass().add("m3-time-spinner");
         amPmToggle.getStyleClass().add("m3-time-ampm");
+        hourSpinner.setAccessibleText("Hour");
+        minuteSpinner.setAccessibleText("Minute");
+        amPmToggle.setAccessibleText("AM or PM");
         hourSpinner.setEditable(true);
         minuteSpinner.setEditable(true);
         Label colon = new Label(":");

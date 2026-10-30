@@ -16,6 +16,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Skin;
 import javafx.scene.control.SkinBase;
+import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
@@ -202,6 +203,10 @@ public class M3Button extends PressableControl {
 
     /** Skin: background + state layer + icon/label content + clipped ripple. */
     static final class ButtonSkin extends SkinBase<M3Button> {
+        /** Keyboard-press feedback: mirrors the pressed state-layer while Space/Enter is held. */
+        private static final javafx.css.PseudoClass KEY_ARMED_PC =
+                javafx.css.PseudoClass.getPseudoClass("key-armed");
+
         private final StackPane root = new StackPane();
         private final Region background = new Region();
         private final Region stateLayer = new Region();
@@ -218,6 +223,9 @@ public class M3Button extends PressableControl {
         private final javafx.beans.value.ChangeListener<ButtonVariant> variantListener;
         private final javafx.beans.value.ChangeListener<Boolean> disabledListener;
         private final javafx.beans.value.ChangeListener<Node> graphicListener;
+        private final javafx.event.EventHandler<KeyEvent> keyArmPressed;
+        private final javafx.event.EventHandler<KeyEvent> keyArmReleased;
+        private final javafx.beans.value.ChangeListener<Boolean> keyArmFocusListener;
 
         ButtonSkin(M3Button control) {
             super(control);
@@ -262,9 +270,30 @@ public class M3Button extends PressableControl {
             pressHandler = control::pressBegin;
             releaseHandler = control::pressEnd;
             keyHandler = control::keyActivate;
+            // The shared state layer tracks mouse presses only; mirror Space/Enter holds onto a
+            // pseudo-class so keyboard activation shows the same pressed feedback.
+            keyArmPressed = e -> {
+                if (!control.isDisabled()
+                        && (e.getCode() == KeyCode.SPACE || e.getCode() == KeyCode.ENTER)) {
+                    control.pseudoClassStateChanged(KEY_ARMED_PC, true);
+                }
+            };
+            keyArmReleased = e -> {
+                if (e.getCode() == KeyCode.SPACE || e.getCode() == KeyCode.ENTER) {
+                    control.pseudoClassStateChanged(KEY_ARMED_PC, false);
+                }
+            };
+            keyArmFocusListener = (obs, oldV, focused) -> {
+                if (!focused) {
+                    control.pseudoClassStateChanged(KEY_ARMED_PC, false);
+                }
+            };
             control.addEventHandler(MouseEvent.MOUSE_PRESSED, pressHandler);
             control.addEventHandler(MouseEvent.MOUSE_RELEASED, releaseHandler);
             control.addEventHandler(KeyEvent.KEY_PRESSED, keyHandler);
+            control.addEventHandler(KeyEvent.KEY_PRESSED, keyArmPressed);
+            control.addEventHandler(KeyEvent.KEY_RELEASED, keyArmReleased);
+            control.focusedProperty().addListener(keyArmFocusListener);
         }
 
         @Override
@@ -274,6 +303,10 @@ public class M3Button extends PressableControl {
                 control.removeEventHandler(MouseEvent.MOUSE_PRESSED, pressHandler);
                 control.removeEventHandler(MouseEvent.MOUSE_RELEASED, releaseHandler);
                 control.removeEventHandler(KeyEvent.KEY_PRESSED, keyHandler);
+                control.removeEventHandler(KeyEvent.KEY_PRESSED, keyArmPressed);
+                control.removeEventHandler(KeyEvent.KEY_RELEASED, keyArmReleased);
+                control.focusedProperty().removeListener(keyArmFocusListener);
+                control.pseudoClassStateChanged(KEY_ARMED_PC, false);
                 control.hoverProperty().removeListener(hoverListener);
                 control.pressedProperty().removeListener(pressedListener);
                 control.variantProperty().removeListener(variantListener);

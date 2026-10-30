@@ -9,6 +9,7 @@ import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
@@ -29,6 +30,11 @@ public class M3TextField extends VBox {
 
     /** Container height in px (spec: 56dp). */
     public static final double CONTAINER_HEIGHT = 56;
+
+    /** Square hit target for leading/trailing icons (matches the library's 40px icon targets). */
+    private static final double ICON_HIT_SIZE = 40;
+
+    private static final javafx.css.PseudoClass OVER_PC = javafx.css.PseudoClass.getPseudoClass("over");
 
     private final ObjectProperty<TextFieldVariant> variant =
             new SimpleObjectProperty<>(this, "variant", TextFieldVariant.FILLED);
@@ -65,6 +71,11 @@ public class M3TextField extends VBox {
         floatingLabel.setMouseTransparent(true);
 
         input.getStyleClass().add("m3-text-field-input");
+        // M3 selection: secondary-container highlight with on-secondary-container text. Inline
+        // looked-up colors (never literals) because m3fx.css does not yet carry the rule; see the
+        // CSS REQUESTS entry, which should replace this line.
+        input.setStyle("-fx-highlight-fill: -md-sys-color-secondary-container;"
+                + " -fx-highlight-text-fill: -md-sys-color-on-secondary-container;");
         inputRow.getChildren().add(input);
         inputRow.getStyleClass().add("m3-text-field-box");
         // Spec container height: 56dp for both filled and outlined variants.
@@ -213,29 +224,41 @@ public class M3TextField extends VBox {
     }
 
     /**
-     * Sets the leading icon.
+     * Sets the leading icon, wrapped in a 40px square hit target so it stays comfortably
+     * touchable inside the 56px container.
      *
-     * @param icon icon node
+     * @param icon icon node, may be {@code null} to remove
      */
     public void setLeadingIcon(Node icon) {
         inputRow.getChildren().removeIf(n -> "m3-text-field-leading".equals(n.getId()));
         if (icon != null) {
-            icon.setId("m3-text-field-leading");
-            inputRow.getChildren().add(0, icon);
+            inputRow.getChildren().add(0, iconHitArea(icon, "m3-text-field-leading"));
         }
     }
 
     /**
-     * Sets the trailing icon.
+     * Sets the trailing icon, wrapped in a 40px square hit target so attached handlers (clear
+     * button, password toggle...) stay comfortably touchable.
      *
-     * @param icon icon node
+     * @param icon icon node, may be {@code null} to remove
      */
     public void setTrailingIcon(Node icon) {
         inputRow.getChildren().removeIf(n -> "m3-text-field-trailing".equals(n.getId()));
         if (icon != null) {
-            icon.setId("m3-text-field-trailing");
-            inputRow.getChildren().add(icon);
+            inputRow.getChildren().add(iconHitArea(icon, "m3-text-field-trailing"));
         }
+    }
+
+    /** Wraps an icon in a fixed square hit target, keeping the icon visually centered. */
+    private Node iconHitArea(Node icon, String id) {
+        javafx.scene.layout.StackPane hit = new javafx.scene.layout.StackPane(icon);
+        hit.setId(id);
+        hit.getStyleClass().add(id);
+        hit.setMinSize(ICON_HIT_SIZE, ICON_HIT_SIZE);
+        hit.setPrefSize(ICON_HIT_SIZE, ICON_HIT_SIZE);
+        hit.setMaxSize(ICON_HIT_SIZE, ICON_HIT_SIZE);
+        hit.setAlignment(Pos.CENTER);
+        return hit;
     }
 
     private void refreshStates() {
@@ -244,13 +267,26 @@ public class M3TextField extends VBox {
         pseudoClassStateChanged(
                 javafx.css.PseudoClass.getPseudoClass("input-focused"), input.isFocused());
         if (getMaxLength() > 0) {
-            counterLabel.setText(input.getText().length() + " / " + getMaxLength());
-            if (input.getText().length() > getMaxLength()) {
+            int length = input.getText() == null ? 0 : input.getText().length();
+            counterLabel.setText(length + " / " + getMaxLength());
+            // Input past the limit is truncated immediately, so "at limit" is the reachable
+            // exceeded state: hard-truncation blocks further typing, and the counter flags it in
+            // the error color (M3 text-field spec: counter turns error color when exceeded).
+            boolean atOrOverLimit = length >= getMaxLength();
+            counterLabel.pseudoClassStateChanged(OVER_PC, atOrOverLimit);
+            // Inline looked-up color until the matching :over rule lands in m3fx.css (see
+            // CSS REQUESTS); the pseudo-class above lets the stylesheet take over later.
+            counterLabel.setStyle(atOrOverLimit
+                    ? "-fx-text-fill: -md-sys-color-error;"
+                    : "");
+            if (length > getMaxLength()) {
                 input.setText(input.getText().substring(0, getMaxLength()));
                 input.positionCaret(getMaxLength());
             }
         } else {
             counterLabel.setText("");
+            counterLabel.pseudoClassStateChanged(OVER_PC, false);
+            counterLabel.setStyle("");
         }
     }
 

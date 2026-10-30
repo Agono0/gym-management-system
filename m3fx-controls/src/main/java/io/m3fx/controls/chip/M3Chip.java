@@ -11,6 +11,8 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Skin;
 import javafx.scene.control.SkinBase;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
@@ -55,6 +57,39 @@ public class M3Chip extends ToggleButton {
             }
         });
         setFocusTraversable(true);
+        // Keyboard parity with the X affordance: Delete/Backspace removes a closable chip.
+        addEventHandler(KeyEvent.KEY_PRESSED, e -> {
+            if (isDisabled() || !isClosable()) {
+                return;
+            }
+            if (e.getCode() == KeyCode.DELETE || e.getCode() == KeyCode.BACK_SPACE) {
+                e.consume();
+                Runnable callback = getOnClose();
+                if (callback != null) {
+                    callback.run();
+                }
+            }
+        });
+        textProperty().addListener((obs, oldV, newV) -> updateAccessibleText());
+        selectedProperty().addListener((obs, oldV, newV) -> updateAccessibleText());
+        variantProperty().addListener((obs, oldV, newV) -> updateAccessibleText());
+        closableProperty().addListener((obs, oldV, newV) -> updateAccessibleText());
+        updateAccessibleText();
+    }
+
+    /**
+     * Keeps the announced text in sync with chip state: selected filter chips announce
+     * {@code "selected"} and closable chips advertise the Delete-key removal.
+     */
+    private void updateAccessibleText() {
+        StringBuilder announced = new StringBuilder(getText());
+        if (getVariant() == ChipVariant.FILTER && isSelected()) {
+            announced.append(", selected");
+        }
+        if (isClosable()) {
+            announced.append(", press Delete to remove");
+        }
+        setAccessibleText(announced.toString());
     }
 
     /**

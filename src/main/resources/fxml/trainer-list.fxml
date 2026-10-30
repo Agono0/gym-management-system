@@ -76,7 +76,7 @@
                     <HBox spacing="12" alignment="CENTER_LEFT">
                         <M3TextField fx:id="txtSearch"
                                      labelText="Search coaches..."
-                                     supportingText="Name, specialization, or email (Ctrl+F)"
+                                     supportingText="Filters the roster below by name, specialization, or email"
                                      prefWidth="380.0" HBox.hgrow="ALWAYS" />
                         <Separator orientation="VERTICAL" />
                         <M3SplitButton fx:id="btnSortOptions" text="Sort: Saturation" />

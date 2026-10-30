@@ -6,8 +6,11 @@ import javafx.beans.property.SimpleIntegerProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import java.util.ArrayList;
@@ -44,6 +47,48 @@ public class M3SegmentedButton extends HBox {
         setAlignment(Pos.CENTER);
         setSegments(segments);
         selectedIndex.addListener((obs, oldV, newV) -> selectInGroup(newV.intValue()));
+        // Radio-group style arrow navigation: arrows move the selection (and focus) between
+        // segments, wrapping at the ends; Home/End jump to the first/last segment.
+        addEventHandler(KeyEvent.KEY_PRESSED, e -> {
+            int count = segmentButtons.size();
+            if (count < 2 || isDisabled()) {
+                return;
+            }
+            int target;
+            switch (e.getCode()) {
+                case LEFT, KP_LEFT, UP, KP_UP -> target = wrapIndex(anchor() - 1, count);
+                case RIGHT, KP_RIGHT, DOWN, KP_DOWN -> target = wrapIndex(anchor() + 1, count);
+                case HOME -> target = 0;
+                case END -> target = count - 1;
+                default -> {
+                    return;
+                }
+            }
+            e.consume();
+            segmentButtons.get(target).requestFocus();
+            setSelectedIndex(target);
+        });
+    }
+
+    /** Index of the segment to navigate from: the selected one, else the focused one, else 0. */
+    private int anchor() {
+        int selected = getSelectedIndex();
+        if (selected >= 0 && selected < segmentButtons.size()) {
+            return selected;
+        }
+        Node focusOwner = getScene() != null ? getScene().getFocusOwner() : null;
+        for (int i = 0; i < segmentButtons.size(); i++) {
+            if (segmentButtons.get(i) == focusOwner) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    /** Modulo that wraps negative indices to the end ({@code wrapIndex(-1, 3) == 2}). */
+    private static int wrapIndex(int index, int count) {
+        int wrapped = index % count;
+        return wrapped < 0 ? wrapped + count : wrapped;
     }
 
     /**

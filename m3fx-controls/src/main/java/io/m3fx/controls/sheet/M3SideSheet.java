@@ -50,6 +50,14 @@ public class M3SideSheet extends VBox {
                 hide();
             }
         });
+        // A scrim click removes this sheet from the layer without calling hide(); still return
+        // focus to whoever opened the sheet.
+        sceneProperty().addListener((obs, oldV, scene) -> {
+            if (scene == null && host != null) {
+                host = null;
+                restoreFocus();
+            }
+        });
     }
 
     /** Returns the modal property. */

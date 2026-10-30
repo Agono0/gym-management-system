@@ -46,6 +46,9 @@ public class M3RangeSlider extends HBox {
         setMax(max);
         lowSlider.valueProperty().bindBidirectional(lowValue);
         highSlider.valueProperty().bindBidirectional(highValue);
+        // Name each thumb so screen readers announce which one is being adjusted.
+        lowSlider.setAccessibleLabel("Low value");
+        highSlider.setAccessibleLabel("High value");
         lowValue.addListener((obs, oldV, newV) -> {
             if (newV.doubleValue() > getHighValue()) {
                 setLowValue(getHighValue());

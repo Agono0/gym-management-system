@@ -9,7 +9,9 @@ import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
+import javafx.scene.Scene;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
@@ -34,6 +36,7 @@ public class M3BottomSheet extends VBox {
     private final javafx.scene.layout.StackPane handleGrip = new javafx.scene.layout.StackPane(handle);
 
     private OverlayLayer host;
+    private Node previousFocus;
     private ParallelTransition exitTransition;
 
     /** Creates an empty bottom sheet. */
@@ -58,6 +61,14 @@ public class M3BottomSheet extends VBox {
             if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE && host != null) {
                 e.consume();
                 hide();
+            }
+        });
+        // A scrim click removes this sheet from the layer without calling hide(); still return
+        // focus to whoever opened the sheet.
+        sceneProperty().addListener((obs, oldV, scene) -> {
+            if (scene == null && host != null) {
+                host = null;
+                restoreFocus();
             }
         });
     }
@@ -97,8 +108,14 @@ public class M3BottomSheet extends VBox {
         }
         setOpacity(1);
         setTranslateY(0);
+        Scene scene = layer.getScene();
+        previousFocus = scene != null ? scene.getFocusOwner() : null;
         this.host = layer;
         layer.showSheet(this);
+        Node target = firstFocusable(contentBox);
+        if (target != null) {
+            target.requestFocus();
+        }
     }
 
     /** Hides the sheet with a slide-down exit animation. */
@@ -172,6 +189,7 @@ public class M3BottomSheet extends VBox {
     private void animateOut(OverlayLayer layer, double fromY) {
         if (getScene() == null) {
             layer.hideSheet();
+            restoreFocus();
             return;
         }
         TranslateTransition slide = new TranslateTransition(
@@ -189,8 +207,35 @@ public class M3BottomSheet extends VBox {
             layer.hideSheet();
             setOpacity(1);
             setTranslateY(0);
+            restoreFocus();
         });
         exitTransition = exit;
         exit.play();
+    }
+
+    /** Returns focus to the node that owned it before the sheet opened. */
+    private void restoreFocus() {
+        Node owner = previousFocus;
+        previousFocus = null;
+        if (owner != null && owner.getScene() != null) {
+            owner.requestFocus();
+        }
+    }
+
+    /** Depth-first search for the first visible, managed, enabled, focus-traversable node. */
+    private static Node firstFocusable(Node node) {
+        if (node == null || !node.isVisible() || !node.isManaged()) {
+            return null;
+        }
+        if (node instanceof Pane pane) {
+            for (Node child : pane.getChildren()) {
+                Node found = firstFocusable(child);
+                if (found != null) {
+                    return found;
+                }
+            }
+            return null;
+        }
+        return !node.isDisabled() && node.isFocusTraversable() ? node : null;
     }
 }

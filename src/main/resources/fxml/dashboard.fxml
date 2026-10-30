@@ -13,6 +13,7 @@
 <?import io.m3fx.controls.data.M3StatCard?>
 <?import io.m3fx.controls.effect.M3PulseBeacon?>
 <?import io.m3fx.controls.icon.M3Icon?>
+<?import io.m3fx.controls.progress.M3LinearProgress?>
 <?import io.m3fx.controls.scene3d.M3TiltCard3D?>
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Label?>
@@ -48,7 +49,8 @@
                     <VBox spacing="4.0">
                         <Label fx:id="welcomeGreetingLabel" text="Good Morning, Administrator" styleClass="greeting-title" />
                         <HBox alignment="CENTER_LEFT" spacing="12.0">
-                            <M3PulseBeacon fx:id="occupancyBeacon" status="ONLINE" />
+                            <M3PulseBeacon fx:id="occupancyBeacon" status="ONLINE"
+                                           accessibleText="Live floor status beacon: online" />
                             <Label fx:id="capacityStatusLabel" text="Floor Occupancy: 82% [Optimal Dynamic Range]"
                                    styleClass="telemetry-subtitle" />
                             <Label text="|" styleClass="divider-pipe" />
@@ -122,11 +124,10 @@
                         <HBox alignment="CENTER_LEFT">
                             <VBox spacing="4.0">
                                 <Label text="Today's Session Schedule" styleClass="card-section-title" />
-                                <Label text="Live agenda tracking trainer bookings and slot capacity"
+                                <Label text="Click a pending row to confirm it; headers sort the agenda"
                                        styleClass="card-section-subtitle" />
                             </VBox>
                             <Region HBox.hgrow="ALWAYS" />
-                            <M3Chip text="RULE 1 &amp; 17 COMPLIANT" variant="ASSIST" />
                         </HBox>
                         <M3DataTable fx:id="agendaTable" prefHeight="260.0" VBox.vgrow="ALWAYS" />
                     </VBox>
@@ -170,10 +171,22 @@
                 <content>
                     <VBox spacing="8.0">
                         <Label text="Floor Density Radar" styleClass="card-section-title" />
-                        <Label text="Cardio: 90% | Free Weights: 75% | Studio: 40%" styleClass="telemetry-subtitle" />
+                        <Label text="Live zone utilisation right now" styleClass="card-section-subtitle" />
                         <Region VBox.vgrow="ALWAYS" />
-                        <HBox alignment="CENTER">
-                            <Label text="[3D GYM RADAR SIMULATION ACTIVE]" styleClass="hologram-text" />
+                        <HBox alignment="CENTER_LEFT" spacing="10.0">
+                            <Label text="Cardio" minWidth="82.0" />
+                            <Label text="90%" minWidth="36.0" styleClass="m3-list-supporting" />
+                            <M3LinearProgress progress="0.90" HBox.hgrow="ALWAYS" />
+                        </HBox>
+                        <HBox alignment="CENTER_LEFT" spacing="10.0">
+                            <Label text="Free Weights" minWidth="82.0" />
+                            <Label text="75%" minWidth="36.0" styleClass="m3-list-supporting" />
+                            <M3LinearProgress progress="0.75" HBox.hgrow="ALWAYS" />
+                        </HBox>
+                        <HBox alignment="CENTER_LEFT" spacing="10.0">
+                            <Label text="Studio" minWidth="82.0" />
+                            <Label text="40%" minWidth="36.0" styleClass="m3-list-supporting" />
+                            <M3LinearProgress progress="0.40" HBox.hgrow="ALWAYS" />
                         </HBox>
                     </VBox>
                 </content>

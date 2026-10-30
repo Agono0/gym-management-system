@@ -3,7 +3,11 @@ package io.m3fx.controls.slider;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.StringProperty;
 import javafx.scene.control.Slider;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 
 /**
  * M3 slider: continuous and discrete (step) modes with 48dp touch handling.
@@ -21,6 +25,8 @@ public class M3Slider extends Slider {
     public static final double TOUCH_TARGET = 48;
 
     private final BooleanProperty discrete = new SimpleBooleanProperty(this, "discrete", false);
+    private final StringProperty accessibleLabel =
+            new SimpleStringProperty(this, "accessibleLabel", "");
 
     /** Creates a continuous slider 0-100. */
     public M3Slider() {
@@ -44,6 +50,59 @@ public class M3Slider extends Slider {
             pseudoClassStateChanged(
                     javafx.css.PseudoClass.getPseudoClass("discrete"), isDiscrete);
         });
+        // Announce the current value so screen readers track drag and keyboard changes.
+        valueProperty().addListener((obs, oldV, newV) -> updateAccessibleText());
+        accessibleLabel.addListener((obs, oldV, newV) -> updateAccessibleText());
+        updateAccessibleText();
+        // Shift+arrows step finely (a tenth of the block increment), complementing the native
+        // arrows (block step), Home/End (min/max) and PageUp/PageDown.
+        addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (!e.isShiftDown() || isDisabled()) {
+                return;
+            }
+            boolean increase = e.getCode() == KeyCode.RIGHT || e.getCode() == KeyCode.UP;
+            boolean decrease = e.getCode() == KeyCode.LEFT || e.getCode() == KeyCode.DOWN;
+            if (!increase && !decrease) {
+                return;
+            }
+            double span = getMax() - getMin();
+            double fine =
+                    getBlockIncrement() > 0 ? getBlockIncrement() / 10 : (span > 0 ? span / 100 : 1);
+            double target = getValue() + (increase ? fine : -fine);
+            setValue(Math.clamp(target, getMin(), getMax()));
+            e.consume();
+        });
+    }
+
+    /** Keeps the announced text in sync with the current value. */
+    private void updateAccessibleText() {
+        double value = getValue();
+        String rendered =
+                !Double.isInfinite(value) && value == Math.rint(value)
+                        ? Long.toString((long) value)
+                        : Double.toString(value);
+        String label = accessibleLabel.get();
+        setAccessibleText((label == null || label.isEmpty() ? "Value" : label) + ": " + rendered);
+    }
+
+    /** Returns the accessible label property (announced before the value; e.g. "Low value"). */
+    public StringProperty accessibleLabelProperty() {
+        return accessibleLabel;
+    }
+
+    /** Returns the accessible label (empty uses the default "Value"). */
+    public String getAccessibleLabel() {
+        return accessibleLabel.get();
+    }
+
+    /**
+     * Sets the accessible label announced before the value (e.g. {@code "Low value"} for range
+     * slider thumbs).
+     *
+     * @param label the label, may be {@code null} to use the default
+     */
+    public void setAccessibleLabel(String label) {
+        accessibleLabel.set(label == null ? "" : label);
     }
 
     /**
