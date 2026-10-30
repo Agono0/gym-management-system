@@ -81,8 +81,8 @@ public class M3Carousel extends Region {
 
         StackPane.setAlignment(prevButton, Pos.CENTER_LEFT);
         StackPane.setAlignment(nextButton, Pos.CENTER_RIGHT);
-        StackPane.setMargin(prevButton, new javafx.geometry.Insets(0, 0, 0, 8));
-        StackPane.setMargin(nextButton, new javafx.geometry.Insets(0, 8, 0, 0));
+        StackPane.setMargin(prevButton, new javafx.geometry.Insets(0, 0, 0, 4));
+        StackPane.setMargin(nextButton, new javafx.geometry.Insets(0, 4, 0, 0));
 
         StackPane overlayContainer = new StackPane(viewport, prevButton, nextButton);
         overlayContainer.setPickOnBounds(false);
@@ -99,7 +99,7 @@ public class M3Carousel extends Region {
         initDragGestures();
 
         setMinHeight(180);
-        setPrefHeight(220);
+        setPrefHeight(260);
         setPrefWidth(600);
 
         activeIndexProperty().addListener((obs, oldV, newV) -> snapToIndex(newV.intValue()));
@@ -115,21 +115,39 @@ public class M3Carousel extends Region {
         });
 
         viewport.addEventHandler(MouseEvent.MOUSE_DRAGGED, e -> {
+            double maxScroll = getMaxScroll();
+            if (maxScroll <= 0) return;
             double dx = e.getX() - dragStartX;
-            track.setTranslateX(trackStartTranslateX + dx);
+            double candidate = trackStartTranslateX + dx;
+            if (candidate > 0) {
+                candidate = candidate * 0.3;
+            } else if (candidate < -maxScroll) {
+                double over = candidate + maxScroll;
+                candidate = -maxScroll + over * 0.3;
+            }
+            track.setTranslateX(candidate);
         });
 
         viewport.addEventHandler(MouseEvent.MOUSE_RELEASED, e -> {
-            double currentX = track.getTranslateX();
-            double itemWidth = getItemSnapWidth();
-            double stride = itemWidth + track.getSpacing();
-            if (stride <= 0 || items.isEmpty()) {
-                return; // nothing measurable to snap to
+            double maxScroll = getMaxScroll();
+            if (maxScroll <= 0) {
+                snapToIndex(0);
+                return;
             }
-            int targetIndex = (int) Math.round(-currentX / stride);
-            targetIndex = Math.max(0, Math.min(items.size() - 1, targetIndex));
-            setActiveIndex(targetIndex);
-            snapToIndex(targetIndex);
+            double currentX = track.getTranslateX();
+            int bestIndex = 0;
+            double bestDist = Double.MAX_VALUE;
+            for (int i = 0; i < items.size(); i++) {
+                double offset = -getItemOffset(i);
+                offset = Math.max(-maxScroll, Math.min(0, offset));
+                double dist = Math.abs(currentX - offset);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestIndex = i;
+                }
+            }
+            setActiveIndex(bestIndex);
+            snapToIndex(bestIndex);
         });
     }
 
@@ -178,27 +196,101 @@ public class M3Carousel extends Region {
         }
     }
 
-    private double getItemSnapWidth() {
-        if (items.isEmpty()) {
-            return 200.0;
+    private double getItemOffset(int index) {
+        double offset = 0;
+        double spacing = track.getSpacing();
+        for (int i = 0; i < index && i < items.size(); i++) {
+            Node node = items.get(i);
+            double w = node instanceof Region r ? (r.getWidth() > 0 ? r.getWidth() : r.getPrefWidth()) : 200.0;
+            offset += w + spacing;
         }
-        Node first = items.get(0);
-        if (first instanceof Region region) {
-            return region.getWidth() > 0 ? region.getWidth() : region.getPrefWidth();
+        return offset;
+    }
+
+    private double getTotalTrackWidth() {
+        double total = 0;
+        double spacing = track.getSpacing();
+        for (int i = 0; i < items.size(); i++) {
+            Node node = items.get(i);
+            double w = node instanceof Region r ? (r.getWidth() > 0 ? r.getWidth() : r.getPrefWidth()) : 200.0;
+            total += w;
+            if (i > 0) total += spacing;
         }
-        return 200.0;
+        javafx.geometry.Insets insets = track.getInsets();
+        if (insets != null) {
+            total += insets.getLeft() + insets.getRight();
+        }
+        return total;
+    }
+
+    private double getMaxScroll() {
+        double viewportW = viewport.getWidth() > 0 ? viewport.getWidth() : (getWidth() > 0 ? getWidth() : getPrefWidth());
+        double totalW = getTotalTrackWidth();
+        return Math.max(0, totalW - viewportW);
     }
 
     private void snapToIndex(int index) {
-        double stride = getItemSnapWidth() + track.getSpacing();
-        double targetX = stride > 0 ? -index * stride : 0;
-        SpringAnimation.animate(track.translateXProperty(), targetX, SpringAnimation.DEFAULT, null);
+        double maxScroll = getMaxScroll();
+        if (maxScroll <= 1.0) {
+            SpringAnimation.animate(track.translateXProperty(), 0.0, SpringAnimation.DEFAULT, this::updateNavState);
+            updateNavState();
+            return;
+        }
+        double targetOffset = getItemOffset(index);
+        double targetX = -Math.min(targetOffset, maxScroll);
+        SpringAnimation.animate(track.translateXProperty(), targetX, SpringAnimation.DEFAULT, this::updateNavState);
         updateNavState();
     }
 
     private void updateNavState() {
-        prevButton.setDisable(getActiveIndex() <= 0);
-        nextButton.setDisable(getActiveIndex() >= items.size() - 1);
+        double maxScroll = getMaxScroll();
+        if (maxScroll <= 1.0) {
+            prevButton.setVisible(false);
+            nextButton.setVisible(false);
+            prevButton.setDisable(true);
+            nextButton.setDisable(true);
+            track.setAlignment(Pos.CENTER);
+            track.setPadding(new javafx.geometry.Insets(8, 8, 8, 8));
+        } else {
+            track.setAlignment(Pos.CENTER_LEFT);
+            track.setPadding(new javafx.geometry.Insets(8, 36, 8, 36));
+            double currentX = track.getTranslateX();
+            boolean atStart = currentX >= -2.0;
+            boolean atEnd = currentX <= -maxScroll + 2.0;
+
+            prevButton.setVisible(true);
+            nextButton.setVisible(true);
+            prevButton.setDisable(atStart);
+            nextButton.setDisable(atEnd);
+            prevButton.setOpacity(atStart ? 0.35 : 1.0);
+            nextButton.setOpacity(atEnd ? 0.35 : 1.0);
+        }
+    }
+
+    @Override
+    protected double computePrefWidth(double height) {
+        return Math.max(600, getTotalTrackWidth());
+    }
+
+    @Override
+    protected double computeMinWidth(double height) {
+        return 320;
+    }
+
+    @Override
+    protected double computePrefHeight(double width) {
+        double maxH = 260;
+        for (Node node : items) {
+            if (node instanceof Region r) {
+                maxH = Math.max(maxH, r.prefHeight(-1));
+            }
+        }
+        return maxH;
+    }
+
+    @Override
+    protected double computeMinHeight(double width) {
+        return 180;
     }
 
     @Override
@@ -209,9 +301,20 @@ public class M3Carousel extends Region {
             return;
         }
         viewport.resizeRelocate(0, 0, w, h);
+
+        double totalTrackW = getTotalTrackWidth();
+        double trackW = Math.max(w, totalTrackW);
+        track.resize(trackW, h);
+        track.setMinHeight(h);
+        track.setPrefHeight(h);
+        track.setMaxHeight(h);
+
         for (Node child : getChildren()) {
-            child.resizeRelocate(0, 0, w, h);
+            if (child != viewport) {
+                child.resizeRelocate(0, 0, w, h);
+            }
         }
+        updateNavState();
     }
 }
 

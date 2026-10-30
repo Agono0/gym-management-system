@@ -110,4 +110,20 @@ class M3ButtonTest {
             assertNull(button.getSkin(), "Skin detachable without error");
         });
     }
+
+    @Test
+    void minWidthDoesNotShrinkBelowContentPrefWidth() throws Throwable {
+        runOnFx(() -> {
+            M3Button button = M3Button.filled("Push / Pull / Legs (6-Day Split)");
+            StackPane holder = new StackPane(button);
+            new Scene(holder);
+            button.applyCss();
+            button.layout();
+
+            double prefW = button.prefWidth(-1);
+            double minW = button.minWidth(-1);
+            assertTrue(prefW > 100.0, "Long text button should have substantial prefWidth: " + prefW);
+            assertEquals(prefW, minW, 0.01, "MinWidth should equal prefWidth to prevent ellipsis truncation");
+        });
+    }
 }

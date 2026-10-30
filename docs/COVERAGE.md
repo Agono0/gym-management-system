@@ -123,9 +123,12 @@ fixes verified against material-web tokens, material-color-utilities and m3.mate
 - [x] Charts: negative/flat data safe (no NaN), spline overshoot clamped, data table sortable +
       page-local zebra striping, speed dial centered on FAB with stagger, stepper error state
 - [x] Gym screens: no blank icons, no dead buttons, no empty tables, exclusive chip groups,
-      dark-mode toggle reads correctly, hardcoded root widths removed
+      dark-mode toggle reads correctly, hardcoded root widths removed, membership plans screen
+      wired with telemetry funnel stages and searchable/filterable subscription ledger
+- [x] Carousel (`M3Carousel`): fixed viewport clipping without bound-property mutations, dynamic
+      auto-centering when items fit, hide prev/next buttons when non-overflowing, strict scroll clamping
 - [x] `./gradlew test` green across m3fx-core, m3fx-controls and the app (incl. new
-      MotionTokensTest, M3ButtonTest, M3SegmentedButtonTest, expanded chart/data tests)
+      MotionTokensTest, M3ButtonTest, M3SegmentedButtonTest, M3CarouselTest, expanded chart/data tests)
 - [ ] Known deliberate deviations (documented, not bugs): drawer width 280/320 vs token 360 (app
       shell calls for 220), slider 16dp single track (JavaFX 21 `SliderSkin` has no separate fill
       node), M3Fonts falls back to system fonts (Roboto files not bundled yet), spring token

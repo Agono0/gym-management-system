@@ -15,6 +15,7 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 
 /**
@@ -46,6 +47,7 @@ public class M3Chip extends ToggleButton {
         super(text == null ? "" : text);
         getStyleClass().add("m3-chip");
         setMinHeight(32);
+        setMinWidth(Region.USE_PREF_SIZE);
         setVariant(variant);
         variantProperty().addListener((obs, oldV, newV) -> updateStyleClass(oldV, newV));
         closableProperty().addListener((obs, oldV, nowClosable) -> {
@@ -237,12 +239,16 @@ public class M3Chip extends ToggleButton {
             root.setAlignment(Pos.CENTER);
             root.getStyleClass().add("m3-chip-content");
             root.setMouseTransparent(false);
+            root.setMinWidth(Region.USE_PREF_SIZE);
 
             leadingSlot.getStyleClass().add("m3-chip-leading");
             textLabel.getStyleClass().add("m3-chip-text");
             textLabel.textProperty().bind(chip.textProperty());
             textLabel.textFillProperty().bind(chip.textFillProperty());
             textLabel.fontProperty().bind(chip.fontProperty());
+            textLabel.setMinWidth(Region.USE_PREF_SIZE);
+            textLabel.setTextOverrun(javafx.scene.control.OverrunStyle.CLIP);
+            textLabel.setEllipsisString("");
 
             M3Icon closeIcon = M3Icon.symbol("close");
             closeIcon.setScaleX(0.7);
@@ -323,6 +329,30 @@ public class M3Chip extends ToggleButton {
             boolean isClose = chip.isClosable();
             closeSlot.setVisible(isClose);
             closeSlot.setManaged(isClose);
+        }
+
+        @Override
+        protected double computeMinWidth(
+                double height, double topInset, double rightInset, double bottomInset, double leftInset) {
+            return computePrefWidth(height, topInset, rightInset, bottomInset, leftInset);
+        }
+
+        @Override
+        protected double computePrefWidth(
+                double height, double topInset, double rightInset, double bottomInset, double leftInset) {
+            return root.prefWidth(height) + leftInset + rightInset;
+        }
+
+        @Override
+        protected double computeMinHeight(
+                double width, double topInset, double rightInset, double bottomInset, double leftInset) {
+            return Math.max(32.0, root.prefHeight(width) + topInset + bottomInset);
+        }
+
+        @Override
+        protected double computePrefHeight(
+                double width, double topInset, double rightInset, double bottomInset, double leftInset) {
+            return Math.max(32.0, root.prefHeight(width) + topInset + bottomInset);
         }
     }
 }

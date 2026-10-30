@@ -61,6 +61,7 @@ public class M3Button extends PressableControl {
         super();
         getStyleClass().add("m3-button");
         setMinHeight(MIN_HEIGHT);
+        setMinWidth(Region.USE_PREF_SIZE);
         setText(text);
         setVariant(variant == null ? ButtonVariant.FILLED : variant);
         variantProperty().addListener((obs, oldV, newV) -> updateStyleClass(oldV, newV));
@@ -235,11 +236,16 @@ public class M3Button extends PressableControl {
             content.getStyleClass().add("m3-button-content");
             content.setAlignment(Pos.CENTER);
             content.setMouseTransparent(true);
+            content.setMinWidth(Region.USE_PREF_SIZE);
+            root.setMinWidth(Region.USE_PREF_SIZE);
             HBox.setHgrow(label, javafx.scene.layout.Priority.ALWAYS);
             iconSlot.getStyleClass().add("m3-button-icon");
             label.getStyleClass().add("m3-button-label");
             label.textProperty().bind(control.textProperty());
             label.setMouseTransparent(true);
+            label.setMinWidth(Region.USE_PREF_SIZE);
+            label.setTextOverrun(javafx.scene.control.OverrunStyle.CLIP);
+            label.setEllipsisString("");
             ripplePane.getStyleClass().add("m3-button-ripple");
             content.getChildren().addAll(iconSlot, label);
             // Paint order: background, ripple, content, state layer — the ripple spreads over
@@ -370,6 +376,30 @@ public class M3Button extends PressableControl {
                 root.setEffect(next.toEffect(shadow));
             }
             currentElevation = next;
+        }
+
+        @Override
+        protected double computeMinWidth(
+                double height, double topInset, double rightInset, double bottomInset, double leftInset) {
+            return computePrefWidth(height, topInset, rightInset, bottomInset, leftInset);
+        }
+
+        @Override
+        protected double computePrefWidth(
+                double height, double topInset, double rightInset, double bottomInset, double leftInset) {
+            return root.prefWidth(height) + leftInset + rightInset;
+        }
+
+        @Override
+        protected double computeMinHeight(
+                double width, double topInset, double rightInset, double bottomInset, double leftInset) {
+            return Math.max(MIN_HEIGHT, root.prefHeight(width) + topInset + bottomInset);
+        }
+
+        @Override
+        protected double computePrefHeight(
+                double width, double topInset, double rightInset, double bottomInset, double leftInset) {
+            return Math.max(MIN_HEIGHT, root.prefHeight(width) + topInset + bottomInset);
         }
     }
 }

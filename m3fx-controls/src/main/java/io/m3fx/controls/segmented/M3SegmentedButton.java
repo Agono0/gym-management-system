@@ -13,6 +13,7 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,6 +46,7 @@ public class M3SegmentedButton extends HBox {
     public M3SegmentedButton(List<String> segments) {
         getStyleClass().add("m3-segmented");
         setAlignment(Pos.CENTER);
+        setMinWidth(Region.USE_PREF_SIZE);
         setSegments(segments);
         selectedIndex.addListener((obs, oldV, newV) -> selectInGroup(newV.intValue()));
         // Radio-group style arrow navigation: arrows move the selection (and focus) between
@@ -118,6 +120,7 @@ public class M3SegmentedButton extends HBox {
             }
             segment.setToggleGroup(group);
             segment.setMaxWidth(Double.MAX_VALUE);
+            segment.setMinWidth(Region.USE_PREF_SIZE);
             HBox.setHgrow(segment, Priority.ALWAYS);
             segment.setOnAction(e -> setSelectedIndex(index));
             segmentButtons.add(segment);

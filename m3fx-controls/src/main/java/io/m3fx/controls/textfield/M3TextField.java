@@ -214,6 +214,11 @@ public class M3TextField extends VBox {
         return input.getText();
     }
 
+    /** Returns the text property of the input. */
+    public StringProperty textProperty() {
+        return input.textProperty();
+    }
+
     /**
      * Sets the current text.
      *

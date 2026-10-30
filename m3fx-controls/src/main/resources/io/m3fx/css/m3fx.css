@@ -23,7 +23,28 @@
 .m3-button-state { -fx-background-radius: 20px; -fx-opacity: 0; }
 .m3-button-ripple { -fx-background-color: transparent; }
 .m3-button-content { -fx-alignment: center; -fx-spacing: 8px; -fx-padding: 0 24px 0 24px; }
-.m3-button-label { -fx-font-size: 14px; -fx-font-weight: bold; }
+.m3-button-label { -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-overrun: clip; }
+
+/* Compact button variants used in toolbar / cards / floor-map / workout */
+.filled-btn-compact, .tonal-btn-compact, .outlined-btn-compact, .text-btn-compact,
+.filled-button-compact, .tonal-button-compact, .outlined-button-compact, .text-button-compact {
+  -fx-min-height: 32px;
+  -fx-pref-height: 32px;
+}
+.filled-btn-compact .m3-button-content, .tonal-btn-compact .m3-button-content,
+.outlined-btn-compact .m3-button-content, .text-btn-compact .m3-button-content,
+.filled-button-compact .m3-button-content, .tonal-button-compact .m3-button-content,
+.outlined-button-compact .m3-button-content, .text-button-compact .m3-button-content {
+  -fx-padding: 0 12px 0 12px;
+  -fx-spacing: 4px;
+}
+.filled-btn-compact .m3-button-label, .tonal-btn-compact .m3-button-label,
+.outlined-btn-compact .m3-button-label, .text-btn-compact .m3-button-label,
+.filled-button-compact .m3-button-label, .tonal-button-compact .m3-button-label,
+.outlined-button-compact .m3-button-label, .text-button-compact .m3-button-label {
+  -fx-font-size: 12px;
+  -fx-text-overrun: clip;
+}
 
 .m3-button-filled .m3-button-bg { -fx-background-color: -md-sys-color-primary; }
 .m3-button-filled .m3-button-label { -fx-text-fill: -md-sys-color-on-primary; }
@@ -417,7 +438,7 @@
 .m3-chip:focused { -fx-border-color: -md-sys-color-primary; -fx-border-width: 2px; }
 .m3-chip:selected:focused { -fx-border-color: -md-sys-color-primary; }
 .m3-chip-content { -fx-alignment: CENTER; }
-.m3-chip-text { -fx-text-fill: inherit; -fx-font-size: 14px; }
+.m3-chip-text { -fx-text-fill: inherit; -fx-font-size: 14px; -fx-text-overrun: clip; }
 .m3-chip-close { -fx-cursor: hand; -fx-padding: 0 0 0 2px; }
 .m3-chip-close .m3-icon-svg { -fx-fill: -md-sys-color-on-surface-variant; }
 .m3-chip-close:hover .m3-icon-svg { -fx-fill: -md-sys-color-on-surface; }
@@ -518,6 +539,31 @@
   -fx-background-color: -md-sys-color-surface;
   -fx-padding: 16px 8px 16px 8px;
   -fx-spacing: 12px;
+}
+
+.side-nav-rail {
+  -fx-background-color: -md-sys-color-surface-container-low;
+  -fx-border-color: transparent -md-sys-color-outline-variant transparent transparent;
+  -fx-border-width: 0 1px 0 0;
+}
+.side-nav-rail.collapsed {
+  -fx-padding: 16px 4px 16px 4px;
+}
+.side-nav-rail .m3-navigation-item {
+  -fx-min-height: 48px;
+  -fx-pref-height: 48px;
+  -fx-padding: 0 16px;
+  -fx-font-size: 14px;
+  -fx-font-weight: 500;
+  -fx-text-fill: -md-sys-color-on-surface-variant;
+}
+.side-nav-rail.collapsed .m3-navigation-item {
+  -fx-padding: 0;
+  -fx-alignment: center;
+}
+.side-nav-rail.collapsed .rail-action-container {
+  -fx-padding: 16px 0 16px 0;
+  -fx-alignment: center;
 }
 .m3-navigation-drawer { -fx-background-color: -md-sys-color-surface-container-low; -fx-background-radius: 0 16px 16px 0; }
 .m3-navigation-drawer:modal {
@@ -1178,11 +1224,51 @@
 .m3-carousel-track {
   -fx-padding: 8px 16px;
 }
-.m3-carousel-nav-prev {
-  -fx-translate-x: 8px;
-}
+.m3-carousel-nav-prev,
 .m3-carousel-nav-next {
-  -fx-translate-x: -8px;
+  -fx-background-color: -md-sys-color-surface-container-highest;
+  -fx-background-radius: 24px;
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a20, 8, 0, 0, 2);
+  -fx-cursor: hand;
+}
+.m3-carousel-nav-prev:hover,
+.m3-carousel-nav-next:hover {
+  -fx-background-color: -md-sys-color-primary-container;
+}
+
+/* ============ membership screen styling ============ */
+.membership-root {
+  -fx-background-color: -md-sys-color-surface;
+}
+.tier-card-standard {
+  -fx-background-color: -md-sys-color-surface-container-low;
+  -fx-background-radius: 16px;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 16px;
+  -fx-border-width: 1px;
+}
+.tier-card-vip {
+  -fx-background-color: -md-sys-color-surface-container-high;
+  -fx-background-radius: 20px;
+  -fx-border-color: -md-sys-color-primary;
+  -fx-border-radius: 20px;
+  -fx-border-width: 2px;
+  -fx-effect: dropshadow(gaussian, -md-sys-color-primary-a20, 16, 0, 0, 4);
+}
+.badge-featured {
+  -fx-background-color: -md-sys-color-primary-container;
+  -fx-text-fill: -md-sys-color-on-primary-container;
+  -fx-font-size: 11px;
+  -fx-font-weight: bold;
+  -fx-padding: 3px 8px;
+  -fx-background-radius: 8px;
+}
+.card-surface {
+  -fx-background-color: -md-sys-color-surface-container-low;
+  -fx-background-radius: 16px;
+  -fx-border-color: -md-sys-color-outline-variant;
+  -fx-border-radius: 16px;
+  -fx-border-width: 1px;
 }
 
 /* ============ circular progress ============ */
