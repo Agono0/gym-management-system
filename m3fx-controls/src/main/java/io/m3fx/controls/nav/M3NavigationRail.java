@@ -7,9 +7,12 @@ import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -37,6 +40,56 @@ public class M3NavigationRail extends VBox {
         items.visibleProperty().bind(javafx.beans.binding.Bindings.isNotEmpty(items.getChildren()));
         getChildren().add(items);
         selectedIndex.addListener((obs, oldV, newV) -> selectInGroup(newV.intValue()));
+        // Radio-group style arrow navigation between destinations (wraps at the ends).
+        addEventHandler(KeyEvent.KEY_PRESSED, e -> {
+            List<ToggleButton> buttons = destinationButtons();
+            int count = buttons.size();
+            if (count < 2 || isDisabled()) {
+                return;
+            }
+            int target;
+            switch (e.getCode()) {
+                case UP, KP_UP, LEFT, KP_LEFT -> target = Math.floorMod(anchor(buttons) - 1, count);
+                case DOWN, KP_DOWN, RIGHT, KP_RIGHT ->
+                        target = Math.floorMod(anchor(buttons) + 1, count);
+                case HOME -> target = 0;
+                case END -> target = count - 1;
+                default -> {
+                    return;
+                }
+            }
+            e.consume();
+            ToggleButton button = buttons.get(target);
+            button.requestFocus();
+            button.setSelected(true);
+            setSelectedIndex(target);
+        });
+    }
+
+    /** The destination buttons, in destination order. */
+    private List<ToggleButton> destinationButtons() {
+        List<ToggleButton> buttons = new ArrayList<>();
+        for (javafx.scene.Node child : items.getChildren()) {
+            if (child instanceof ToggleButton button) {
+                buttons.add(button);
+            }
+        }
+        return buttons;
+    }
+
+    /** Index to navigate from: the selected destination, else the focused one, else 0. */
+    private int anchor(List<ToggleButton> buttons) {
+        int selected = getSelectedIndex();
+        if (selected >= 0 && selected < buttons.size()) {
+            return selected;
+        }
+        javafx.scene.Node focusOwner = getScene() != null ? getScene().getFocusOwner() : null;
+        for (int i = 0; i < buttons.size(); i++) {
+            if (buttons.get(i) == focusOwner) {
+                return i;
+            }
+        }
+        return 0;
     }
 
     /**

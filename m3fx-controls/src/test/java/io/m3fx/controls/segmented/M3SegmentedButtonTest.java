@@ -7,11 +7,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import javafx.application.Platform;
 import javafx.scene.Node;
+import javafx.scene.Scene;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.StackPane;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 class M3SegmentedButtonTest {
 
@@ -68,6 +74,48 @@ class M3SegmentedButtonTest {
         getSegment(segmented, 1).fire();
 
         assertEquals(1, segmented.getSelectedIndex(), "Segment action updates selectedIndex");
+    }
+
+    @Test
+    void arrowKeysMoveSelectionWithWrap() throws Throwable {
+        CountDownLatch latch = new CountDownLatch(1);
+        Throwable[] error = new Throwable[1];
+        Platform.runLater(() -> {
+            try {
+                M3SegmentedButton segmented = new M3SegmentedButton(List.of("Day", "Week", "Month"));
+                StackPane holder = new StackPane(segmented);
+                new Scene(holder, 320, 60);
+                segmented.setSelectedIndex(0);
+
+                segmented.fireEvent(keyPressed(KeyCode.RIGHT));
+                assertEquals(1, segmented.getSelectedIndex(), "Right moves to the next segment");
+
+                segmented.setSelectedIndex(2);
+                segmented.fireEvent(keyPressed(KeyCode.RIGHT));
+                assertEquals(0, segmented.getSelectedIndex(), "Right wraps past the last segment");
+
+                segmented.fireEvent(keyPressed(KeyCode.LEFT));
+                assertEquals(2, segmented.getSelectedIndex(), "Left wraps back to the last segment");
+
+                segmented.fireEvent(keyPressed(KeyCode.HOME));
+                assertEquals(0, segmented.getSelectedIndex(), "Home jumps to the first segment");
+
+                segmented.fireEvent(keyPressed(KeyCode.END));
+                assertEquals(2, segmented.getSelectedIndex(), "End jumps to the last segment");
+            } catch (Throwable t) {
+                error[0] = t;
+            } finally {
+                latch.countDown();
+            }
+        });
+        assertTrue(latch.await(5, TimeUnit.SECONDS), "FX task timed out");
+        if (error[0] != null) {
+            throw error[0];
+        }
+    }
+
+    private static KeyEvent keyPressed(KeyCode code) {
+        return new KeyEvent(KeyEvent.KEY_PRESSED, "", "", code, false, false, false, false);
     }
 
     private static ToggleButton getSegment(M3SegmentedButton segmented, int index) {

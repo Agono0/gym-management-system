@@ -52,10 +52,10 @@
                 <!-- Tier Cards Carousel -->
                 <VBox spacing="8.0">
                     <Label text="MEMBERSHIP TIERS &amp; PACKAGES" styleClass="label-small"/>
-                    <M3Carousel fx:id="tierCarousel" prefHeight="260.0">
+                    <M3Carousel fx:id="tierCarousel" prefHeight="270.0">
                         <items>
                             <!-- Monthly Standard Card -->
-                            <M3Card fx:id="cardMonthly" variant="OUTLINED" styleClass="tier-card-standard" prefWidth="300.0">
+                            <M3Card fx:id="cardMonthly" variant="OUTLINED" styleClass="tier-card-standard" prefWidth="310.0" prefHeight="250.0" maxHeight="Infinity">
                                 <padding>
                                     <Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/>
                                 </padding>
@@ -71,7 +71,7 @@
                             </M3Card>
 
                             <!-- Yearly Cyber VIP Card (Featured) -->
-                            <M3Card fx:id="cardYearlyVip" variant="ELEVATED" styleClass="tier-card-vip" prefWidth="340.0">
+                            <M3Card fx:id="cardYearlyVip" variant="ELEVATED" styleClass="tier-card-vip" prefWidth="350.0" prefHeight="250.0" maxHeight="Infinity">
                                 <padding>
                                     <Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/>
                                 </padding>
@@ -91,7 +91,7 @@
                             </M3Card>
 
                             <!-- Quarterly Pro Card -->
-                            <M3Card fx:id="cardQuarterly" variant="OUTLINED" styleClass="tier-card-standard" prefWidth="300.0">
+                            <M3Card fx:id="cardQuarterly" variant="OUTLINED" styleClass="tier-card-standard" prefWidth="310.0" prefHeight="250.0" maxHeight="Infinity">
                                 <padding>
                                     <Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/>
                                 </padding>
@@ -110,26 +110,30 @@
                 </VBox>
 
                 <!-- Split Section: Conversion Funnel & Fleet Data Table -->
-                <GridPane hgap="16.0" vgap="16.0" VBox.vgrow="ALWAYS">
+                <GridPane hgap="16.0" vgap="16.0" VBox.vgrow="ALWAYS" minHeight="450.0">
                     <columnConstraints>
-                        <ColumnConstraints percentWidth="38.0"/>
-                        <ColumnConstraints percentWidth="62.0"/>
+                        <ColumnConstraints percentWidth="38.0" minWidth="320.0"/>
+                        <ColumnConstraints percentWidth="62.0" minWidth="480.0"/>
                     </columnConstraints>
                     <rowConstraints>
-                        <RowConstraints percentHeight="100.0"/>
+                        <RowConstraints vgrow="ALWAYS" minHeight="430.0" prefHeight="480.0"/>
                     </rowConstraints>
 
                     <!-- Left Column: Conversion Funnel -->
-                    <VBox spacing="10.0" GridPane.columnIndex="0" styleClass="card-surface">
+                    <VBox spacing="12.0" GridPane.columnIndex="0" styleClass="card-surface" minHeight="430.0">
                         <padding>
                             <Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/>
                         </padding>
-                        <Label text="MEMBER CONVERSION FUNNEL" styleClass="title-medium"/>
-                        <M3FunnelChart fx:id="conversionFunnelChart" VBox.vgrow="ALWAYS"/>
+                        <HBox alignment="CENTER_LEFT" spacing="8.0">
+                            <Label text="MEMBER CONVERSION FUNNEL" styleClass="title-medium"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Label text="4-STAGE TELEMETRY" styleClass="badge-featured"/>
+                        </HBox>
+                        <M3FunnelChart fx:id="conversionFunnelChart" VBox.vgrow="ALWAYS" minHeight="350.0" prefHeight="390.0"/>
                     </VBox>
 
                     <!-- Right Column: Active Memberships Table & Action Toolbar -->
-                    <VBox spacing="10.0" GridPane.columnIndex="1" styleClass="card-surface">
+                    <VBox spacing="12.0" GridPane.columnIndex="1" styleClass="card-surface" minHeight="430.0">
                         <padding>
                             <Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/>
                         </padding>
@@ -138,7 +142,7 @@
                             <Region HBox.hgrow="ALWAYS"/>
                             <M3Chip fx:id="chipExpiringFilter" text="Expiring in 7 Days" selected="false"/>
                         </HBox>
-                        <M3DataTable fx:id="membershipDataTable" VBox.vgrow="ALWAYS"/>
+                        <M3DataTable fx:id="membershipDataTable" VBox.vgrow="ALWAYS" minHeight="310.0" prefHeight="350.0"/>
                         <!-- Lifecycle Action Command Bar -->
                         <HBox spacing="10.0" alignment="CENTER_RIGHT">
                             <M3Button fx:id="btnRenewAction" text="Renew Agreement" variant="TONAL" onAction="#onRenew" styleClass="m3-button-tonal"/>

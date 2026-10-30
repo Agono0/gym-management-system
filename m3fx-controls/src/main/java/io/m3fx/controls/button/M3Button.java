@@ -16,6 +16,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Skin;
 import javafx.scene.control.SkinBase;
+import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
@@ -60,6 +61,7 @@ public class M3Button extends PressableControl {
         super();
         getStyleClass().add("m3-button");
         setMinHeight(MIN_HEIGHT);
+        setMinWidth(Region.USE_PREF_SIZE);
         setText(text);
         setVariant(variant == null ? ButtonVariant.FILLED : variant);
         variantProperty().addListener((obs, oldV, newV) -> updateStyleClass(oldV, newV));
@@ -202,6 +204,10 @@ public class M3Button extends PressableControl {
 
     /** Skin: background + state layer + icon/label content + clipped ripple. */
     static final class ButtonSkin extends SkinBase<M3Button> {
+        /** Keyboard-press feedback: mirrors the pressed state-layer while Space/Enter is held. */
+        private static final javafx.css.PseudoClass KEY_ARMED_PC =
+                javafx.css.PseudoClass.getPseudoClass("key-armed");
+
         private final StackPane root = new StackPane();
         private final Region background = new Region();
         private final Region stateLayer = new Region();
@@ -218,6 +224,9 @@ public class M3Button extends PressableControl {
         private final javafx.beans.value.ChangeListener<ButtonVariant> variantListener;
         private final javafx.beans.value.ChangeListener<Boolean> disabledListener;
         private final javafx.beans.value.ChangeListener<Node> graphicListener;
+        private final javafx.event.EventHandler<KeyEvent> keyArmPressed;
+        private final javafx.event.EventHandler<KeyEvent> keyArmReleased;
+        private final javafx.beans.value.ChangeListener<Boolean> keyArmFocusListener;
 
         ButtonSkin(M3Button control) {
             super(control);
@@ -227,11 +236,16 @@ public class M3Button extends PressableControl {
             content.getStyleClass().add("m3-button-content");
             content.setAlignment(Pos.CENTER);
             content.setMouseTransparent(true);
+            content.setMinWidth(Region.USE_PREF_SIZE);
+            root.setMinWidth(Region.USE_PREF_SIZE);
             HBox.setHgrow(label, javafx.scene.layout.Priority.ALWAYS);
             iconSlot.getStyleClass().add("m3-button-icon");
             label.getStyleClass().add("m3-button-label");
             label.textProperty().bind(control.textProperty());
             label.setMouseTransparent(true);
+            label.setMinWidth(Region.USE_PREF_SIZE);
+            label.setTextOverrun(javafx.scene.control.OverrunStyle.CLIP);
+            label.setEllipsisString("");
             ripplePane.getStyleClass().add("m3-button-ripple");
             content.getChildren().addAll(iconSlot, label);
             // Paint order: background, ripple, content, state layer — the ripple spreads over
@@ -262,9 +276,30 @@ public class M3Button extends PressableControl {
             pressHandler = control::pressBegin;
             releaseHandler = control::pressEnd;
             keyHandler = control::keyActivate;
+            // The shared state layer tracks mouse presses only; mirror Space/Enter holds onto a
+            // pseudo-class so keyboard activation shows the same pressed feedback.
+            keyArmPressed = e -> {
+                if (!control.isDisabled()
+                        && (e.getCode() == KeyCode.SPACE || e.getCode() == KeyCode.ENTER)) {
+                    control.pseudoClassStateChanged(KEY_ARMED_PC, true);
+                }
+            };
+            keyArmReleased = e -> {
+                if (e.getCode() == KeyCode.SPACE || e.getCode() == KeyCode.ENTER) {
+                    control.pseudoClassStateChanged(KEY_ARMED_PC, false);
+                }
+            };
+            keyArmFocusListener = (obs, oldV, focused) -> {
+                if (!focused) {
+                    control.pseudoClassStateChanged(KEY_ARMED_PC, false);
+                }
+            };
             control.addEventHandler(MouseEvent.MOUSE_PRESSED, pressHandler);
             control.addEventHandler(MouseEvent.MOUSE_RELEASED, releaseHandler);
             control.addEventHandler(KeyEvent.KEY_PRESSED, keyHandler);
+            control.addEventHandler(KeyEvent.KEY_PRESSED, keyArmPressed);
+            control.addEventHandler(KeyEvent.KEY_RELEASED, keyArmReleased);
+            control.focusedProperty().addListener(keyArmFocusListener);
         }
 
         @Override
@@ -274,6 +309,10 @@ public class M3Button extends PressableControl {
                 control.removeEventHandler(MouseEvent.MOUSE_PRESSED, pressHandler);
                 control.removeEventHandler(MouseEvent.MOUSE_RELEASED, releaseHandler);
                 control.removeEventHandler(KeyEvent.KEY_PRESSED, keyHandler);
+                control.removeEventHandler(KeyEvent.KEY_PRESSED, keyArmPressed);
+                control.removeEventHandler(KeyEvent.KEY_RELEASED, keyArmReleased);
+                control.focusedProperty().removeListener(keyArmFocusListener);
+                control.pseudoClassStateChanged(KEY_ARMED_PC, false);
                 control.hoverProperty().removeListener(hoverListener);
                 control.pressedProperty().removeListener(pressedListener);
                 control.variantProperty().removeListener(variantListener);
@@ -337,6 +376,30 @@ public class M3Button extends PressableControl {
                 root.setEffect(next.toEffect(shadow));
             }
             currentElevation = next;
+        }
+
+        @Override
+        protected double computeMinWidth(
+                double height, double topInset, double rightInset, double bottomInset, double leftInset) {
+            return computePrefWidth(height, topInset, rightInset, bottomInset, leftInset);
+        }
+
+        @Override
+        protected double computePrefWidth(
+                double height, double topInset, double rightInset, double bottomInset, double leftInset) {
+            return root.prefWidth(height) + leftInset + rightInset;
+        }
+
+        @Override
+        protected double computeMinHeight(
+                double width, double topInset, double rightInset, double bottomInset, double leftInset) {
+            return Math.max(MIN_HEIGHT, root.prefHeight(width) + topInset + bottomInset);
+        }
+
+        @Override
+        protected double computePrefHeight(
+                double width, double topInset, double rightInset, double bottomInset, double leftInset) {
+            return Math.max(MIN_HEIGHT, root.prefHeight(width) + topInset + bottomInset);
         }
     }
 }

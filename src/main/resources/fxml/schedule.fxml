@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import io.m3fx.controls.appbar.M3TopAppBar?>
 <?import io.m3fx.controls.button.M3Button?>
 <?import io.m3fx.controls.button.M3SplitButton?>
 <?import io.m3fx.controls.card.M3Card?>
@@ -33,9 +34,14 @@
         <!-- Top App Bar & Time Navigation -->
         <top>
             <VBox styleClass="top-bar-container" spacing="8.0">
+                <M3TopAppBar title="Schedule &amp; Timetable" variant="SMALL">
+                    <navigationIcon>
+                        <M3Icon symbolName="arrow_back"/>
+                    </navigationIcon>
+                </M3TopAppBar>
                 <HBox alignment="CENTER_LEFT" spacing="16.0">
-                    <padding><Insets top="12.0" right="24.0" bottom="12.0" left="24.0"/></padding>
-                    <Label text="SCHEDULE &amp; TIMETABLE" styleClass="title-large"/>
+                    <padding><Insets top="4.0" right="24.0" bottom="12.0" left="24.0"/></padding>
+                    <Label text="This week's sessions and bookings" styleClass="body-medium"/>
                     <Region HBox.hgrow="ALWAYS"/>
                     <M3IconButton fx:id="btnPrevWeek" accessibleText="Previous Week" onAction="#onPrevWeek">
                         <graphic>
@@ -48,7 +54,7 @@
                             <M3Icon symbolName="chevron_right"/>
                         </graphic>
                     </M3IconButton>
-                    <M3Button fx:id="btnToday" text="Today" onAction="#onToday" styleClass="m3-button-tonal"/>
+                    <M3Button fx:id="btnToday" text="Today" onAction="#onToday" variant="TONAL" styleClass="m3-button-tonal"/>
                     <Separator orientation="VERTICAL"/>
                     <M3SplitButton fx:id="actionSplitButton" text="Book Slot" onAction="#onBook" styleClass="m3-split-button-filled"/>
                 </HBox>
@@ -61,11 +67,12 @@
                 <!-- Left Filter & Resource Rail -->
                 <VBox spacing="16.0" styleClass="filter-rail">
                     <padding><Insets top="16.0" right="16.0" bottom="16.0" left="16.0"/></padding>
-                    <M3TextField fx:id="searchTrainerField" labelText="Search Coaches or Classes"/>
+                    <M3TextField fx:id="searchTrainerField" labelText="Search Coaches or Classes"
+                                 supportingText="Filters the coach roster below"/>
                     <Label text="COACH ROSTER" styleClass="label-small"/>
                     <ListView fx:id="trainerListView" VBox.vgrow="ALWAYS"/>
                     <M3Button fx:id="btnShowAvailableTrainers" text="Available Coaches Matrix"
-                              onAction="#showAvailableTrainers" styleClass="m3-button-outlined" maxWidth="Infinity"/>
+                              onAction="#showAvailableTrainers" variant="OUTLINED" styleClass="m3-button-outlined" maxWidth="Infinity"/>
                 </VBox>
 
                 <!-- Center Calendar Matrix -->
@@ -111,13 +118,13 @@
                     <!-- Command Button Cluster -->
                     <VBox spacing="8.0">
                         <M3Button fx:id="btnConfirmAction" text="Confirm Session" onAction="#onConfirmClick"
-                                  styleClass="m3-button-filled" maxWidth="Infinity"/>
+                                  variant="FILLED" styleClass="m3-button-filled" maxWidth="Infinity"/>
                         <M3Button fx:id="btnCompleteAction" text="Complete Session" onAction="#onCompleteClick"
-                                  styleClass="m3-button-tonal" maxWidth="Infinity"/>
+                                  variant="TONAL" styleClass="m3-button-tonal" maxWidth="Infinity"/>
                         <M3Button fx:id="btnNoShowAction" text="Mark No-Show" onAction="#onNoShowClick"
-                                  styleClass="m3-button-outlined" maxWidth="Infinity"/>
+                                  variant="OUTLINED" styleClass="m3-button-outlined" maxWidth="Infinity"/>
                         <M3Button fx:id="btnCancelAction" text="Cancel Session" onAction="#onCancel"
-                                  styleClass="m3-button-text-danger" maxWidth="Infinity"/>
+                                  variant="TEXT" styleClass="m3-button-text-danger" maxWidth="Infinity"/>
                     </VBox>
                 </VBox>
             </SplitPane>

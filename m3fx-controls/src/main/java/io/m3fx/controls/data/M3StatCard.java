@@ -73,6 +73,10 @@ public class M3StatCard extends M3Card {
         deltaBadge.textProperty().bind(Bindings.createStringBinding(
                 () -> (isDeltaPositive() ? "\u25B2 " : "\u25BC ") + getDeltaText(),
                 deltaTextProperty(), deltaPositiveProperty()));
+        // Spoken form replaces the ▲/▼ glyphs with words so screen readers announce the trend.
+        deltaBadge.accessibleTextProperty().bind(Bindings.createStringBinding(
+                () -> (isDeltaPositive() ? "up " : "down ") + getDeltaText(),
+                deltaTextProperty(), deltaPositiveProperty()));
         updateDeltaBadgeStyle(isDeltaPositive());
         deltaPositiveProperty().addListener((obs, o, pos) -> updateDeltaBadgeStyle(pos));
 

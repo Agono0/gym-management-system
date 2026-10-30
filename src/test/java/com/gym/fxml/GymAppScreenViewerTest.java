@@ -313,5 +313,62 @@ public class GymAppScreenViewerTest {
             throw new AssertionError("Navigation rail or page scroll test failed", err.get());
         }
     }
+
+    @Test
+    void testMembershipScreenLayoutAndComponents() throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Throwable> err = new AtomicReference<>();
+
+        Platform.runLater(() -> {
+            try {
+                FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/membership.fxml"));
+                Parent root = loader.load();
+                Object ctrl = loader.getController();
+                assertNotNull(ctrl, "MembershipController should be injected");
+
+                javafx.scene.Scene scene = new javafx.scene.Scene(new javafx.scene.layout.StackPane(root), 1280, 800);
+                root.applyCss();
+                root.layout();
+
+                // 1. Verify Carousel
+                io.m3fx.controls.carousel.M3Carousel carousel = (io.m3fx.controls.carousel.M3Carousel) root.lookup("#tierCarousel");
+                assertNotNull(carousel, "tierCarousel must be present");
+                assertEquals(3, carousel.getItems().size(), "3 membership tier cards should be in carousel");
+
+                // 2. Verify Funnel Chart is populated
+                io.m3fx.controls.chart.M3FunnelChart funnelChart = (io.m3fx.controls.chart.M3FunnelChart) root.lookup("#conversionFunnelChart");
+                assertNotNull(funnelChart, "conversionFunnelChart must be present");
+                assertTrue(funnelChart.getStages().size() >= 4, "Funnel chart should have 4 conversion stages");
+
+                // 3. Verify Data Table is populated
+                io.m3fx.controls.data.M3DataTable<?> table = (io.m3fx.controls.data.M3DataTable<?>) root.lookup("#membershipDataTable");
+                assertNotNull(table, "membershipDataTable must be present");
+                assertTrue(table.getItems().size() >= 5, "Membership table should have initial agreement rows");
+
+                // 4. Verify search and filter controls
+                io.m3fx.controls.textfield.M3TextField search = (io.m3fx.controls.textfield.M3TextField) root.lookup("#searchMemberField");
+                assertNotNull(search, "searchMemberField must be present");
+                io.m3fx.controls.chip.M3Chip chip = (io.m3fx.controls.chip.M3Chip) root.lookup("#chipExpiringFilter");
+                assertNotNull(chip, "chipExpiringFilter must be present");
+
+                // Filter search
+                search.setText("Sarah");
+                assertEquals(1, table.getItems().size(), "Search filter should match exactly 1 record");
+
+                search.setText("");
+                assertTrue(table.getItems().size() >= 5, "Clearing search should restore records");
+
+            } catch (Throwable t) {
+                err.set(t);
+            } finally {
+                latch.countDown();
+            }
+        });
+
+        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        if (err.get() != null) {
+            throw new AssertionError("Membership screen layout test failed", err.get());
+        }
+    }
 }
 

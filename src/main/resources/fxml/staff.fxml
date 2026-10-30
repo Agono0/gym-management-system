@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import io.m3fx.controls.appbar.M3TopAppBar?>
 <?import io.m3fx.controls.button.M3Button?>
+<?import io.m3fx.controls.icon.M3Icon?>
 <?import io.m3fx.controls.iconbutton.M3IconButton?>
 <?import io.m3fx.controls.data.M3DataTable?>
 <?import io.m3fx.controls.data.M3Timeline?>
@@ -28,11 +30,16 @@
         <!-- Top App Bar -->
         <top>
             <VBox spacing="8.0" styleClass="top-bar-container">
+                <M3TopAppBar title="Staff &amp; Access Governance" variant="SMALL">
+                    <navigationIcon>
+                        <M3Icon symbolName="arrow_back"/>
+                    </navigationIcon>
+                </M3TopAppBar>
                 <HBox alignment="CENTER_LEFT" spacing="16.0">
                     <padding>
-                        <Insets top="16.0" right="24.0" bottom="16.0" left="24.0"/>
+                        <Insets top="4.0" right="24.0" bottom="12.0" left="24.0"/>
                     </padding>
-                    <Label text="STAFF RBAC &amp; SECURITY GOVERNANCE" styleClass="title-large"/>
+                    <Label text="Role-based access, audit trail and administrative overrides" styleClass="body-medium"/>
                     <Region HBox.hgrow="ALWAYS"/>
                     <Label text="ROLE: ADMIN (Alex Vance)" styleClass="badge-admin"/>
                     <M3Button fx:id="btnTopAddStaff" text="+ Add Staff Member" onAction="#onAddStaff" variant="FILLED" styleClass="m3-button-filled"/>
@@ -100,7 +107,7 @@
                 <HBox alignment="CENTER_LEFT">
                     <Label fx:id="lblSideSheetTitle" text="Administrative Override" styleClass="headline-small"/>
                     <Region HBox.hgrow="ALWAYS"/>
-                    <M3Button text="✕" variant="TEXT" onAction="#onCloseSideSheetClick"/>
+                    <M3Button text="Close" variant="TEXT" onAction="#onCloseSideSheetClick"/>
                 </HBox>
                 <Label text="Configure entity parameters and review audit implications." styleClass="body-small"/>
                 <VBox fx:id="sideSheetFormContainer" spacing="12.0" VBox.vgrow="ALWAYS"/>

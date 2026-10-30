@@ -79,6 +79,9 @@ public class M3DateDialog extends M3Dialog {
         });
         dialog.getActionsBox().getChildren().addAll(cancel, ok);
         dialog.showIn(layer);
+        // Hand keyboard focus straight to the month grid (OverlayLayer focuses the dialog shell),
+        // so arrows/Home/End/PgUp/PgDn navigate dates immediately without an extra Tab.
+        dialog.getCalendar().requestFocus();
         return dialog;
     }
 }

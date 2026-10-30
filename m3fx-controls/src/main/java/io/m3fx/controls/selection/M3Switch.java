@@ -8,6 +8,7 @@ import javafx.beans.property.SimpleBooleanProperty;
 import javafx.css.PseudoClass;
 import javafx.geometry.Insets;
 import javafx.scene.AccessibleRole;
+import javafx.scene.Cursor;
 import javafx.scene.control.Control;
 import javafx.scene.control.Skin;
 import javafx.scene.control.SkinBase;
@@ -68,6 +69,7 @@ public class M3Switch extends Control {
         setAccessibleText(isSelected() ? "On" : "Off");
         setMinSize(52, 48);
         setPrefSize(52, 48);
+        setCursor(Cursor.HAND);
     }
 
     /** Returns the selected property. */
@@ -128,6 +130,9 @@ public class M3Switch extends Control {
         private final Circle thumb = new Circle(8);
         private final io.m3fx.controls.icon.M3Icon iconCheck =
                 io.m3fx.controls.icon.M3Icon.symbol("check");
+        private final javafx.beans.value.ChangeListener<Boolean> selectedListener;
+        private final javafx.beans.value.ChangeListener<Boolean> showIconListener;
+        private final javafx.beans.value.ChangeListener<Boolean> pressedListener;
 
         SwitchSkin(M3Switch control) {
             super(control);
@@ -151,12 +156,17 @@ public class M3Switch extends Control {
             applyStateLayerColor();
             StateLayer.bind(control, stateLayer);
             layoutThumb(false);
-            control.selectedProperty().addListener((obs, oldV, newV) -> {
+            // Held as fields so dispose() can remove them: anonymous listeners captured here would
+            // otherwise survive a skin swap and run stale animations on a dead skin.
+            selectedListener = (obs, oldV, newV) -> {
                 applyStateLayerColor();
                 layoutThumb(true);
-            });
-            control.showIconProperty().addListener((obs, oldV, newV) -> layoutThumb(false));
-            control.pressedProperty().addListener((obs, oldV, pressed) -> applyHandleRadius(true));
+            };
+            showIconListener = (obs, oldV, newV) -> layoutThumb(false);
+            pressedListener = (obs, oldV, pressed) -> applyHandleRadius(true);
+            control.selectedProperty().addListener(selectedListener);
+            control.showIconProperty().addListener(showIconListener);
+            control.pressedProperty().addListener(pressedListener);
             control.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
                 if (!control.isDisabled()) {
                     control.toggle();
@@ -177,6 +187,9 @@ public class M3Switch extends Control {
         public void dispose() {
             M3Switch control = getSkinnable();
             if (control != null) {
+                control.selectedProperty().removeListener(selectedListener);
+                control.showIconProperty().removeListener(showIconListener);
+                control.pressedProperty().removeListener(pressedListener);
                 StateLayer.unbind(control, stateLayer);
             }
             super.dispose();

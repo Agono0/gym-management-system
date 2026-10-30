@@ -38,7 +38,8 @@
             <HBox alignment="CENTER_LEFT" styleClass="app-bar-container">
                 <M3TopAppBar fx:id="topAppBar" title="BIOMECHANICAL PROGRESS &amp; ANALYTICS" variant="CENTER_ALIGNED" HBox.hgrow="ALWAYS">
                     <navigationIcon>
-                        <M3IconButton fx:id="btnBack" onAction="#onNavigateBack">
+                        <M3IconButton fx:id="btnBack" onAction="#onNavigateBack"
+                                      accessibleText="Back to member roster">
                             <graphic><M3Icon symbolName="arrow_back"/></graphic>
                         </M3IconButton>
                     </navigationIcon>
@@ -106,7 +107,7 @@
                                         <HBox alignment="CENTER_LEFT">
                                             <Label text="52-WEEK TRAINING DENSITY" styleClass="title-small"/>
                                             <Region HBox.hgrow="ALWAYS"/>
-                                            <Label text="184 Workouts" styleClass="label-small"/>
+                                            <Label text="2026 Year To Date" styleClass="label-small"/>
                                         </HBox>
                                         <M3ActivityCalendar fx:id="activityHeatmap" prefHeight="130"/>
                                     </VBox>
@@ -175,15 +176,18 @@
                 <HBox alignment="CENTER_LEFT">
                     <Label text="LOG BIOMETRIC TELEMETRY" styleClass="title-medium"/>
                     <Region HBox.hgrow="ALWAYS"/>
-                    <M3IconButton onAction="#onCloseLogSheet">
+                    <M3IconButton onAction="#onCloseLogSheet"
+                                  accessibleText="Close log entry sheet">
                         <graphic><M3Icon symbolName="close"/></graphic>
                     </M3IconButton>
                 </HBox>
                 <M3TextField fx:id="txtEntryDate" labelText="Entry Date" supportingText="YYYY-MM-DD" variant="OUTLINED"/>
                 <M3TextField fx:id="txtWeight" labelText="Weight (kg)" supportingText="e.g., 84.2" variant="OUTLINED"/>
-                <M3Slider fx:id="sliderWeight" min="40" max="160" value="84.2"/>
+                <M3Slider fx:id="sliderWeight" min="40" max="160" value="84.2"
+                          accessibleLabel="Weight in kilograms"/>
                 <M3TextField fx:id="txtBodyFat" labelText="Body Fat (%)" supportingText="e.g., 13.8" variant="OUTLINED"/>
-                <M3TextField fx:id="txtTargetWeight" labelText="Target Goal Weight (kg)" variant="OUTLINED"/>
+                <M3TextField fx:id="txtTargetWeight" labelText="Target Goal Weight (kg)"
+                             supportingText="e.g., 80.0" variant="OUTLINED"/>
                 <M3TextField fx:id="txtMeasurements" labelText="Circumferences (JSON/Notes)" supportingText="Chest, Waist, Arms" variant="OUTLINED"/>
                 <M3Button text="Save Telemetry Entry" variant="FILLED" maxWidth="Infinity" onAction="#onSaveRecord"/>
             </VBox>

@@ -115,3 +115,7 @@ m3fx-controls/build/
 # Read-only reference dumps (AGENTS.md: do not ship; local only, ~17 MB)
 material-color-utilities-main/
 material-web-2.5.0/
+
+# Antigravity agent coordination artifacts
+.agents/
+

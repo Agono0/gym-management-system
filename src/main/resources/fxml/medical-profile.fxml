@@ -34,7 +34,8 @@
             <HBox alignment="CENTER_LEFT" styleClass="app-bar-container">
                 <M3TopAppBar fx:id="topAppBar" title="ATHLETIC MEDICAL &amp; SAFETY CONSOLE" variant="CENTER_ALIGNED" HBox.hgrow="ALWAYS">
                     <navigationIcon>
-                        <M3IconButton fx:id="btnBack" onAction="#onNavigateBack">
+                        <M3IconButton fx:id="btnBack" onAction="#onNavigateBack"
+                                      accessibleText="Back to member roster">
                             <graphic><M3Icon symbolName="arrow_back"/></graphic>
                         </M3IconButton>
                     </navigationIcon>
@@ -81,7 +82,8 @@
                                 <VBox spacing="12">
                                     <padding><Insets top="16" right="16" bottom="16" left="16"/></padding>
                                     <HBox alignment="CENTER_LEFT" spacing="8">
-                                        <M3PulseBeacon fx:id="beaconAllergyAlert"/>
+                                        <M3PulseBeacon fx:id="beaconAllergyAlert" status="CRITICAL"
+                                                       accessibleText="Allergy alert status: critical"/>
                                         <Label text="CRITICAL ALLERGIES &amp; WARNINGS" styleClass="title-small"/>
                                     </HBox>
                                     <FlowPane fx:id="paneAllergyChips" hgap="8" vgap="8">
@@ -115,7 +117,8 @@
                                     <HBox alignment="CENTER_LEFT">
                                         <Label text="3D MUSCULOSKELETAL INJURY MAPPING" styleClass="title-small"/>
                                         <Region HBox.hgrow="ALWAYS"/>
-                                        <M3IconButton fx:id="btnResetCamera" onAction="#onReset3DCamera">
+                                        <M3IconButton fx:id="btnResetCamera" onAction="#onReset3DCamera"
+                                                      accessibleText="Reset 3D camera to standard pose">
                                             <graphic><M3Icon symbolName="refresh"/></graphic>
                                         </M3IconButton>
                                     </HBox>
@@ -139,15 +142,22 @@
                                     <M3TextField fx:id="txtConditions" labelText="Chronic Conditions" supportingText="Comma-separated"
                                                  variant="OUTLINED"/>
                                     <M3TextField fx:id="txtAllergies" labelText="Allergies &amp; Contraindications"
+                                                 supportingText="Press Enter or + Add Allergy Tag to chip it"
                                                  variant="OUTLINED"/>
                                     <M3TextField fx:id="txtMedications" labelText="Active Medications &amp; Dosages"
+                                                 supportingText="Drug, dose, frequency"
                                                  variant="OUTLINED"/>
                                     <M3TextField fx:id="txtInjuries" labelText="Musculoskeletal Injuries History"
+                                                 supportingText="Year + body area, most recent first"
                                                  variant="OUTLINED"/>
                                     <M3Divider/>
                                     <Label text="ATTENDING PHYSICIAN" styleClass="label-large"/>
-                                    <M3TextField fx:id="txtDoctorName" labelText="Doctor Full Name" variant="OUTLINED"/>
-                                    <M3TextField fx:id="txtDoctorPhone" labelText="Doctor Emergency Phone" variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtDoctorName" labelText="Doctor Full Name"
+                                                 supportingText="Shown on the emergency biometrics card"
+                                                 variant="OUTLINED"/>
+                                    <M3TextField fx:id="txtDoctorPhone" labelText="Doctor Emergency Phone"
+                                                 supportingText="Digits only, e.g. 01055443322"
+                                                 variant="OUTLINED"/>
                                     <M3Divider/>
                                     <Label text="CLINICAL REHAB NOTES" styleClass="label-large"/>
                                     <TextArea fx:id="txtNotes" prefRowCount="4" wrapText="true"

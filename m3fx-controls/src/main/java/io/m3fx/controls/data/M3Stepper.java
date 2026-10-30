@@ -117,8 +117,6 @@ public class M3Stepper extends HBox {
             nodeCircle.setMinSize(32, 32);
             nodeCircle.setPrefSize(32, 32);
             nodeCircle.setMaxSize(32, 32);
-            nodeCircle.setAccessibleRole(javafx.scene.AccessibleRole.BUTTON);
-            nodeCircle.setAccessibleText("Step " + (i + 1) + ": " + stepTitles.get(i));
 
             if (isError) {
                 Circle c = new Circle(14);
@@ -149,8 +147,15 @@ public class M3Stepper extends HBox {
                 nodeCircle.getChildren().addAll(c, num);
             }
 
+            // Describe the step state, not just the label, and only advertise the button role on
+            // steps that actually activate (completed/error): a pending or active step must not
+            // offer activation that does nothing.
+            String state = isError ? ", error" : (isCompleted ? ", completed" : (isActive ? ", current" : ""));
+            nodeCircle.setAccessibleText("Step " + (i + 1) + ": " + stepTitles.get(i) + state);
+
             if (clickable) {
                 nodeCircle.getStyleClass().add("m3-stepper-clickable");
+                nodeCircle.setAccessibleRole(javafx.scene.AccessibleRole.BUTTON);
                 nodeCircle.setFocusTraversable(true);
                 nodeCircle.setOnMouseClicked(e -> setCurrentStep(stepIndex));
                 nodeCircle.setOnKeyPressed(e -> {

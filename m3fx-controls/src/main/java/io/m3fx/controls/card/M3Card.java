@@ -44,6 +44,8 @@ public class M3Card extends Control {
         variantProperty().addListener((obs, oldV, newV) -> updateStyleClass(oldV, newV));
         clickableProperty().addListener((obs, oldV, nowClickable) -> {
             setFocusTraversable(nowClickable);
+            // A clickable card behaves (and announces) like a button; a static one stays a node.
+            setAccessibleRole(nowClickable ? AccessibleRole.BUTTON : AccessibleRole.NODE);
             pseudoClassStateChanged(
                     javafx.css.PseudoClass.getPseudoClass("clickable"), nowClickable);
         });

@@ -47,17 +47,20 @@
                 <HBox alignment="CENTER_LEFT" styleClass="app-bar-container">
                     <M3TopAppBar fx:id="topAppBar" title="ATHLETE &amp; MEMBER ROSTER" variant="CENTER_ALIGNED" HBox.hgrow="ALWAYS">
                         <navigationIcon>
-                            <M3IconButton fx:id="btnNavMenu" onAction="#onToggleNavRail">
+                            <M3IconButton fx:id="btnNavMenu" onAction="#onToggleNavRail"
+                                          accessibleText="Roster menu: focus search or clear filters">
                                 <graphic><M3Icon symbolName="menu"/></graphic>
                             </M3IconButton>
                         </navigationIcon>
                     </M3TopAppBar>
                     <HBox alignment="CENTER_RIGHT" spacing="8">
                         <padding><Insets right="16"/></padding>
-                        <M3IconButton fx:id="btnExport" onAction="#onExportData">
+                        <M3IconButton fx:id="btnExport" onAction="#onExportData"
+                                      accessibleText="Export visible athletes as CSV to clipboard">
                             <graphic><M3Icon symbolName="arrow_drop_down"/></graphic>
                         </M3IconButton>
-                        <M3IconButton fx:id="btnHelp" onAction="#onShowHelp">
+                        <M3IconButton fx:id="btnHelp" onAction="#onShowHelp"
+                                      accessibleText="How the roster works">
                             <graphic><M3Icon symbolName="info"/></graphic>
                         </M3IconButton>
                     </HBox>
@@ -80,7 +83,7 @@
                     <M3StatCard fx:id="cardSuspended" title="SUSPENDED / HOLD" value="14"
                                 deltaText="Memberships Frozen" HBox.hgrow="ALWAYS"/>
                     <M3StatCard fx:id="cardNewThisMonth" title="NEW THIS MONTH" value="+86"
-                                deltaText="+12% vs Previous Mo" HBox.hgrow="ALWAYS"/>
+                                deltaText="+12% vs Previous Month" HBox.hgrow="ALWAYS"/>
                 </HBox>
 
                 <!-- Search and Filter Bar -->
@@ -100,7 +103,7 @@
                     <M3Chip fx:id="chipFilterExpiring" text="Expiring Soon" variant="FILTER" onAction="#onFilterChanged"/>
                 </FlowPane>
 
-                <!-- Virtualized Master Data Table -->
+                <!-- Virtualized Master Data Table: rows open the quick-peek sheet, headers sort -->
                 <M3DataTable fx:id="customerTable" VBox.vgrow="ALWAYS"/>
             </VBox>
         </center>
@@ -114,7 +117,8 @@
                 <HBox alignment="CENTER_LEFT">
                     <Label text="ATHLETE QUICK PEEK" styleClass="title-medium"/>
                     <Region HBox.hgrow="ALWAYS"/>
-                    <M3IconButton fx:id="btnCloseSideSheet" onAction="#onCloseSideSheet">
+                    <M3IconButton fx:id="btnCloseSideSheet" onAction="#onCloseSideSheet"
+                                  accessibleText="Close quick peek">
                         <graphic><M3Icon symbolName="close"/></graphic>
                     </M3IconButton>
                 </HBox>
@@ -129,7 +133,8 @@
                 <HBox spacing="8">
                     <M3Button fx:id="btnOpenFullProfile" text="Open Full Profile" variant="FILLED"
                               HBox.hgrow="ALWAYS" onAction="#onOpenSelectedProfile"/>
-                    <M3IconButton fx:id="btnDeleteCustomer" onAction="#onDeleteSelectedCustomer">
+                    <M3IconButton fx:id="btnDeleteCustomer" onAction="#onDeleteSelectedCustomer"
+                                  accessibleText="Delete selected athlete">
                         <graphic><M3Icon symbolName="delete"/></graphic>
                     </M3IconButton>
                 </HBox>

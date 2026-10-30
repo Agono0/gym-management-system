@@ -1,5 +1,7 @@
 package io.m3fx.controls.menu;
 
+import io.m3fx.controls.internal.MotionUtil;
+import io.m3fx.core.token.MotionTokens;
 import javafx.scene.control.CustomMenuItem;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
@@ -10,7 +12,8 @@ import javafx.stage.Popup;
  *
  * <p>See <a href="https://m3.material.io/components/menus/overview">M3 menus</a>. Surface
  * container, extra-small shape (4dp), elevation level 2; items are label-large with leading/trailing
- * icon support via {@link #item(String, javafx.scene.Node, Runnable)}.
+ * icon support via {@link #item(String, javafx.scene.Node, Runnable)}. Opens with a short
+ * token-driven fade-and-rise; ESC closes and focus returns to the opener (JavaFX popup behavior).
  */
 public class M3Menu {
 
@@ -101,6 +104,7 @@ public class M3Menu {
      */
     public void show(javafx.scene.Node owner, double screenX, double screenY) {
         popup.show(owner, screenX, screenY);
+        animateOpen();
     }
 
     /**
@@ -114,6 +118,19 @@ public class M3Menu {
             popup.show(owner, bounds.getMinX(), bounds.getMaxY() + 4);
         } else {
             popup.show(owner, 0, 0);
+        }
+        animateOpen();
+    }
+
+    /**
+     * Short token-driven open transition (fade + slight rise) on the popup's root so the menu
+     * settles instead of popping. Uses the shared slide-in helper; a menu hidden mid-animation
+     * simply discards its detached scene, so no cleanup is required.
+     */
+    private void animateOpen() {
+        javafx.scene.Scene scene = popup.getScene();
+        if (scene != null && scene.getRoot() != null) {
+            MotionUtil.slideIn(scene.getRoot(), 8, MotionTokens.DURATION_SHORT_3);
         }
     }
 

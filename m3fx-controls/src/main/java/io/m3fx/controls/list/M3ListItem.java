@@ -71,6 +71,24 @@ public class M3ListItem extends HBox {
         setSupporting(supporting);
         setLines(lines);
         rebuild();
+        // The row itself is not a control, so announce its text content for screen readers.
+        headlineProperty().addListener((obs, oldV, newV) -> updateAccessibleText());
+        supportingProperty().addListener((obs, oldV, newV) -> updateAccessibleText());
+        overlineProperty().addListener((obs, oldV, newV) -> updateAccessibleText());
+        updateAccessibleText();
+    }
+
+    /** Builds the announced text from the non-empty text lines, in visual order. */
+    private void updateAccessibleText() {
+        StringBuilder announced = new StringBuilder();
+        if (!getOverline().isEmpty()) {
+            announced.append(getOverline()).append(", ");
+        }
+        announced.append(getHeadline());
+        if (!getSupporting().isEmpty()) {
+            announced.append(", ").append(getSupporting());
+        }
+        setAccessibleText(announced.toString());
     }
 
     private void rebuild() {

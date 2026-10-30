@@ -1,6 +1,7 @@
 package io.m3fx.controls.command;
 
 import io.m3fx.controls.icon.M3Icon;
+import io.m3fx.controls.internal.MotionUtil;
 import io.m3fx.core.token.TypeScale;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -109,14 +110,24 @@ public class M3CommandPalette extends StackPane {
 
         searchField.textProperty().addListener((obs, o, n) -> filterResults(n));
         open.addListener((obs, o, n) -> {
-            setVisible(n);
-            setManaged(n);
             if (n) {
+                setVisible(true);
+                setManaged(true);
                 previousFocus = getScene() != null ? getScene().getFocusOwner() : null;
                 searchField.setText("");
                 filterResults("");
                 searchField.requestFocus();
+                // Token-driven fade + rise on the card so the palette settles in instead of
+                // popping (MotionUtil cancels any in-flight exit first).
+                MotionUtil.enter(card, MotionUtil.MotionDirection.UP);
             } else {
+                // Fade out, then drop from the layout once the exit finishes. Reopening during
+                // the exit is safe: MotionUtil.enter cancels the tracked exit before it can run
+                // its callback, so visibility is never left off after a quick re-open.
+                MotionUtil.exit(card, () -> {
+                    setVisible(false);
+                    setManaged(false);
+                });
                 Node owner = previousFocus;
                 previousFocus = null;
                 if (owner != null && owner.getScene() != null) {
@@ -171,6 +182,12 @@ public class M3CommandPalette extends StackPane {
             } else if (e.getCode() == KeyCode.UP) {
                 e.consume();
                 moveSelection(-1);
+            } else if (e.getCode() == KeyCode.HOME) {
+                e.consume();
+                moveSelectionTo(0);
+            } else if (e.getCode() == KeyCode.END) {
+                e.consume();
+                moveSelectionTo(filteredActions.size() - 1);
             } else if (e.getCode() == KeyCode.ENTER) {
                 e.consume();
                 executeSelected();
@@ -179,9 +196,18 @@ public class M3CommandPalette extends StackPane {
     }
 
     private void moveSelection(int delta) {
-        if (filteredActions.isEmpty()) return;
-        selectedIndex = Math.max(0, Math.min(filteredActions.size() - 1, selectedIndex + delta));
-        renderResults();
+        moveSelectionTo(selectedIndex + delta);
+    }
+
+    private void moveSelectionTo(int index) {
+        if (filteredActions.isEmpty()) {
+            return;
+        }
+        int clamped = Math.max(0, Math.min(filteredActions.size() - 1, index));
+        if (clamped != selectedIndex) {
+            selectedIndex = clamped;
+            ensureSelectedVisible(renderResults());
+        }
     }
 
     private void executeSelected() {
@@ -207,20 +233,25 @@ public class M3CommandPalette extends StackPane {
             }
         }
         selectedIndex = 0;
-        renderResults();
+        ensureSelectedVisible(renderResults());
     }
 
-    private void renderResults() {
+    /**
+     * Rebuilds the result rows; returns the selected row (or {@code null} when nothing matches),
+     * so keyboard callers can scroll it into view while mouse callers skip the scroll.
+     */
+    private HBox renderResults() {
         resultsContainer.getChildren().clear();
 
         if (filteredActions.isEmpty()) {
             Label empty = new Label("No matching commands found");
             empty.setStyle("-fx-text-fill: -md-sys-color-on-surface-variant; -fx-padding: 20;");
             resultsContainer.getChildren().add(empty);
-            return;
+            return null;
         }
 
         String currentCat = "";
+        HBox selectedRow = null;
 
         for (int i = 0; i < filteredActions.size(); i++) {
             CommandAction act = filteredActions.get(i);
@@ -242,6 +273,7 @@ public class M3CommandPalette extends StackPane {
             row.getStyleClass().add("m3-command-palette-row");
             if (isSelected) {
                 row.getStyleClass().add("selected");
+                selectedRow = row;
             }
 
             M3Icon icon = M3Icon.symbol(act.iconName != null ? act.iconName : "arrow_forward");
@@ -273,10 +305,48 @@ public class M3CommandPalette extends StackPane {
 
             resultsContainer.getChildren().add(row);
         }
+
+        return selectedRow;
+    }
+
+    /**
+     * Keeps the arrow-key selection on screen: after layout, scrolls so the selected row is
+     * visible (centers it when it fits, clamps at the list ends). No-op for mouse hover, where
+     * the row is by definition already visible.
+     */
+    private void ensureSelectedVisible(HBox selectedRow) {
+        if (selectedRow == null) {
+            return;
+        }
+        javafx.application.Platform.runLater(() -> {
+            if (selectedRow.getScene() == null) {
+                return;
+            }
+            double contentHeight = resultsContainer.getHeight();
+            double viewHeight = scrollPane.getViewportBounds().getHeight();
+            if (contentHeight <= 0 || viewHeight <= 0 || contentHeight <= viewHeight) {
+                return; // nothing to scroll (not laid out yet, or everything fits)
+            }
+            double rowTop = selectedRow.getBoundsInParent().getMinY();
+            double rowHeight = selectedRow.getBoundsInParent().getHeight();
+            double offset = rowTop - (viewHeight - rowHeight) / 2.0;
+            double maxOffset = contentHeight - viewHeight;
+            offset = Math.max(0, Math.min(maxOffset, offset));
+            scrollPane.setVvalue(offset / maxOffset);
+        });
     }
 
     public ObservableList<CommandAction> getMasterActions() {
         return masterActions;
+    }
+
+    /**
+     * Returns the palette's search input, so hosts can prefill or observe the query text.
+     *
+     * @return the search text field
+     */
+    public TextField getSearchField() {
+        return searchField;
     }
 
     public BooleanProperty openProperty() {

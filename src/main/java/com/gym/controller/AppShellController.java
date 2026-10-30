@@ -5,6 +5,8 @@ import io.m3fx.controls.button.M3SplitButton;
 import io.m3fx.controls.chip.M3Chip;
 import io.m3fx.controls.command.M3CommandPalette;
 import io.m3fx.controls.effect.M3PulseBeacon;
+import io.m3fx.controls.icon.M3Icon;
+import io.m3fx.controls.iconbutton.IconButtonVariant;
 import io.m3fx.controls.iconbutton.M3IconButton;
 import io.m3fx.controls.internal.MotionUtil;
 import io.m3fx.controls.internal.SpringAnimation;
@@ -13,15 +15,20 @@ import io.m3fx.controls.selection.M3Switch;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.fxml.FXML;
 import javafx.geometry.Bounds;
+import javafx.geometry.Pos;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Toggle;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Controller skeleton for Adaptive Application Shell (app-shell.fxml).
@@ -52,6 +59,13 @@ public class AppShellController {
     /** Spring-driven pill size (a Region's width/height are read-only during layout). */
     private final SimpleDoubleProperty pillWidth = new SimpleDoubleProperty();
     private final SimpleDoubleProperty pillHeight = new SimpleDoubleProperty();
+
+    /** Compact icon button displayed in the rail header when collapsed. */
+    private M3IconButton collapsedActionBtn;
+    /** Cached list of all navigation destination toggle buttons. */
+    private final List<ToggleButton> navButtons = new ArrayList<>();
+    /** Rail collapsed state. */
+    private boolean railCollapsed = false;
 
     /**
      * The Apple-style launch gate (splash → login → morph), created lazily and reused for
@@ -92,6 +106,7 @@ public class AppShellController {
     @FXML
     public void initialize() {
         if (navigationRail != null) {
+            setupNavigationRail();
             javafx.application.Platform.runLater(() -> {
                 javafx.scene.control.ScrollPane railScroll = (javafx.scene.control.ScrollPane) navigationRail.lookup(".rail-scroll-pane");
                 if (railScroll != null) {
@@ -102,6 +117,37 @@ public class AppShellController {
         }
         loadScreen("dashboard.fxml");
         initCommandPalette();
+    }
+
+    private void setupNavigationRail() {
+        navButtons.clear();
+        if (navDashboard != null) navButtons.add(navDashboard);
+        if (navCustomers != null) navButtons.add(navCustomers);
+        if (navTrainers != null) navButtons.add(navTrainers);
+        if (navSchedule != null) navButtons.add(navSchedule);
+        if (navMemberships != null) navButtons.add(navMemberships);
+        if (navEquipment != null) navButtons.add(navEquipment);
+        if (navAttendance != null) navButtons.add(navAttendance);
+        if (navPayments != null) navButtons.add(navPayments);
+        if (navStaff != null) navButtons.add(navStaff);
+        if (navHelp != null) navButtons.add(navHelp);
+
+        for (ToggleButton btn : navButtons) {
+            btn.setMinHeight(48.0);
+            btn.setPrefHeight(48.0);
+            btn.setGraphicTextGap(12.0);
+            Tooltip.install(btn, new Tooltip(btn.getText()));
+        }
+
+        if (globalActionSplitBtn != null && globalActionSplitBtn.getParent() instanceof javafx.scene.layout.Pane actionContainer) {
+            collapsedActionBtn = new M3IconButton(M3Icon.symbol("bolt"), IconButtonVariant.FILLED);
+            collapsedActionBtn.setAccessibleText("Fast Check-In");
+            Tooltip.install(collapsedActionBtn, new Tooltip("Fast Check-In"));
+            collapsedActionBtn.setOnAction(e -> onFastCheckIn());
+            collapsedActionBtn.setVisible(false);
+            collapsedActionBtn.setManaged(false);
+            actionContainer.getChildren().add(collapsedActionBtn);
+        }
     }
 
     /**
@@ -390,9 +436,64 @@ public class AppShellController {
 
     @FXML
     public void onToggleRail() {
-        if (navigationRail != null) {
-            double currentW = navigationRail.getPrefWidth();
-            navigationRail.setPrefWidth(currentW > 100 ? 72 : 220);
+        if (navigationRail == null) return;
+        railCollapsed = !railCollapsed;
+        double targetWidth = railCollapsed ? 80.0 : 220.0;
+
+        if (railCollapsed) {
+            if (!navigationRail.getStyleClass().contains("collapsed")) {
+                navigationRail.getStyleClass().add("collapsed");
+            }
+            for (ToggleButton btn : navButtons) {
+                btn.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+                btn.setAlignment(Pos.CENTER);
+            }
+            if (globalActionSplitBtn != null) {
+                globalActionSplitBtn.setVisible(false);
+                globalActionSplitBtn.setManaged(false);
+            }
+            if (collapsedActionBtn != null) {
+                collapsedActionBtn.setVisible(true);
+                collapsedActionBtn.setManaged(true);
+            }
+        } else {
+            navigationRail.getStyleClass().remove("collapsed");
+            if (collapsedActionBtn != null) {
+                collapsedActionBtn.setVisible(false);
+                collapsedActionBtn.setManaged(false);
+            }
+            if (globalActionSplitBtn != null) {
+                globalActionSplitBtn.setVisible(true);
+                globalActionSplitBtn.setManaged(true);
+            }
+        }
+
+        if (navigationRail.getScene() != null) {
+            SpringAnimation.animate(navigationRail.prefWidthProperty(), targetWidth, SpringAnimation.FAST, () -> {
+                navigationRail.setPrefWidth(targetWidth);
+                if (!railCollapsed) {
+                    for (ToggleButton btn : navButtons) {
+                        btn.setContentDisplay(ContentDisplay.LEFT);
+                        btn.setAlignment(Pos.CENTER_LEFT);
+                    }
+                }
+                javafx.application.Platform.runLater(() -> {
+                    if (navHighlightPill != null && lastPillTarget != null) {
+                        moveNavPill(lastPillTarget, false);
+                    }
+                });
+            });
+        } else {
+            navigationRail.setPrefWidth(targetWidth);
+            if (!railCollapsed) {
+                for (ToggleButton btn : navButtons) {
+                    btn.setContentDisplay(ContentDisplay.LEFT);
+                    btn.setAlignment(Pos.CENTER_LEFT);
+                }
+            }
+            if (navHighlightPill != null && lastPillTarget != null) {
+                moveNavPill(lastPillTarget, false);
+            }
         }
     }
 

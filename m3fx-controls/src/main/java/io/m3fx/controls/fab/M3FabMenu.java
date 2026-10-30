@@ -12,10 +12,13 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * M3 Expressive FAB menu: a FAB that expands into a vertical stack of small action FABs with
@@ -30,6 +33,7 @@ public class M3FabMenu extends StackPane {
 
     private final M3Fab mainFab;
     private final VBox actionsBox = new VBox(12);
+    private final List<M3Fab> actionFabs = new ArrayList<>();
     private final BooleanProperty expanded = new SimpleBooleanProperty(this, "expanded", false);
 
     /**
@@ -85,14 +89,34 @@ public class M3FabMenu extends StackPane {
         HBox row = new HBox(8, text, actionFab);
         row.setAlignment(Pos.CENTER_RIGHT);
         row.getStyleClass().add("m3-fab-menu-row");
+        // Clicking anywhere on the row runs the action (bigger hit target); a click landing on
+        // the FAB itself must not fire a second time.
+        row.setCursor(javafx.scene.Cursor.HAND);
+        row.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
+            if (!isInside(actionFab, e.getTarget()) && !actionFab.isDisabled()) {
+                actionFab.fire();
+                e.consume();
+            }
+        });
         actionFab.setOnAction(e -> {
             if (handler != null) {
                 handler.run();
             }
             collapse();
         });
+        actionFabs.add(actionFab);
         actionsBox.getChildren().add(row);
         return this;
+    }
+
+    /** True when {@code target} is {@code container} itself or any descendant of it. */
+    private static boolean isInside(Node container, javafx.event.EventTarget target) {
+        for (Node node = target instanceof Node n ? n : null; node != null; node = node.getParent()) {
+            if (node == container) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -190,6 +214,18 @@ public class M3FabMenu extends StackPane {
         }
         if (!open && count == 0) {
             actionsBox.setVisible(false);
+        }
+        // Keyboard flow: opening moves focus to the first action, closing returns it to the FAB
+        // (Escape collapses, so the FAB regains focus and Tab order resumes from there).
+        if (open) {
+            for (M3Fab action : actionFabs) {
+                if (!action.isDisabled()) {
+                    action.requestFocus();
+                    break;
+                }
+            }
+        } else {
+            mainFab.requestFocus();
         }
     }
 }

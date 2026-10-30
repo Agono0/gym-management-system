@@ -91,9 +91,12 @@
                     </content>
                 </M3Card>
 
-                <!-- Interactive 7-Day Slot Matrix Grid -->
+                <!-- Interactive Annual Booking Calendar -->
                 <VBox spacing="8" VBox.vgrow="ALWAYS">
-                    <Label text="7-Day Interactive Hourly Slot Matrix" styleClass="title-medium" />
+                    <HBox spacing="12" alignment="CENTER_LEFT">
+                        <Label text="Booking Activity Calendar" styleClass="title-medium" />
+                        <Label text="One cell per day; darker cells mean more booked slots" styleClass="body-small" />
+                    </HBox>
                     <M3ActivityCalendar fx:id="calendarGrid" minHeight="540.0" VBox.vgrow="ALWAYS" />
                 </VBox>
 
@@ -136,7 +139,7 @@
                 <HBox alignment="CENTER_LEFT">
                     <Label text="Batch Publish Hourly Availability Slots" styleClass="headline-small" />
                     <Region HBox.hgrow="ALWAYS" />
-                    <M3IconButton fx:id="btnCloseBottomSheet" onAction="#onCloseBottomSheet">
+                    <M3IconButton fx:id="btnCloseBottomSheet" accessibleText="Close batch publisher" onAction="#onCloseBottomSheet">
                         <graphic><M3Icon symbolName="close" /></graphic>
                     </M3IconButton>
                 </HBox>

@@ -4,13 +4,22 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import io.m3fx.controls.data.M3Timeline.Status;
 import io.m3fx.controls.icon.M3Icon;
+import io.m3fx.controls.search.M3SearchBar;
 import javafx.application.Platform;
+import javafx.scene.Cursor;
+import javafx.scene.Node;
+import javafx.scene.control.Label;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Unit tests for Phase 4 Advanced Enterprise & Telemetry Components.
@@ -252,6 +261,194 @@ class M3DataComponentsTest {
             dial.setExpanded(false);
             assertFalse(dial.isExpanded());
         });
+    }
+
+    // =========================================================================
+    // UX polish: empty states, pagination clamping, row actions, header sort a11y
+    // =========================================================================
+
+    @Test
+    void dataTableEmptyStateShowsQuietPlaceholderAndClearsWhenItemsArrive() throws Throwable {
+        runOnFx(() -> {
+            M3DataTable<String> table = new M3DataTable<>();
+            table.getColumns().add(new M3DataTable.Column<>("Name", String::toString, 140));
+
+            VBox rows = (VBox) table.getChildren().get(2);
+            assertEquals(1, rows.getChildren().size(), "Empty table shows one placeholder row");
+            Node empty = rows.getChildren().get(0);
+            assertTrue(empty.getStyleClass().contains("m3-data-table-empty"),
+                    "Placeholder carries the m3-data-table-empty style class");
+            assertEquals("No items", ((Label) empty).getText());
+
+            table.getItems().addAll("Alice", "Bob");
+
+            rows = (VBox) table.getChildren().get(2);
+            assertEquals(2, rows.getChildren().size(), "Placeholder is replaced by real rows");
+            assertEquals("Alice", cellText(rows, 0));
+        });
+    }
+
+    @Test
+    void dataTableFilteredEmptyStateSaysNoMatchingItems() throws Throwable {
+        runOnFx(() -> {
+            M3DataTable<String> table = new M3DataTable<>();
+            table.getColumns().add(new M3DataTable.Column<>("Name", String::toString, 140));
+            table.getItems().addAll("Alice", "Bob");
+
+            M3SearchBar search = (M3SearchBar) table.getChildren().get(0);
+            search.setQuery("zzz-no-match");
+
+            VBox rows = (VBox) table.getChildren().get(2);
+            assertEquals(1, rows.getChildren().size());
+            assertEquals("No matching items", ((Label) rows.getChildren().get(0)).getText());
+
+            search.setQuery("");
+            rows = (VBox) table.getChildren().get(2);
+            assertEquals(2, rows.getChildren().size(), "Rows return when the filter clears");
+        });
+    }
+
+    @Test
+    void dataTablePageSizeChangeClampsCurrentPage() throws Throwable {
+        runOnFx(() -> {
+            M3DataTable<String> table = new M3DataTable<>();
+            table.getColumns().add(new M3DataTable.Column<>("Name", String::toString, 140));
+            table.setPageSize(2);
+            for (int i = 1; i <= 5; i++) {
+                table.getItems().add("M" + i);
+            }
+
+            table.nextPage();
+            table.nextPage();
+            assertEquals(2, table.getCurrentPage(), "Last page of three reached");
+
+            // Shrinking the page set (5 items / 4 per page = 2 pages) must pull the page back
+            // in range instead of rendering a stale out-of-range page.
+            table.setPageSize(4);
+            assertEquals(1, table.getCurrentPage(), "currentPage clamped to the new last page");
+
+            table.setPageSize(10);
+            assertEquals(0, table.getCurrentPage(), "Single-page table clamps to page 0");
+        });
+    }
+
+    @Test
+    void dataTableRowActionActivatesByMouseAndKeyboard() throws Throwable {
+        runOnFx(() -> {
+            M3DataTable<String> table = new M3DataTable<>();
+            table.getColumns().add(new M3DataTable.Column<>("Name", String::toString, 140));
+            table.getItems().addAll("Alice", "Bob");
+
+            // Without a handler rows are presentational: default cursor, no Tab focus.
+            VBox rows = (VBox) table.getChildren().get(2);
+            HBox passiveRow = (HBox) rows.getChildren().get(0);
+            assertEquals(Cursor.DEFAULT, passiveRow.getCursor(),
+                    "No hand cursor without a row action");
+            assertFalse(passiveRow.isFocusTraversable());
+
+            AtomicReference<String> activated = new AtomicReference<>();
+            table.setOnRowAction(activated::set);
+
+            rows = (VBox) table.getChildren().get(2);
+            HBox secondRow = (HBox) rows.getChildren().get(1);
+            assertEquals(Cursor.HAND, secondRow.getCursor(), "Hand cursor signals interactivity");
+            assertTrue(secondRow.isFocusTraversable(), "Row is Tab-reachable");
+            assertEquals("Bob", secondRow.getAccessibleText(),
+                    "Row exposes its leading value to screen readers");
+
+            secondRow.fireEvent(keyPress(KeyCode.ENTER));
+            assertEquals("Bob", activated.get(), "Enter activates the focused row");
+
+            secondRow.fireEvent(keyPress(KeyCode.SPACE));
+            assertEquals("Bob", activated.get(), "Space activates the focused row");
+        });
+    }
+
+    @Test
+    void dataTableHeaderSortIsKeyboardOperableAndAnnouncesDirection() throws Throwable {
+        runOnFx(() -> {
+            M3DataTable<String> table = new M3DataTable<>();
+            table.getColumns().add(new M3DataTable.Column<>("Name", String::toString, 140));
+            table.getItems().addAll("Cara", "Alice", "Bob");
+
+            HBox headerRow = (HBox) table.getChildren().get(1);
+            Label header = (Label) headerRow.getChildren().get(0);
+            assertTrue(header.isFocusTraversable(), "Sortable header is Tab-reachable");
+
+            header.fireEvent(keyPress(KeyCode.ENTER));
+            assertTrue(header.getText().contains("\u25B2"), "Ascending arrow after Enter");
+            assertEquals("Sorted ascending by Name", header.getAccessibleText());
+
+            header.fireEvent(keyPress(KeyCode.ENTER));
+            assertTrue(header.getText().contains("\u25BC"), "Descending arrow after second Enter");
+            assertEquals("Sorted descending by Name", header.getAccessibleText());
+
+            header.fireEvent(keyPress(KeyCode.ENTER));
+            assertEquals("Name", header.getText(), "Third Enter clears the sort");
+            assertEquals("Sort by Name", header.getAccessibleText());
+        });
+    }
+
+    @Test
+    void stepperOnlyClickableStepsAdvertiseTheButtonRole() throws Throwable {
+        runOnFx(() -> {
+            M3Stepper stepper = new M3Stepper("Profile", "Plan", "Payment", "Confirm");
+            stepper.setCurrentStep(2); // steps 0,1 completed (clickable); 2 active; 3 pending
+
+            // Children alternate [stepBox, connectorBand, stepBox, ...]
+            javafx.scene.layout.StackPane circle0 =
+                    circleOf((VBox) stepper.getChildren().get(0));
+            javafx.scene.layout.StackPane circle2 =
+                    circleOf((VBox) stepper.getChildren().get(4));
+            javafx.scene.layout.StackPane circle3 =
+                    circleOf((VBox) stepper.getChildren().get(6));
+
+            assertEquals(javafx.scene.AccessibleRole.BUTTON, circle0.getAccessibleRole(),
+                    "Completed step is a button");
+            assertTrue(circle0.getAccessibleText().contains(", completed"));
+
+            assertNotEquals(javafx.scene.AccessibleRole.BUTTON, circle2.getAccessibleRole(),
+                    "Active step is not a fake button");
+            assertTrue(circle2.getAccessibleText().contains(", current"));
+
+            assertNotEquals(javafx.scene.AccessibleRole.BUTTON, circle3.getAccessibleRole(),
+                    "Pending step is not a fake button");
+            assertTrue(circle3.getAccessibleText().startsWith("Step 4: Confirm"));
+        });
+    }
+
+    @Test
+    void speedDialDisabledActionItemCannotActivate() throws Throwable {
+        runOnFx(() -> {
+            M3SpeedDial dial = new M3SpeedDial();
+            AtomicBoolean firstRun = new AtomicBoolean(false);
+            AtomicBoolean secondRun = new AtomicBoolean(false);
+            dial.addAction("Add Member", M3Icon.symbol("person"), () -> firstRun.set(true));
+            dial.addAction("Add Workout", M3Icon.symbol("star"), () -> secondRun.set(true));
+
+            // dial children: [dialPane, triggerButton]; dial items live in the pane
+            javafx.scene.layout.Pane dialPane = (javafx.scene.layout.Pane) dial.getChildren().get(0);
+            javafx.scene.Node firstItem = dialPane.getChildren().get(0);
+            assertFalse(firstItem.isDisabled(), "Actions start enabled");
+
+            dial.setActionEnabled(0, false);
+            assertTrue(firstItem.isDisabled(), "Disabled action renders a disabled button");
+            assertFalse(dial.isExpanded());
+
+            dial.setActionEnabled(1, false);
+            dial.setActionEnabled(1, true);
+            assertFalse(dialPane.getChildren().get(1).isDisabled(),
+                    "Re-enabled action is clickable again");
+        });
+    }
+
+    private static javafx.scene.layout.StackPane circleOf(VBox stepBox) {
+        return (javafx.scene.layout.StackPane) stepBox.getChildren().get(0);
+    }
+
+    private static KeyEvent keyPress(KeyCode code) {
+        return new KeyEvent(KeyEvent.KEY_PRESSED, KeyEvent.CHAR_UNDEFINED, "", code,
+                false, false, false, false);
     }
 }
 

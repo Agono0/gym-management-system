@@ -87,6 +87,7 @@ public class M3SplitButton extends HBox {
         getStyleClass().addAll("m3-split-button", "m3-split-button-" + safeVariant.name().toLowerCase());
         setAlignment(Pos.CENTER_LEFT);
         setSpacing(0);
+        setMinWidth(Region.USE_PREF_SIZE);
 
         this.leadingButton = new M3Button(text, safeVariant);
         this.leadingButton.getStyleClass().add("m3-split-button-leading");

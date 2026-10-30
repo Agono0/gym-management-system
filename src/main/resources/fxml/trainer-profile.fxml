@@ -77,10 +77,8 @@
                         </VBox>
 
                         <VBox spacing="8" alignment="CENTER_RIGHT">
-                            <HBox spacing="8" alignment="CENTER_RIGHT">
-                                <Label text="Hourly Rate (\$):" styleClass="label-medium" />
-                                <M3TextField fx:id="txtHourlyRate" labelText="Hourly Rate" prefWidth="120.0" />
-                            </HBox>
+                            <M3TextField fx:id="txtHourlyRate" labelText="Hourly Rate (\$)"
+                                         supportingText="USD per session hour" prefWidth="120.0" />
                             <M3GaugeChart fx:id="gaugeCapacity" prefWidth="160.0" prefHeight="160.0" />
                             <Label fx:id="lblCapacityText" text="Saturation: 23 / 25 Athletes (92%)" styleClass="label-small" />
                         </VBox>
@@ -195,7 +193,7 @@
                 <HBox alignment="CENTER_LEFT">
                     <Label text="Athlete Clinical Dossier" styleClass="headline-small" />
                     <Region HBox.hgrow="ALWAYS" />
-                    <M3IconButton fx:id="btnCloseMedicalFlyout" onAction="#onCloseMedical">
+                    <M3IconButton fx:id="btnCloseMedicalFlyout" accessibleText="Close clinical dossier" onAction="#onCloseMedical">
                         <graphic><M3Icon symbolName="close" /></graphic>
                     </M3IconButton>
                 </HBox>

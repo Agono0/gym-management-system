@@ -180,11 +180,19 @@ public class M3Calendar extends Control {
             case HOME -> next = current.withDayOfMonth(1);
             case END -> next = current.withDayOfMonth(YearMonth.from(current).lengthOfMonth());
             case PAGE_UP -> {
-                setYearMonth(getYearMonth().minusMonths(1));
+                // Same range guard as the header's previous-month button, so keyboard month
+                // navigation can never land on a month that is entirely disabled.
+                YearMonth target = getYearMonth().minusMonths(1);
+                if (getMinDate() == null || YearMonth.from(getMinDate()).compareTo(target) <= 0) {
+                    setYearMonth(target);
+                }
                 event.consume();
             }
             case PAGE_DOWN -> {
-                setYearMonth(getYearMonth().plusMonths(1));
+                YearMonth target = getYearMonth().plusMonths(1);
+                if (getMaxDate() == null || YearMonth.from(getMaxDate()).compareTo(target) >= 0) {
+                    setYearMonth(target);
+                }
                 event.consume();
             }
             case ENTER, SPACE -> {
@@ -301,6 +309,17 @@ public class M3Calendar extends Control {
                     boolean disabled = control.isDisabledDate(date);
                     dayButton.setDisable(disabled);
                     dayButton.pseudoClassStateChanged(TODAY_PC, date.equals(LocalDate.now()));
+                    boolean selectedToday = date.equals(control.getSelectedDate())
+                            && date.equals(LocalDate.now());
+                    if (selectedToday) {
+                        // The stylesheet's :today rule ties with :selected and loads later, so
+                        // today+selected would render primary-on-primary (invisible). Keep the
+                        // on-primary text until the combined :selected:today rule lands in
+                        // m3fx.css (see CSS REQUESTS), which should replace this workaround.
+                        dayButton.setStyle("-fx-text-fill: -md-sys-color-on-primary;");
+                    } else {
+                        dayButton.setStyle("");
+                    }
                     dayButton.setAccessibleText(date.getDayOfMonth() + " "
                             + date.getMonth().getDisplayName(TextStyle.SHORT, Locale.getDefault())
                             + (date.equals(LocalDate.now()) ? ", today" : "")
