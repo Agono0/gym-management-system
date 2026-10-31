@@ -209,6 +209,9 @@ throwaway file to production code.
 **How to write it.** Do not extend it. When the real shell lands, `MainApp` loads the shell FXML, and
 this file either moves to `../java/com/gym/M3Samples.java`'s test window (the git-ignored
 `M3Samples` class already exists for that, see `build.gradle` → `runSamples`) or is deleted.
+Note: `gradlew runSamples` requires that local, git-ignored `M3Samples.java` harness
+(`.gitignore`: `src/main/java/com/gym/M3Samples.java`) and fails on a fresh clone without it —
+it is a developer-side testing tool, never part of the shipped build.
 
 **How to know it is right.** `gradlew run` shows both tabs and nothing throws. It must never be the
 file the shipped app opens.

@@ -417,7 +417,7 @@ Run this list in order; every row is something you can show someone.
 - Writing this guide did not include launching the GUI, so row 2 is a check for a human, not a recorded result. What *is* verified: `.\gradlew.bat build` is green, and `MainApp.java` loads `/fxml/main.fxml`.
 - ⚠️ Rows 4 and 5 do not pass today. `MainApp` has no `M3Stylesheets.applyTo(...)` call (`docs/COVERAGE.md` records "no theme call"), and no code creates `gym.db`: `model/`, `dao/`, `service/`, `controller/`, `util/` contain only `README.md` files, and `src/main/resources/db/` holds only `.gitkeep`. Section 6 documents the convention the DAO layer must implement.
 - `src/main/resources/db/schema.sql` is not committed yet (`docs/COVERAGE.md` lists it unticked; `src/main/resources/README.md` calls it "planned Week 1").
-- The nav shell and themed `MainApp` are blocked on a public `m3fx` overlay entry point (`DECISIONS.md` 35) — that is a library change, not an app change.
+- ~~The nav shell and themed `MainApp` are blocked on a public `m3fx` overlay entry point (`DECISIONS.md` 35)~~ **resolved** — the library now ships the public `M3Overlay` facade and the shell (`GymApp` → `app-shell.fxml`) is shipped.
 
 ### Open details to settle later
 
@@ -426,8 +426,8 @@ Each of these is a real choice the repository does not make yet. Decide, then re
 | **Open detail (decide + log in `DECISIONS.md`)** | Why it is open | What it would change |
 |---|---|---|
 | add a formatter plugin (`spotless` with `google-java-format`) | `AGENTS.md` §6 asks for one formatter config; `PLAN.md` Phase 0 says none is set up in this repo | one plugin block in the root build; today every reviewer formats by hand |
-| add app tests (`src/test`, JUnit 5, maybe TestFX) | the `java` plugin registers `test`, but the app has no test sources — verified `:test NO-SOURCE` — and `README.md` §11 says the app deliberately ships without automated tests | decides whether that stays deliberate; TestFX would be a new dependency needing approval (`AGENTS.md` §9) |
-| put `options.release = 21` in the root `build.gradle` | the two module builds set it and the app does not — verified `MainApp.class` = major 71, `M3Theme.class` = major 65 (§4.2) — while `DECISIONS.md` 2 states the language level is 21 | one line, or an explicit note that the app is the exception |
-| put `options.encoding = 'UTF-8'` in the root `build.gradle` | both module builds set it; the root build does not | avoids platform-default-encoding surprises for non-ASCII source on a teammate's machine |
+| ~~add app tests~~ **settled** | the app now has 9 test classes / 59 tests in `src/test/java/com/gym/fxml/` (headless JavaFX harness, JUnit 5 — no TestFX); `README.md` §11 documents the suite | nothing left to decide; `./gradlew test` runs it |
+| ~~put `options.release = 21` in the root `build.gradle`~~ **settled** | the root build now sets `options.release = 21` in its `JavaCompile` block (alongside the two module builds) | nothing left to decide |
+| ~~put `options.encoding = 'UTF-8'` in the root `build.gradle`~~ **settled** | the root build now sets `options.encoding = 'UTF-8'` for every `JavaCompile` task | nothing left to decide |
 | add a `gradle.properties` (daemon heap, build cache, configuration cache) | the repo has none, so Gradle defaults apply; Gradle 9.8 prints "Consider enabling configuration cache" on every build | faster repeat builds, but one committed file changes behaviour for everyone |
 | decide the toolchain auto-download policy | Gradle 9.8 here reports `Auto-download: Enabled` and has already provisioned a Temurin JDK 17 into `%USERPROFILE%\.gradle\jdks` | either accept Gradle downloading JDKs (needs network), or pin `org.gradle.java.installations.paths` / disable auto-download and require a manual JDK 27 install |

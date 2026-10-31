@@ -1,9 +1,12 @@
 # UML — Gym Management System (JavaFX)
 
-> **Status: design specification, not a description of shipped code.** This document is the agreed
-> target design. As of this revision the repository contains the `m3fx` library, a component
-> showcase (`fxml/main.fxml`, no controller) and `com.gym.MainApp` — the classes below are *planned*.
-> See `docs/COVERAGE.md` for what is actually built.
+> **Status: design specification for the backend; partly shipped for the UI.** The `m3fx` library,
+> the `MainApp` component gallery, the `GymApp` shell launcher and **all 20 controllers with their
+> 19 FXML screens + `app-shell.fxml`** are shipped (running on demo data held in the controllers —
+> see §5 and the runtime-spine section there). Everything behind the controllers — the `model/`,
+> `dao/`, `service/`, `util/` layers, the 19 business rules and the SQLite persistence — is
+> **planned, not built**, and every edge drawn to a `*Service`, `SessionContext` or a `*Dao`
+> describes target wiring, not shipped code. `docs/COVERAGE.md` tracks exactly what exists.
 >
 > **Two domain diagrams, then five per-layer zoom-ins** (architecture, data access, services,
 > controllers, utilities). Each class is drawn in full exactly once; a later diagram repeats a
@@ -565,26 +568,42 @@ classDiagram
 
 ```mermaid
 flowchart TD
-    APP[MainApp<br/>entry point, nav shell, theme, overlay layer] --> CTRL[Controllers<br/>16 FXML screens]
-    CTRL --> SRV[Services<br/>validation + business rules]
-    SRV --> DAO[DAOs<br/>SQLite persistence]
-    DAO --> DB[(SQLite<br/>gym.db)]
+    APP[GymApp / MainApp<br/>entry points, shell, theme] --> CTRL[Controllers<br/>19 FXML screens + app shell — shipped, demo data]
+    CTRL -. planned .-> SRV[Services<br/>validation + business rules — planned]
+    SRV -. planned .-> DAO[DAOs<br/>SQLite persistence — planned]
+    DAO -. planned .-> DB[(SQLite<br/>gym.db — planned)]
     M3FX[External: m3fx library<br/>M3 theme + components] -. styles .-> APP
     M3FX -. styles .-> CTRL
-    UTIL[util<br/>DbConnection, DaoException, Validators, DateUtils,<br/>FxUtils, ChartUtils, SessionContext, PasswordUtils] -. supports .-> SRV
+    UTIL[util — planned<br/>DbConnection, DaoException, Validators, DateUtils,<br/>FxUtils, ChartUtils, SessionContext, PasswordUtils] -. supports .-> SRV
     UTIL -. supports .-> CTRL
     UTIL -. supports .-> DAO
 ```
 
-Layer rules:
+Layer rules (the standard the planned backend must meet; the shipped controller layer already follows
+the controller-side half):
 - Controllers never contain SQL and never touch a DAO directly — always through a service.
 - Services and DAOs never import JavaFX. `FxUtils` is the only JavaFX-aware utility and only
   controllers depend on it.
 - `DaoException` is thrown by every `*DaoImpl`, caught in the controller, and shown with
   `FxUtils.error(getMessage())`. Services never format a message for display.
 
-Startup and session flow (the boundary path, shown here because `MainApp` and `SessionContext`
-are the two classes that sit outside the four layers):
+**Shipped startup and session flow (Oct 2026).** What actually runs:
+
+1. `GymApp.start(Stage)` builds `M3Theme.fromSeed(SEED_PURPLE, TONAL_SPOT, dark)`, registers it with
+   `M3Stylesheets.setLatestTheme` (so FXML inflation resolves colors), loads `/fxml/app-shell.fxml`
+   into a maximized 1280×800 scene, and starts a freeze watchdog (diagnostics thread; dumps FX +
+   QuantumRenderer stacks to stderr if the FX thread stays >60% busy for 4 s — `DECISIONS.md` 70).
+2. For a real run (`main()` sets `SHOW_LAUNCH_GATES=true`), `AppShellController.beginLaunchGates()`
+   hands off to `LaunchGateController`: code-built splash → glass login card (shared-element morph)
+   → shell. **Demo auth: any email + a password of 4+ characters signs in**; invalid input shakes
+   the card (`DECISIONS.md` 71). Tests call `start(Stage)` directly with the flag `false` and get
+   the plain shell.
+3. `AppShellController.loadScreen(fxmlName)` / `openScreenViaRail(...)` swap the 19 screens inside
+   `contentArea`; sign-out reverses into the gate.
+
+**Planned startup and session flow** (the boundary path below describes the target, shown because
+`MainApp` and `SessionContext` are the two classes that sit outside the four layers — none of steps
+1–4 exists yet):
 
 1. `MainApp.start(Stage)` applies the theme (`M3Stylesheets.applyTo`), builds the nav shell and
    overlay layer, and opens `LoginController`.
@@ -596,6 +615,10 @@ are the two classes that sit outside the four layers):
    `MainApp` clears it again on exit as a safety net.
 
 ## 3. Data access layer
+
+> **Planned, not built.** No DAO, `DbConnection` or `DaoException` class exists in the repository
+> yet; there is no SQLite dependency in `build.gradle` and no `schema.sql`. This section is the
+> agreed design (see `src/main/java/com/gym/dao/README.md`).
 
 ```mermaid
 classDiagram
@@ -899,6 +922,9 @@ classDiagram
 
 ## 4. Service layer (validation + business rules, no JavaFX, no SQL)
 
+> **Planned, not built.** No service class exists in the repository yet; the shipped controllers
+> hold demo data. This section is the agreed design (see `src/main/java/com/gym/service/README.md`).
+
 ```mermaid
 classDiagram
     direction TB
@@ -1067,8 +1093,76 @@ classDiagram
 
 ## 5. Controllers (each backed by a matching FXML file)
 
-`MainApp` is declared in §1 because it is the entry point rather than a screen; it appears in this
-diagram only as the edge that opens the first screen.
+**Shipped today:** 20 controller classes in `com.gym.controller` — 19 FXML-backed (the 18 app
+screens + `AppShellController` for `app-shell.fxml`) plus the code-built `LaunchGateController`.
+They run on **demo data held in each controller**; there are no services, no `SessionContext`, no
+`FxUtils` yet. The two extra screens beyond the original 16 (`GymFloorMapController`,
+`LiveWorkoutController`) and the shell are documented screen-by-screen in
+`src/main/java/com/gym/controller/README.md`; their `fx:id` contracts are pinned by
+`ControllerBindingContractTest`.
+
+### 5a. The shipped runtime spine (real signatures, Oct 2026)
+
+```mermaid
+classDiagram
+    direction TB
+    class GymApp {
+        +SEED_PURPLE$ Color
+        +SHOW_LAUNCH_GATES$ boolean
+        +start(Stage stage) void
+        +stop() void
+        +main(String[] args) void
+        -startFreezeWatchdog()$ void
+    }
+    class AppShellController {
+        +SHELL_CONTROLLER_KEY$ String
+        +initialize() void
+        +beginLaunchGates() void
+        +getMorphTarget() Region
+        +settleCurrentPage() void
+        +loadScreen(String fxmlName) void
+        +openScreenViaRail(String railButtonId, String detailFxml, Consumer setup) void
+        +enableSmoothScrolling(ScrollPane sp)$ void
+        +onToggleRail() void
+        +onOpenCommandPalette() void
+        +onToggleThemeMode() void
+        +onOpenUserMenu() void
+    }
+    class LaunchGateController {
+        +LaunchGateController(AppShellController shell)
+        +beginLaunchGates() void
+        +showLoginGate() void
+        +isGateShowing() boolean
+    }
+    class Application {
+        <<external>>
+    }
+    class ScreenControllers {
+        <<shipped 18 screen controllers>>
+    }
+    GymApp --|> Application : extends
+    GymApp ..> AppShellController : loads via app-shell.fxml
+    AppShellController ..> LaunchGateController : beginLaunchGates()
+    AppShellController ..> ScreenControllers : loadScreen(fxmlName)
+```
+
+Notes on the real signatures: `GymApp.stop()` calls only `Platform.exit()` — never `System.exit`
+(the gallery can co-host a `GymApp` stage in the same JVM; `DECISIONS.md` documents this). The
+freeze watchdog (`startFreezeWatchdog`) is a private static daemon thread, diagnostics only. `main()`
+sets `SHOW_LAUNCH_GATES = true` so `gradlew runGym` gets the splash → login → shell choreography;
+tests call `start(Stage)` directly with the flag `false` (`DECISIONS.md` 71). `openScreenViaRail`'s
+third parameter is `Consumer<Object>` (Mermaid shows the erasure). `LaunchGateController` builds the
+splash and glass login card entirely in code — no FXML, no `fx:id`s, so the FXML test contracts stay
+byte-identical — and **demo auth (any email + 4+ char password) lives here and in
+`LoginController`**.
+
+**Planned design, not shipped code.** In the diagram below, every `..>` edge that names a
+`*Service`, `SessionContext` or `FxUtils` is **planned wiring** — those classes do not exist yet,
+and the shipped controllers hold demo data instead of calling them. The method lists below are the
+agreed target; where a shipped controller already realises a method it is named identically (e.g.
+`CustomerListController` shipped `onOpenSelectedProfile()` / `onDeleteSelectedCustomer()` —
+selection is read by the controller, so the planned `int customerId` parameters became no-argument
+methods).
 
 ```mermaid
 classDiagram
@@ -1087,8 +1181,8 @@ classDiagram
         +initialize() void
         +onSearch() void
         +onAdd() void
-        +onOpenProfile(int customerId) void
-        +onDelete(int customerId) void
+        +onOpenSelectedProfile() void
+        +onDeleteSelectedCustomer() void
     }
     class CustomerProfileController {
         +initialize() void
@@ -1103,7 +1197,7 @@ classDiagram
     }
     class TrainerProfileController {
         +initialize() void
-        +showTrainer(int trainerId) void
+        +showTrainer(TrainerSnapshot trainer) void
         +onSave() void
         +showMedicalProfile(int customerId) void
     }
@@ -1223,6 +1317,9 @@ classDiagram
 
 ## 6. Utilities
 
+> **Planned, not built.** None of the classes below exists in the repository yet (see
+> `src/main/java/com/gym/util/README.md`).
+
 ```mermaid
 classDiagram
     direction TB
@@ -1318,13 +1415,15 @@ The three candidate hierarchies were each examined and rejected:
 |---|---|---|
 | 13 `*DaoImpl` → `AbstractJdbcDao<T>` | stay flat | They vary in SQL and entity type, not structure. `DbConnection` already supplies the shared seam, and the 13 explicit `..> DbConnection` edges keep the wiring checkable. |
 | 11 services → `BaseService` | stay flat | `validate` exists on exactly one service, so the base would be empty. |
-| 16 controllers → `BaseController` | stay flat | `initialize()` is the JavaFX `Initializable` convention, differs in every controller, and must remain a public no-arg method for `FXMLLoader`. |
+| 20 controllers → `BaseController` | stay flat | `initialize()` is the JavaFX `Initializable` convention, differs in every controller, and must remain a public no-arg method for `FXMLLoader`. |
 
 ---
 
 ## Class descriptions
 
 ### Entities
+
+> **Planned, not built.** These classes do not exist in the repository yet.
 
 | Class | Description |
 |---|---|
@@ -1344,6 +1443,8 @@ The three candidate hierarchies were each examined and rejected:
 
 ### Enumerations
 
+> **Planned, not built.**
+
 | Enum | Literals |
 |---|---|
 | `CustomerStatus` | ACTIVE, INACTIVE, SUSPENDED |
@@ -1362,6 +1463,10 @@ The three candidate hierarchies were each examined and rejected:
 derived from the end date, and both `CANCELLED` literals are set by an explicit cancel operation.
 
 ### Data access
+
+> **Planned, not built.** These classes do not exist in the repository yet.
+
+| Class | Description |
 
 | Class | Description |
 |---|---|
@@ -1384,6 +1489,8 @@ derived from the end date, and both `CANCELLED` literals are set by an explicit 
 
 ### Services (validation + business rules, no JavaFX, no SQL)
 
+> **Planned, not built.** These classes do not exist in the repository yet.
+
 | Class | Description |
 |---|---|
 | `CustomerService` | Customer validation, search/filter, status rules |
@@ -1400,9 +1507,16 @@ derived from the end date, and both `CANCELLED` literals are set by an explicit 
 
 ### UI (each controller backed by a matching FXML file)
 
+Shipped: all rows below exist as code. The `*Service`/`SessionContext` mentions in the descriptions
+are the planned backend each controller will call — today the controllers hold demo data.
+
 | Class | Description |
 |---|---|
-| `MainApp` | Entry point: builds the window, nav shell, theme and overlay layer |
+| `MainApp` | Shipped. Entry point of the m3fx gallery: code-built showcase, seed picker, command palette, 19-screen FXML viewer; can launch `GymApp` |
+| `GymApp` | Shipped. Entry point of the app: loads `app-shell.fxml`, themes the scene, freeze watchdog, optional splash/login launch gates (`main()` only) |
+| `AppShellController` | Shipped. Hosts the persistent chrome: navigation rail, top app bar, `contentArea` screen swap, command palette, global snackbar |
+| `LaunchGateController` | Shipped, code-built (no FXML). Splash → glass login card → morph into the shell; demo auth (any email + 4+ char password) |
+| `LoginController` | Login screen (shipped, demo auth); will authenticate via `AdminService` and store the user in `SessionContext` |
 | `LoginController` | Login screen: authenticates admin via AdminService, stores user in SessionContext |
 | `DashboardController` | Main dashboard: active members, today's sessions, revenue snapshot, logout |
 | `CustomerListController` | Searchable/filterable customer list |
@@ -1421,6 +1535,8 @@ derived from the end date, and both `CANCELLED` literals are set by an explicit 
 | `StaffController` | Staff management and admin overrides (ADMIN role only) |
 
 ### Utilities
+
+> **Planned, not built.** These classes do not exist in the repository yet.
 
 | Class | Description |
 |---|---|

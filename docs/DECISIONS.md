@@ -442,3 +442,27 @@
     the `glass/` panel control, then land the variant wiring). Also recovered with this round:
     the schedule screen responsive-layout fix (root prefWidth removal, contextual inspector,
     hour-row constraints).
+
+73. **Ship-readiness round (Nov 2026) — audited, fixed, de-theatered.** Three read-only audits (repo
+    hygiene, library, app) drove a 7-agent fix wave plus a strict-compile wave. Landmark outcomes:
+    (1) `module-info` exports every public package (command, floorplan, workout were missing), and the
+    internal-type leak in public signatures is closed by moving `OverlayLayer` from `internal` into the
+    exported `overlay` package behind a new public `OverlayHost` interface (`OverlayLayer implements
+    OverlayHost`); public API now never names a non-exported type. (2) `M3Icon.symbol()` renders an honest
+    placeholder + warns once per unknown name instead of silently going blank (two thread-safe statics added:
+    `WARNED_UNKNOWN_NAMES`, and `M3Stylesheets`' `APPLIED_URLS`/`THEME_FILE_LOCK` for exact stylesheet
+    tracking + one hash-named temp file per theme — documented static-state exceptions to rule 12).
+    (3) `MotionUtil.slideIn` now uses the shared tracked-timeline/FX-guard/scene-cleanup pattern;
+    `StateLayer`'s value-holds-key static pattern fixed; switch/FAB lifecycle gaps closed.
+    (4) The standard M3 type-role classes (`title-*`/`body-*`/`label-*`) are now real CSS from `TypeScale`;
+    note `.title-large` is 32px here to match the app's banner usage, diverging from `TypeScale.TITLE_LARGE`
+    (22sp) — documented at the CSS rule. (5) App flows wired: trainer list → `showTrainer(TrainerSnapshot)`
+    (signature changed from the planned `int` — UML updated), customer list → profile navigation, real
+    logout to the gate, live `login.fxml` demo auth, payment/attendance every control answers,
+    `loadScreen` failures surface a snackbar, dead statics deleted, `GymApp.stop()` no longer force-exits
+    the JVM (the gallery can host the shell). (6) Tests de-theatered: scroll-height test asserts, integrity
+    test fails on missing screens, the 444/448 checksum replaced by structural contracts, flow smoke tests
+    added. (7) Root module compiles `release 21` UTF-8 with `-Xlint:all,-processing`; zero warnings.
+    (8) `bolt`/`remove` added to the icon catalog (two names found hitting the placeholder). Deferred with
+    reasons: remaining chart `Roboto` literals where no fixed TypeRole exists (computed sizes), liquid-glass
+    feature completion (DECISIONS #72, stash preserved), drawer width and other documented deviations.

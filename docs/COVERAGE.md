@@ -68,38 +68,40 @@
 
 ## Gym Management System (the `com.gym` app)
 
-The graded deliverable, built on m3fx. Current state: **`MainApp` hosts the comprehensive M3 / M3 Expressive flagship gallery showcase & 19-screen FXML Porting Studio; `GymApp` launches the standalone application shell.**
+The graded deliverable, built on m3fx. Current state: **an interactive M3 demo** — `MainApp` hosts
+the comprehensive M3 / M3 Expressive flagship gallery showcase & 19-screen FXML Porting Studio;
+`GymApp` launches the standalone application shell. All data is demo data held in the controllers;
+sign-in is demo auth (any email + 4+ char password, labelled in the UI). **There is no backend** —
+the SQLite-JDBC dependency was removed from `build.gradle`.
 
 - [x] `MainApp` flagship M3 gallery (interactive 17-page showcase, seed picker, light/dark, 9 variants, contrast, spring playground, 19 FXML screen studio viewer)
-- [x] `GymApp` standalone desktop application launcher for `app-shell.fxml` (`./gradlew runGym`)
+- [x] `GymApp` standalone desktop application launcher for `app-shell.fxml` (`./gradlew runGym`) — theme pre-registered before FXML inflation, maximized-before-show, `Platform.exit()`-only shutdown (no `System.exit`), daemon freeze watchdog (FX-thread CPU > 60% for 4 s dumps stacks to stderr)
+- [x] Launch gates (splash → glass login → morph into the shell) via the code-built `LaunchGateController`, shown only when `main()` sets `SHOW_LAUNCH_GATES=true` so the FXML test contracts stay byte-identical
 - [x] All 19 declarative FXML UI screens implemented in `src/main/resources/fxml/` (`login.fxml`, `app-shell.fxml`, `dashboard.fxml`, `customer-list.fxml`, `customer-profile.fxml`, `medical-profile.fxml`, `progress.fxml`, `trainer-list.fxml`, `trainer-profile.fxml`, `availability.fxml`, `workout.fxml`, `live-workout-hud.fxml`, `schedule.fxml`, `equipment.fxml`, `gym-floor-map.fxml`, `attendance.fxml`, `membership.fxml`, `payment.fxml`, `staff.fxml`)
-- [x] All 19 controller UI skeletons in `src/main/java/com/gym/controller/` with 570 `@FXML` bindings
+- [x] All 20 controllers in `src/main/java/com/gym/controller/` (19 FXML-backed + code-built `LaunchGateController`) with 711 `@FXML` bindings
+- [x] Wired app flows — real user journeys execute across screens, pinned by `WiredFlowSmokeTest`: trainer list → trainer profile with the chosen coach, customer list → full customer profile, dashboard end-shift → back to the login gate, payment record and attendance check-in produce visible answers
 - [x] Responsive Viewport & Side Menu Scrolling: ScrollPane integration for M3NavigationRail and M3NavigationDrawer; nested scroll conflict elimination and computed height bounds across all 19 FXML screens
-- [x] Automated FXML integrity, reflection binding, and stress test suites in `src/test/java/com/gym/fxml/`
-- [x] `fxml/main.fxml` — m3fx component showcase (FXML declaration testing)
-- [ ] Backend domain services and SQLite DAOs (13 entities, 11 enums, 13 DAO pairs, 11 services, 19 business rules)
-- [ ] `schema.sql` + seed data
+- [x] Automated test suites in `src/test/java/com/gym/fxml/` — 9 classes / 59 tests, honest by construction (strict-by-default screen integrity with `-Dtest.lenient=true` as the opt-out, binding-contract tests pin the `fx:id`/`@FXML` counts per screen, every case drives a real `FXMLLoader` load or the real shell); 195 tests total across the 3 modules via `./gradlew test`
+- [x] Strict compile — `-Xlint:all,-processing` enabled everywhere with no truncation (`-Xmaxwarns 10000`), UTF-8 forced, and the build is warning-clean
+- [x] `fxml/main.fxml` — m3fx component showcase (controller-free FXML declaration artifact; no code loads it today)
+- [ ] Backend domain services and SQLite DAOs (13 entities, 11 enums, 13 DAO pairs, 11 services, 19 business rules) — **planned, not built**; designed in `docs/UML.md` §1–§4
+- [ ] `schema.sql` + seed data — **planned, not built**; designed in `src/main/resources/db/README.md`
 
-### Documentation for the app (complete — this is what the code is written from)
+### Documentation for the app
 
-- [x] **Design spec** — `docs/UML.md`: 13 entities, 11 enums, 13 DAO interfaces + 13 impls, 11 services,
-      16 controllers, 10 utilities, plus the 19 business rules every owner implements identically.
-- [x] **Per-layer learning docs** (~15 500 lines) — `src/main/java/com/gym/README.md` (entry point) and
-      `model/`, `dao/`, `service/`, `controller/`, `util/` READMEs. Each has the same nine sections:
-      purpose, the OOP concepts practised there, design patterns, rules with the bug each prevents,
-      **one entry per file** (why it is shaped that way, how to write it step by step, a code sketch, how
-      to verify it, ≥3 common mistakes), how the layer connects, mistakes + review checklist, exercises
-      with answers, ownership + definition of done.
-- [x] **Per-file coverage verified** — every planned `.java` file, every screen FXML and every table has
-      its own entry (121/121 checked against `docs/UML.md`).
-- [x] **Resource docs** — `src/main/resources/README.md` plus `fxml/`, `db/` (13 tables, constraints,
-      indexes, seed), `theme/` and `images/`.
-- [x] **Project docs** — `docs/README.md` (index), `docs/DOCS_STANDARD.md` (how the folder docs are
-      written and which document wins), `docs/LEARNING_GUIDE.md` (study path, OOP concept index, glossary,
-      40 defence questions), `docs/BUILD_AND_RUN.md` (build files line by line, commands, troubleshooting).
-- [x] **141 "Open detail (decide + log in `DECISIONS.md`)" markers** — every genuinely undecided
-      implementation point is listed with its options and trade-offs instead of being invented. Settling
-      one is a `docs/DECISIONS.md` entry, and the list is the team's first backlog after Week 1.
+- [x] **Design spec** — `docs/UML.md`: the planned backend (13 entities, 11 enums, 13 DAO pairs, 11
+      services, 10 utilities, the 19 business rules) clearly marked *planned, not built*, plus the
+      shipped runtime spine (`GymApp`, `AppShellController`, `LaunchGateController`) with real
+      signatures in §5a.
+- [x] **Entry-point doc** — `src/main/java/com/gym/README.md`: the real launchers and spine, with
+      the backend composition root marked planned.
+- [x] **Shipped-layer doc** — `src/main/java/com/gym/controller/README.md` + `fxml/README.md`: the
+      20 controllers and 20 FXML files as built (real `fx:id` contracts, demo-data convention).
+- [x] **Planned-layer docs** — `model/`, `dao/`, `service/`, `util/` READMEs and `db/README.md`:
+      each is now an honest *planned, not built* stub that keeps the OOP/pattern teaching and the
+      build rules, and points at `docs/UML.md` instead of describing files that do not exist.
+- [x] **Project docs** — `docs/README.md` (index), `docs/DOCS_STANDARD.md`, `docs/LEARNING_GUIDE.md`,
+      `docs/BUILD_AND_RUN.md`, `TEST_READY.md` (harness), `PLAN.md` (current-phase note).
 - [ ] Each owner settles the open details in their folder while writing that folder's code.
 
 Track per-owner progress in `docs/UML_TEAM.md` → "Who does what".
@@ -129,7 +131,43 @@ fixes verified against material-web tokens, material-color-utilities and m3.mate
       auto-centering when items fit, hide prev/next buttons when non-overflowing, strict scroll clamping
 - [x] `./gradlew test` green across m3fx-core, m3fx-controls and the app (incl. new
       MotionTokensTest, M3ButtonTest, M3SegmentedButtonTest, M3CarouselTest, expanded chart/data tests)
-- [ ] Known deliberate deviations (documented, not bugs): drawer width 280/320 vs token 360 (app
-      shell calls for 220), slider 16dp single track (JavaFX 21 `SliderSkin` has no separate fill
-      node), M3Fonts falls back to system fonts (Roboto files not bundled yet), spring token
-      constants unverified against v34 motion tokens
+
+## Ship-readiness round (Nov 2026) — wave fixes verified
+
+- [x] **Module exports** — `module-info.java` now exports `io.m3fx.controls.command`,
+      `io.m3fx.controls.floorplan` and `io.m3fx.controls.workout` (previously used by the app while
+      unexported).
+- [x] **Public-API internal-type leak closed** — the library's public API no longer exposes
+      `io.m3fx.controls.internal` types. The app's shell/gallery still *import* `MotionUtil` and
+      `SpringAnimation` internally — the one documented exception (`DECISIONS.md` 69, controller
+      README rule 25); screen controllers use public API only.
+- [x] **Honest unknown-icon handling** — `M3Icon` renders a neutral ring placeholder for an unknown
+      symbol name, announces `"unknown icon: <name>"` through the accessible text and logs one
+      warning per distinct unknown name; it never throws and never shows a blank box.
+- [x] **`MotionUtil.slideIn` is tracked** — in-flight motion cancels first, the animation is
+      registered in the per-node tracker, and scene-exit cleanup resets transforms if the node
+      leaves the scene mid-flight (`MotionUtil.java` ~114).
+- [x] **`StateLayer` leak pattern fixed** — `unbind` removes the hover/pressed/focus listeners it
+      registered and stops the running `FadeTransition`, so replaced skins stop leaking listeners.
+- [x] **FAB disable propagation** — `M3FabMenu` mirrors `isDisable() || mainFab.isDisable()` onto
+      the action FAB and gates its outside-click dismiss and actions on it.
+- [x] **Icon-button accessible text** — `M3IconButton` sets a default accessible text so an icon
+      button without an explicit label is still announced.
+- [x] **M3 type-role CSS classes** — `m3fx.css` ships `.title-*` / `.body-*` / `.label-*` classes
+      derived from `TypeScale`, used by the app FXMLs (≈100 uses across the screens).
+- [x] **Test honesty + strict compile** — see the app section above.
+
+## Known deliberate deviations / open items (documented, not bugs)
+
+- [ ] Drawer width 280/320 vs token 360 (app shell calls for 220).
+- [ ] Slider 16dp single track (JavaFX 21 `SliderSkin` has no separate fill node).
+- [ ] M3Fonts falls back to system fonts (Roboto files not bundled yet).
+- [ ] Spring token constants unverified against v34 motion tokens.
+- [ ] Charts do not re-render on a theme/seed change until a data or control change repaints them.
+- [ ] `.headline-small/medium/large` style classes are referenced by app FXMLs but not defined in
+      `m3fx.css` (only `.title-*`/`.body-*`/`.label-*` exist) — those nodes fall back to default
+      label styling.
+- [ ] Liquid-glass feature deferred (`DECISIONS.md` 72): the `GLASS`/`GLASS_PROMINENT` button and
+      card variants and `ToolbarStyle.GLASS` ship unstyled — `glass.css` and the
+      `io.m3fx.controls.glass` package were never in the recovered stash; finishing them is the
+      recorded follow-up.

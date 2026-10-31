@@ -10,6 +10,21 @@ Also note: `material-web` is in maintenance mode and does not implement M3 Expre
 baseline M3 numbers only. For Expressive and newer components, use m3.material.io and the
 androidx.compose.material3 source. Verify the current state of the spec before each phase, since it keeps changing.
 
+## Current phase (Nov 2026)
+
+- **Phases 0–4 are done.** m3fx-core (color engine, tokens, themes) and m3fx-controls are built out:
+  all T1 + T2 components exist, and the T3 "stretch" list from Phase 5 was also implemented
+  (split button, toolbar, carousel, shape morphing, spring motion, adaptive scaffold — see
+  `docs/COVERAGE.md` for the full checklist). `./gradlew test` is green across all three modules.
+- **The gym app is an interactive M3 demo, not a production system.** 19 FXML screens + app shell
+  (`GymApp` → `app-shell.fxml` → `AppShellController`) run on demo data held in the controllers,
+  with demo auth (any email + a 4+ character password). There is **no backend**: `model/`, `dao/`,
+  `service/`, `util/` and the SQLite layer in `docs/UML.md` are *planned, not built* — the SQLite
+  JDBC dependency was removed from `build.gradle` when this became explicit.
+- **Next steps:** either polish the demo (visual/motion pass, screenshots) or start the backend per
+  `docs/UML.md` §3–§4 (schema + DAOs first), keeping the controllers' service calls behind the
+  seams the folder READMEs already document. Phase 6 (release/publish) applies to the m3fx library.
+
 ## Scope tiers
 
 | Tier | Meaning | Goal |

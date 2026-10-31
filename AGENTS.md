@@ -46,7 +46,8 @@ Do not claim "100% M3". Track coverage in `docs/COVERAGE.md`.
 - Java 21 (use records, sealed types, switch expressions where they help)
 - JavaFX 21 LTS or newer (pin the version once in the parent POM `<properties>`)
 - Maven multi-module build
-- JUnit 5 for logic tests, TestFX for UI tests, `Node.snapshot()` for visual checks
+- JUnit 5 for logic tests; UI tests use the project's own FX harness (not TestFX) plus
+  `Node.snapshot()` for visual checks
 - Ikonli for icon rendering (`ikonli-javafx`); Material Symbols SVG paths where Ikonli lacks an icon
 - No other runtime dependencies in `m3fx-core` or `m3fx-controls` without asking me
 
@@ -149,8 +150,10 @@ to core and controls, and export only public API packages (never `internal`).
 - Small classes. If a skin exceeds ~300 lines, extract helpers.
 - No unused code, no commented-out blocks, no TODOs without a `COVERAGE.md` entry.
 - Naming: `M3Button`, `M3Card`, `M3TextField`... prefix public controls with `M3`.
-- Tests: each component gets at least (a) property/state logic tests, (b) a TestFX smoke test,
-  (c) a demo page.
+- Tests: each component gets at least (a) property/state logic tests, (b) a UI smoke test,
+  (c) a demo page. UI tests use the project's own FX harness (JUnit 5 + real
+  `FXMLLoader`/`Node` interactions on the toolkit thread — see `src/test/java/com/gym/fxml/`
+  and the m3fx `*Test` suites); TestFX is **not** used and must not be required.
 - Format with a single formatter config (add `spotless` or `google-java-format` in Phase 0).
 
 ---
@@ -163,8 +166,9 @@ to core and controls, and export only public API packages (never `internal`).
 4. Add the component to the demo app with ALL variants and ALL states (enabled, hover, focus,
    pressed, disabled, error where applicable) in both light and dark.
 5. Add tests.
-6. Run `mvn -q verify`. Fix failures. Run the demo (`mvn -pl m3fx-demo javafx:run`) and, if you can,
-   save snapshots to `docs/snapshots/` for me to inspect.
+6. Run `./gradlew test`. Fix failures. Run the demo (`./gradlew run` for the m3fx gallery,
+   `./gradlew runGym` for the app shell) and, if you can, save snapshots to `docs/snapshots/`
+   for me to inspect.
 7. Update `docs/COVERAGE.md` and `docs/DECISIONS.md` if you made a non-obvious choice.
 8. Summarize in plain language: what the classes do and how they connect, so I can explain it
    in my college presentation. List anything you were unsure about.
