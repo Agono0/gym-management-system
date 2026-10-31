@@ -32,11 +32,20 @@ import java.util.List;
 /**
  * Controller for the Trainer Profile screen.
  * UI-contract only (no backend/service dependencies): owns the demo athlete cohort, the
- * certification timeline, the capacity gauge and the clinical-dossier side sheet.
+ * certification timeline, the capacity gauge and the clinical-dossier side sheet. The dossier
+ * is filled per coach by the roster handoff ({@code TrainerListController#onOpenProfile} via
+ * {@link #showTrainer(TrainerSnapshot)}); opened directly it keeps the demo default coach.
  */
 public class TrainerProfileController {
 
-    private static int selectedTrainerId;
+    /**
+     * Immutable per-coach payload handed over from the trainer roster (static-free passing, no
+     * backend): exactly the fields the roster row carries — id, name, specialization, years of
+     * experience, hourly rate, assigned athletes, saturation percent and email.
+     */
+    public record TrainerSnapshot(int trainerId, String name, String specialization, int yearsExperience,
+                                  double hourlyRate, int assignedAthletes, int saturationPercent, String email) {
+    }
 
     @FXML private M3TopAppBar topAppBar;
     @FXML private M3GlassPane heroGlassPane;
@@ -81,8 +90,11 @@ public class TrainerProfileController {
     /** Hosts M3 snackbars and dialogs for this screen (attached to the scene root at runtime). */
     private final M3Overlay feedback = new M3Overlay();
 
-    /** Demo hourly rate the Cancel action restores. */
+    /** Demo hourly rate applied before a roster handoff; the Cancel action restores it. */
     private static final String DEFAULT_RATE = "74.50";
+
+    /** Rate currently shown for the selected coach; Cancel/discards restore this value. */
+    private String demoRate = DEFAULT_RATE;
 
     /** Demo cohort rows in "id|name|status|subscription|program" shape (matches hero counts). */
     private final List<String> demoAthletes = List.of(
@@ -112,14 +124,6 @@ public class TrainerProfileController {
 
     public TrainerProfileController() {
         // Public no-arg constructor
-    }
-
-    public static void setSelectedTrainerId(int id) {
-        selectedTrainerId = id;
-    }
-
-    public static int getSelectedTrainerId() {
-        return selectedTrainerId;
     }
 
     @FXML
@@ -284,10 +288,10 @@ public class TrainerProfileController {
         feedback.showSnackbar("Profile changes saved (demo)");
     }
 
-    /** Restores the demo rate and clears validation feedback. */
+    /** Restores the selected coach's demo rate and clears validation feedback. */
     private void discardChanges() {
         if (txtHourlyRate != null) {
-            txtHourlyRate.setText(DEFAULT_RATE);
+            txtHourlyRate.setText(demoRate);
             txtHourlyRate.setError(false);
             txtHourlyRate.setSupportingText("USD per session hour");
         }
@@ -340,8 +344,50 @@ public class TrainerProfileController {
         onPrintMedical();
     }
 
-    public void showTrainer(int trainerId) {
-        setSelectedTrainerId(trainerId);
+    /**
+     * Fills the dossier with the chosen coach (handed over from the roster via
+     * {@code TrainerListController#onOpenProfile}): hero labels, demo hourly rate, capacity
+     * gauge, cohort-free capacity text and the competency radar series name. Fields the roster
+     * does not carry (phone) get honest placeholder text instead of the previous coach's data.
+     */
+    public void showTrainer(TrainerSnapshot trainer) {
+        if (trainer == null) {
+            return;
+        }
+        if (lblCoachName != null) {
+            lblCoachName.setText(trainer.name());
+        }
+        if (lblSpecialization != null) {
+            lblSpecialization.setText("Specialization: " + trainer.specialization());
+        }
+        if (lblEmail != null) {
+            lblEmail.setText(trainer.email());
+        }
+        if (lblPhone != null) {
+            lblPhone.setText("Phone: on file with the front desk (demo)");
+        }
+        if (lblExperience != null) {
+            lblExperience.setText("Experience: " + trainer.yearsExperience() + " Years");
+        }
+        demoRate = String.format(java.util.Locale.ROOT, "%.2f", trainer.hourlyRate());
+        if (txtHourlyRate != null) {
+            txtHourlyRate.setText(demoRate);
+            txtHourlyRate.setError(false);
+            txtHourlyRate.setSupportingText("USD per session hour");
+        }
+        if (gaugeCapacity != null) {
+            gaugeCapacity.setValue(trainer.saturationPercent());
+        }
+        if (lblCapacityText != null) {
+            lblCapacityText.setText("Saturation: " + trainer.assignedAthletes() + " athletes · "
+                    + trainer.saturationPercent() + "% capacity");
+        }
+        if (lblValidationStatus != null) {
+            lblValidationStatus.setText("Credentials verified for " + trainer.name() + ".");
+        }
+        if (chartCompetency != null && !chartCompetency.getSeriesList().isEmpty()) {
+            chartCompetency.getSeriesList().get(0).setName(trainer.name());
+        }
     }
 
     /**
@@ -349,7 +395,6 @@ public class TrainerProfileController {
      * medical fields and the anatomy viewer, then makes the sheet visible.
      */
     public void showMedicalProfile(int customerId) {
-        setSelectedTrainerId(customerId);
         if (lblMedAthleteName != null) {
             lblMedAthleteName.setText("Athlete: " + athleteName(customerId) + " (#" + customerId + ")");
         }

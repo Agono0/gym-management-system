@@ -19,7 +19,6 @@ import io.m3fx.controls.textfield.TextFieldVariant;
 import javafx.fxml.FXML;
 import javafx.scene.Node;
 import javafx.scene.Parent;
-import javafx.scene.control.ButtonBase;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.StackPane;
@@ -86,6 +85,8 @@ public class CustomerProfileController {
     private boolean membershipFrozen;
     /** Name of the currently assigned demo program, or {@code null} when unassigned. */
     private String assignedProgram;
+    /** Member identity on the holographic pass ("M-1007" until the roster handoff replaces it). */
+    private String currentMemberId = "M-1007";
 
     public CustomerProfileController() {
         // Public no-arg constructor for FXMLLoader
@@ -113,6 +114,21 @@ public class CustomerProfileController {
     public void onNavigateBack() {
         navigateViaShellRail("navCustomers",
                 "Open the member roster from the navigation rail (this preview is standalone).");
+    }
+
+    /**
+     * Prefills the dossier from the roster selection (the "Open Full Profile" handoff in
+     * {@code CustomerListController}): the name field and the holographic pass identity. Demo
+     * facts the roster does not carry keep their dossier values.
+     */
+    public void showMember(String memberName, String memberId) {
+        if (memberName != null && !memberName.isBlank()) {
+            txtFullName.setText(memberName.trim());
+        }
+        if (memberId != null && !memberId.isBlank()) {
+            currentMemberId = memberId.trim();
+        }
+        renderIdentityPass();
     }
 
     /**
@@ -294,7 +310,7 @@ public class CustomerProfileController {
     private void renderIdentityPass() {
         Label name = new Label(txtFullName.getText().isBlank() ? "Unnamed athlete" : txtFullName.getText().trim());
         name.getStyleClass().add("m3-list-headline");
-        Label meta = new Label("M-1007 · Membership ACTIVE · Monthly Standard");
+        Label meta = new Label(currentMemberId + " · Membership ACTIVE · Monthly Standard");
         meta.getStyleClass().add("m3-list-supporting");
         meta.setWrapText(true);
         holographicPass.setContent(new VBox(6, name, meta));
@@ -384,12 +400,18 @@ public class CustomerProfileController {
     /**
      * Navigates by firing the shell's own pinned rail button (same pathway as clicking the
      * rail). Outside the shell — standalone previews and FXML tests — it answers with a
-     * snackbar instead of pretending to navigate.
+     * snackbar instead of pretending to navigate. JavaFX 21 {@code ToggleButton.fire()}
+     * toggles selection before firing the action, so an already-selected destination is
+     * re-selected after the fire (a click on a rail button never deselects it).
      */
     private void navigateViaShellRail(String railButtonId, String fallbackText) {
         Node railButton = findInScene(railButtonId);
-        if (railButton instanceof ButtonBase button && !button.isDisabled()) {
+        if (railButton instanceof javafx.scene.control.ToggleButton button && !button.isDisabled()) {
+            boolean wasSelected = button.isSelected();
             button.fire();
+            if (wasSelected) {
+                button.setSelected(true);
+            }
             return;
         }
         overlay.showSnackbar(fallbackText);

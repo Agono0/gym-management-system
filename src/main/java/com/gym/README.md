@@ -1,325 +1,218 @@
-# `com.gym` — application entry point (JavaFX branch)
+# `com.gym` — application entry points (JavaFX branch)
 
-> **Signature authority:** `docs/UML.md` §1 declares `MainApp`, §2 declares the startup/session flow,
-> §5 shows the `MainApp ..> LoginController` edge. This README explains *why* the class exists, what
-> the JavaFX lifecycle does around it, and how to write it. Code here is an illustrative sketch — if a
-> sketch and `UML.md` disagree, `UML.md` wins.
+> **Status note.** This package is **shipped code** — three launcher classes plus the runtime
+> spine they create. The *backend wiring* that the older version of this README sketched
+> (`SqliteDbConnection`, DAO construction, session bootstrap in `stop()`) is **planned, not
+> built**: no `model/`, `dao/`, `service/` or `util/` class exists yet, and the SQLite-JDBC
+> dependency has been removed from `build.gradle` until the DAO layer lands. The planned startup
+> flow lives in `docs/UML.md` §2; this README documents what actually runs.
+>
+> **Signature authority:** `docs/UML.md` declares the planned domain classes; the launcher and
+> shell classes below are described from the shipped code (`GymApp.java`, `MainApp.java`,
+> `M3Samples.java`) and the shipped controllers (`controller/AppShellController.java`,
+> `controller/LaunchGateController.java`).
 
 ## 1. Purpose — the problem this package solves
 
-`com.gym` contains **one class**: `MainApp`. It is the process entry point and the *composition root*
-of the application — the single place where the concrete parts of the system are created and wired
-together (the theme, the window, the navigation shell, the overlay layer, and the first screen).
+`com.gym` contains the classes the JVM and JavaFX start, plus the composition of the two windows
+the product has:
 
-Everything else in the project lives in one of four layers (`model`, `dao`, `service`, `controller`)
-plus the cross-cutting `util` package. `MainApp` deliberately sits **outside** those layers, because
-it is the class that decides *which* implementation of each layer will be used, and a layer is not the
-right place to make that decision: a DAO impl must not choose itself, and a service must not know
-about `Stage`s.
+| Class | Lines | What it is |
+|---|---|---|
+| `MainApp` | ~1 600 | The **m3fx component gallery**: an interactive 17-page Material Design 3 / Expressive showcase, plus a viewer for the 19 app FXML screens and a button that launches the full app shell |
+| `M3Samples` | 9 | A convenience launcher alias (`extends MainApp`, delegates to `MainApp.main`) |
+| `GymApp` | 169 | The **app entry point**: maximizes the window, loads `/fxml/app-shell.fxml`, applies the M3 theme, starts a freeze watchdog and (for real runs) the splash → login → shell launch gates |
 
-**What breaks if this class is done wrong.** A JavaFX application has exactly one `start(Stage)` call.
-If the theme is applied there but the session is not cleared on exit, a second run of the app can
-inherit a signed-in administrator (a real security bug in a shared reception machine). If the overlay
-layer is not installed before the first screen opens, dialogs and snackbars silently fall back to
-separate windows or disappear. If a controller is opened before the theme stylesheet is on the scene,
-the first frame renders unstyled and then jumps. All three failures are invisible in unit tests and
-obvious to a user — which is why this file must follow the documented startup order exactly.
+Everything else lives in `controller/` (20 controllers). The four planned layers (`model`, `dao`,
+`service`, `util`) contain only READMEs for now — the entry points deliberately do **not** create
+DAOs, services or a database today (see §7).
 
-**What this package deliberately does not do.** It contains no business rules, no SQL, no DAO access,
-no FXML layout, and no navigation *logic* beyond opening the first screen and hosting the shell. It is
-a bootstrap, not a screen.
+**What breaks if the launchers are done wrong.** JavaFX has exactly one `start(Stage)` per
+`Application`. If the theme is applied after the first frame, every control flashes unstyled; if a
+closing stage force-kills the JVM, a second window opened by the gallery dies with it (this is why
+`GymApp.stop()` calls `Platform.exit()` and never `System.exit` — `DECISIONS.md` documents this);
+if a UI freeze has no diagnostics, it hangs silently. Each launcher below answers one of these.
+
+**What this package deliberately does not do.** No business rules, no SQL, no data access. The
+gallery builds showcase nodes; `GymApp` loads one FXML and hands over to
+`AppShellController`. Screens are not opened from here beyond the shell itself.
 
 ## 2. What you learn here (OOP concepts)
 
-| Concept | Where in this file | Why the project needs it | How to apply it (one line) |
+| Concept | Where | Why the project needs it | How to apply it (one line) |
 |---|---|---|---|
-| Inheritance from a framework class | `MainApp extends Application` | JavaFX requires it: the toolkit calls *your* `start` back | Extend, override only what you need, never call `start` yourself |
-| The template-method idea (lifecycle hooks) | `init()` → `start(Stage)` → `stop()` are called by the framework in that order | Gives a documented place for "before UI", "build UI", "after UI" work | Do heavy/shared setup in `init`, build the scene in `start`, release resources in `stop` |
-| Composition root / manual dependency injection | `MainApp` creates `SqliteDbConnection`, passes it to DAOs, DAOs to services | Nothing else in the app is allowed to `new` infrastructure; one place to swap it (`DECISIONS.md` 33) | Create collaborators in `start`, pass them inward, keep them off static fields |
-| Polymorphism at the seam | The field/variable type is `DbConnection`, the object is `SqliteDbConnection` | The database can be replaced without touching 26 DAO files | Declare the interface type, instantiate the implementation once |
-| Static entry point | `public static void main(String[] args)` → `launch(args)` | The JVM needs a static `main`; JavaFX needs `launch` to boot the toolkit | Keep `main` to one line — no logic turns up there |
-| Encapsulation of window state | `primaryStage`, the theme object and the shell live as private state of this class | The window belongs to the app, not to a screen or a global | Keep `Stage` out of every other class |
-| Documented mutable state | `SessionContext` is static mutable state owned by `util` (`DECISIONS.md` 34) — `MainApp` reads it once, at exit | One place to clear the session means no stale login | Clear it in `stop()` even though logout already clears it (a safety net) |
-| Interfaces over singletons | No `App.getInstance()` singleton anywhere | A singleton would make tests and the Swing port depend on global state | Pass what a class needs through its constructor |
-| Constants and literals | Window title, minimum size, initial scene size are named constants or one obvious literal | Magic numbers scattered in code cannot be reviewed or changed consistently | Define them at the top with a comment on why that value |
+| Inheritance from a framework class | `MainApp extends Application`, `GymApp extends Application` | The toolkit calls *your* `start(Stage)` back | Override only what you need; never call `start` yourself |
+| Template-method lifecycle | `init()` → `start(Stage)` → `stop()` | A documented place for "before UI", "build UI", "after UI" | Build the scene in `start`, release resources in `stop` |
+| Static entry point | `public static void main(String[] args)` → `launch(args)` | The JVM needs `main`; JavaFX needs `launch` | Keep `main` to the launch flag + one call |
+| Composition root (light form) | `GymApp.start` picks the theme, loads the shell FXML, applies stylesheets | One place decides seed color, variant and scene setup | Create collaborators in `start`, pass them inward |
+| Encapsulation of window state | `Stage` handling stays inside the launcher | The window belongs to the app, not to a screen | Keep `Stage` out of controllers |
+| A documented static flag | `GymApp.SHOW_LAUNCH_GATES` | Tests call `start(Stage)` directly and must get the plain shell; `main()` flips the flag for the full gate choreography (`DECISIONS.md` 71) | One mutable static, set in exactly one place, documented in its Javadoc |
+| Daemon worker threads | `GymApp.startFreezeWatchdog()` | A monitor thread must never keep the JVM alive | `setDaemon(true)`, sleep-loop, read-only over the scene graph |
+| Constants and literals | `SEED_PURPLE = Color.web("#6750A4")`, window sizes | Named once, shared (`MainApp`'s seed presets reuse `GymApp.SEED_PURPLE`) | Define at the top with a comment on why |
 
 ## 3. Design patterns in this layer
 
-| Pattern | Where | Why this pattern | What goes wrong if used carelessly |
+| Pattern | Where | Why | What goes wrong if used carelessly |
 |---|---|---|---|
-| **Composition root** (a.k.a. "poor man's DI") | `start(Stage)` | One class knows how to assemble the object graph; everything below takes its collaborators as constructor parameters | If screens start creating their own DAOs, the wiring is no longer reviewable and the database choice spreads |
-| **Facade over the toolkit** | Thin helper calls (`M3Stylesheets.applyTo`, `FxUtils` dialogs) rather than raw toolkit juggling in every screen | Screens ask for a *result*, not for JavaFX plumbing | Hiding too much (e.g. wrapping `Stage` completely) makes ordinary JavaFX work harder than it should be |
-| **Template method** (framework-defined) | `Application.init/start/stop` | The toolkit owns the sequence; we fill in the steps | Putting long queries in `start` freezes the splash; put them in a `Task` and show progress |
-| **Singleton — deliberately avoided** | — | A global `App` would be the only way a service could reach the UI — exactly the dependency the layering forbids | Explain in review: we pass `Stage` to the shell, not to services |
+| **Composition root** | `GymApp.start(Stage)` | One class knows the theme, the scene and the shell; everything below receives them | Screens creating their own themes produce mismatched palettes |
+| **Facade over the toolkit** | `M3Stylesheets.applyTo(scene, theme)`, `M3CommandPalette.attachGlobalShortcut(...)` | Screens ask for a result, not for CSS plumbing | Hiding `Stage` completely makes ordinary JavaFX work harder |
+| **Template method** (framework-defined) | `Application.init/start/stop` | The toolkit owns the sequence | Long work in `start` freezes the window before it shows |
+| **Watchdog** | `startFreezeWatchdog()` | Samples FX-thread CPU; dumps stacks when busy, not when deadlocked | A watchdog that touches the scene graph would *cause* the freeze it watches |
+| **Singleton — deliberately avoided** | — | A global `App` would let screens reach global state | Pass what a class needs through constructors |
 
 ## 4. Rules you must follow (and the bug each rule prevents)
 
-1. **All scene-graph work happens on the FX application thread.** Touching a control from a worker
-   thread either throws or corrupts the scene; `Task`/`Platform.runLater` are the two allowed bridges.
-2. **No static mutable state in this package.** The only static state in the app is
-   `util/SessionContext` (documented in `DECISIONS.md` 34); a second one makes the app's behaviour
-   depend on run order.
-3. **Apply the theme before the first screen is shown.** Otherwise the window paints unstyled and then
-   jumps, and any control created before the stylesheet loads misses its lookups.
-4. **Clear `SessionContext` in `stop()`.** Prevents a signed-in session from surviving the window
-   (and, on a shared machine, from leaking to the next user).
-5. **Do not touch DAOs or SQL from here.** Create the DAO inside the composition root and pass it into
-   the service that owns it; a `MainApp` that runs queries means the layering has already failed.
-6. **Do not put business decisions in this class.** "Which screen opens first" is bootstrap; "who may
-   see it" is `SessionContext.requireRole` (rule 16).
-7. **The window title and sizes are set here and nowhere else.** A screen that renames the window is a
-   review failure — the user's window is app state.
-8. **`main` stays one line.** `launch(args)` only. Logic in `main` cannot be tested through the
-   JavaFX lifecycle.
+1. **All scene-graph work happens on the FX application thread.** `Platform.runLater` is the only
+   bridge from the watchdog or background work.
+2. **No `System.exit` from this package.** `MainApp`'s "Launch Full Application Shell Window"
+   action starts a `GymApp` stage *inside the same JVM* as the running gallery — killing the
+   process would murder the gallery window too. `GymApp.stop()` calls `Platform.exit()` only; the
+   launcher performs the final JVM exit (`GymApp.java` Javadoc documents this).
+3. **Apply the theme before the scene is shown.** `GymApp` builds `M3Theme.fromSeed(SEED_PURPLE,
+   TONAL_SPOT, true)` and calls `M3Stylesheets.setLatestTheme(theme)` *before* the FXML loads, so
+   custom controls resolve colors during inflation, then `applyTo(scene, theme)` before `show()`.
+4. **Maximize before `show()`** on Windows, so the OS computes the work area correctly
+   (`GymApp.start` does `setMaximized(true)` before `show()`).
+5. **`SHOW_LAUNCH_GATES` stays a `main()`-only switch.** Tests drive `start(Stage)` directly and
+   must never see the splash/login overlay (the FXML test contracts pin the pre-gate shell).
+6. **The watchdog never touches the scene graph.** It reads thread CPU and stack traces only, and
+   is a daemon so it cannot hold the JVM open.
+7. **No planned-backend classes are named here.** When the DAO layer lands, the composition root
+   gains the `DbConnection` wiring described in `docs/UML.md` §2 — not before. A launcher that
+   references not-yet-existing classes cannot compile, and a stub one lies.
 
 ## 5. The files in this package
 
-Write order: there is only one file, and it comes **after** `util/DbConnection` (so the composition
-root has something to wire) but **before** the screens, so there is always a window to run.
+### `MainApp.java` — the m3fx gallery (entry point of `gradlew run`)
 
-### `MainApp.java` — the JavaFX application and composition root (owner: Abdelrhman)
+**Status:** implemented (~1 600 lines). **What it is.** `MainApp extends Application` builds the
+showcase entirely in code — no FXML for its own UI:
 
-**Status:** exists as a placeholder — it loads the FXML showcase, with no theme, no shell, no session.
-**Canonical:** `docs/UML.md` §1 (declaration), §2 (startup flow, steps 1–4), §5 (`..>` edges).
+- `M3Overlay` overlay layer, `M3CommandPalette` (Ctrl/Cmd+K, `attachGlobalShortcut`) and an
+  `M3NavigationDrawer` with 17 destinations: tokens, buttons/FABs, split buttons/toolbars, inputs,
+  chips/badges, cards/lists, progress/sliders, carousels, overlays/dialogs, a spring-physics
+  playground, charts, 3D viewers, effects, data components, live-workout HUD, gym floorplan, and
+  "Gym App Screens (19 FXMLs)".
+- A theme control strip: seed preset dots (`GymApp.SEED_PURPLE` + five more), a `ColorPicker`,
+  `ThemeVariant` combo, contrast combo, and an "Expressive Physics" switch.
+- The "Gym App Screens" page is the FXML porting studio: a combo loads any of the 19 app screens
+  into a viewport, with buttons to launch the full shell (`new GymApp().start(new Stage())`) or a
+  standalone login window.
+- Scene 1220×840, themed via `M3Stylesheets.applyTo`, title "m3fx — Material Design 3 & Expressive
+  Showcase".
 
-**What it is.** The class the JVM starts. `main` hands over to JavaFX, JavaFX constructs `MainApp` and
-calls `init()`, `start(Stage)` and (on exit) `stop()`. In `start` we assemble the app: theme →
-navigation shell → overlay layer → first screen.
+### `M3Samples.java` — the gallery alias
 
-**Fields.** A `MainApp` needs almost none, and each one must earn its place:
+**Status:** implemented (9 lines). `M3Samples extends MainApp` whose `main` delegates to
+`MainApp.main` — a stable second entry point for the showcase.
 
-| Field | Type | Nullable? | Why this type/name |
-|---|---|---|---|
-| (none required) | — | — | Window/theme/connection objects are locals inside `start` unless `stop()` needs them |
-| optional: the bootstrap connection | `DbConnection` | only if `stop()` must close it | Declared as the **interface** so the concrete SQLite class is named once (rule: `DECISIONS.md` 33) |
+### `GymApp.java` — the app shell launcher (entry point of `gradlew runGym`)
 
-The notable design choice is the *absence* of fields: everything created in `start` and not needed
-afterwards stays a local variable, so nothing can be accidentally reused by a screen.
+**Status:** implemented (169 lines). **What it does, in order** (`start(Stage)`):
 
-**Why it is designed this way.**
+1. `M3Theme.fromSeed(SEED_PURPLE, ThemeVariant.TONAL_SPOT, true)` + `M3Stylesheets.setLatestTheme`
+   so FXML inflation resolves looked-up colors.
+2. Loads `/fxml/app-shell.fxml` (fails fast with `IllegalStateException` if missing) — the loader
+   produces an `AppShellController`.
+3. `new Scene(root, 1280, 800)` + `applyTo(scene, theme)`; title
+   "GYM-OS // Enterprise Gym Management System (2026)"; min size 1024×700.
+4. `setOnCloseRequest(e -> Platform.exit())` so `stop()` cleanup runs; `setMaximized(true)`;
+   `show()`; `startFreezeWatchdog()`.
+5. If `SHOW_LAUNCH_GATES` (set by `main()` only) and the controller is an `AppShellController`:
+   `shellController.beginLaunchGates()` — the splash → login → morph choreography
+   (`DECISIONS.md` 71). Invalid sign-in input shakes the card; **demo auth: any email plus a
+   password of 4+ characters signs in** (there is no backend by design — `DECISIONS.md` 71).
 
-- **Why `Application` and not a plain `main` that builds a `Stage`.** JavaFX requires
-  `Application.launch` to start the toolkit, the render thread and the implicit exit behaviour. Doing
-  it by hand is possible and fragile; the framework path is the documented one.
-- **Why the composition root is here and not in a service.** The choice "SQLite, and therefore
-  `SqliteDbConnection`" is a deployment decision. Services must be testable without a database, so
-  they receive a DAO; only the bootstrap names a concrete database (`DECISIONS.md` 33).
-- **Why it is not one of the 16 screens.** `docs/UML.md` §5 lists `MainApp` only as the edge that
-  opens `LoginController`. A screen that also owns the window cannot be reopened or embedded, and the
-  nav shell would have to live inside it.
-- **Why the overlay layer is installed before the first screen** (`DECISIONS.md` 8, 35): dialogs,
-  snackbars and sheets render into a `StackPane` above the shell, so that stack must exist before any
-  screen tries to show one. Today the overlay layer is not exported by the library, which is why the
-  shell step is still blocked (`DECISIONS.md` 35, `COVERAGE.md`) — the honest status, not a shortcut.
-- **Why the session is cleared twice** (logout *and* `stop`): logout is the normal path; `stop` covers
-  the close-button path, where no logout handler runs.
+**The freeze watchdog** (`startFreezeWatchdog`, diagnostics only): a daemon thread samples the
+JavaFX Application Thread's CPU via `ThreadMXBean`; if it stays above 60% of a core for 4
+consecutive seconds it dumps the FX and `QuantumRenderer-0` stacks to stderr (at most one dump per
+30 s), so a repaint-storm freeze self-diagnoses in the `runGym` console instead of hanging silently
+(`DECISIONS.md` 70). Read-only over the scene graph.
 
-**How to write it.** Steps, in order:
+**`stop()`**: `super.stop(); Platform.exit();` — cleanup only, no `System.exit` (rule 2).
 
-1. Declare `public class MainApp extends Application`.
-2. Add the constants the window needs (title, initial width/height, minimum size) as `private static final`, each with a short comment on why that value.
-   **Open detail (decide + log in `DECISIONS.md`):** the exact initial and minimum window size is not
-   fixed by `docs/UML.md`; agree one pair of values with the team (the nav shell needs room for a
-   navigation rail plus a content pane), then treat it as the app's single source for window size.
-3. Write `public static void main(String[] args) { launch(args); }`.
-4. Override `start(Stage primaryStage)`:
-   1. build the composition root: `DbConnection db = new SqliteDbConnection(); db.initializeSchema();`
-   2. create the DAOs and services the shell needs, passing the DAO through the constructor;
-   3. load the shell/nav FXML with `FXMLLoader` (`getClass().getResource("/fxml/…")` — the leading `/` means "classpath root", see `src/main/resources/fxml/README.md`);
-   4. call the theme entry point on the new `Scene`: `M3Stylesheets.applyTo(scene, M3Theme.baseline(false));`
-      (light/dark comes from the user's preference; a UI switch just calls it again);
-   5. install the overlay layer above the shell (blocked on the library entry point — `DECISIONS.md` 35);
-   6. set the title, size and minimum size on `primaryStage`, then `primaryStage.show()`;
-   7. open the first screen (`LoginController` / its FXML).
-5. Override `stop()` and clear `SessionContext`.
-6. Override `init()` only if something must exist before the toolkit builds a window (rare; nothing in
-   this project needs it today).
+### The runtime spine this package starts
 
-**Sketch.**
-
-```java
-// Sketch — the canonical declaration is docs/UML.md §1; the startup ORDER is §2.
-public class MainApp extends Application {
-
-    private static final String WINDOW_TITLE = "Gym Management System";
-
-    public static void main(String[] args) {
-        launch(args);                       // one line: the JVM entry, nothing else belongs here
-    }
-
-    @Override
-    public void start(Stage primaryStage) throws Exception {
-        // 1) composition root: the ONLY place that names the concrete database (DECISIONS.md 33)
-        DbConnection db = new SqliteDbConnection();
-        db.initializeSchema();              // creates gym.db + tables on first run
-
-        // 2) wire one vertical slice's collaborators; services take DAO *interfaces*
-        CustomerDao customerDao = new CustomerDaoImpl(db);
-        CustomerService customerService = new CustomerService(customerDao /*, … */);
-
-        // 3) build the shell and apply the theme BEFORE showing anything (rule 3)
-        Parent shell = new FXMLLoader(getClass().getResource("/fxml/main.fxml")).load();
-        Scene scene = new Scene(shell);
-        M3Stylesheets.applyTo(scene, M3Theme.baseline(false));
-
-        // 4) overlay layer, then the window, then the first screen
-        //    OverlayLayer install: blocked on the m3fx public facade (DECISIONS.md 35)
-        primaryStage.setTitle(WINDOW_TITLE);
-        primaryStage.setScene(scene);
-        primaryStage.setMinWidth(1024);
-        primaryStage.setMinHeight(720);
-        primaryStage.show();
-
-        // 5) first screen: LoginController → AdminService.authenticate → SessionContext
-        FxUtils.switchScene("/fxml/login.fxml");
-    }
-
-    @Override
-    public void stop() {
-        SessionContext.clear();             // the close-button path never runs onLogout()
-    }
-}
-```
-
-**Line-by-line: the placeholder that exists today.** `MainApp.java` is 24 lines (4 of them blank) and
-is worth reading as a lesson in what is missing (root `README` §4 says "placeholder"):
-
-| Current line | What it does | What is missing / why it will change |
-|---|---|---|
-| `FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/main.fxml"));` | Loads the component showcase from the classpath | The leading `/` is correct and important; the file it loads is the library gallery, not a screen of ours |
-| `Parent root = loader.load();` | Builds the node tree | No controller is attached (`main.fxml` has no `fx:controller`), so nothing is wired |
-| `primaryStage.setTitle("JavaFX Application");` | Window title | Must be the product name; a title is user-visible app state |
-| `primaryStage.setScene(new Scene(root, 600, 400));` | Fixed 600×400 scene | No theme applied (`M3Stylesheets.applyTo` missing) → controls render unstyled; a hardcoded size cannot host the nav shell |
-| `primaryStage.show();` | Shows the window | No shell, no overlay layer, no first screen, no session handling |
-| `main → launch(args)` | Correct already | Keep it exactly like this |
-
-**How to know it is right.**
-
-1. `gradlew run` — the window opens with the product title, at the intended size, already themed (no
-   unstyled first frame).
-2. `gym.db` appears in the working directory on the first run (`BUILD_AND_RUN.md` §6).
-3. Log in, close the window with the X (not via logout), run the app again — the login screen appears,
-   **not** the dashboard. That single check proves `stop()` clears the session.
-4. Trigger a dialog on a screen: it must render inside the window (overlay), not as a second OS window.
-5. Console shows no stack trace; any database failure is a friendly dialog (`FxUtils.error`).
-
-**Common mistakes.**
-
-- **`getResource("fxml/main.fxml")` without the leading slash.** The path is then relative to the
-  class's package and `loader.load()` throws `NullPointerException`/`IOException` even though the file
-  exists in `src/main/resources`.
-- **Creating the scene before the stylesheet is applied.** The first frame is unstyled; users see a
-  flash. Apply the theme to the `Scene` first.
-- **Putting the theme call on the root node's `getStylesheets()`.** A look-up colour resolves from the
-  root of the *scene*; styling only the root node means popups and dialogs (separate scenes) stay
-  unthemed.
-- **Forgetting `stop()`.** The session survives the window; on a shared reception PC the next person
-  lands on the dashboard.
-- **Queries in `start`.** They run before the window is visible, so the app looks crashed. Use a
-  `Task` with a progress indicator, or move the query into the screen's `initialize()`.
-- **`new SqliteDbConnection()` inside a DAO or service.** Then the composition root is not the root any
-  more, and swapping the database touches many files (`DECISIONS.md` 33).
-- **Static `Stage`/`Scene` fields "for convenience".** They are mutable global state and they break the
-  moment the Swing branch or a test creates a second window.
-- **Adding the tenth responsibility here** (e.g. "just this one query because it is only the
-  dashboard's number"). Bootstrap code grows one exception at a time; the layering rule is absolute.
-
-**How it connects.**
-
-- **Calls:** `SqliteDbConnection` → `initializeSchema`, the DAO constructors, `M3Stylesheets.applyTo`,
-  `FxUtils.switchScene`, `SessionContext.clear`, and it opens `LoginController` (`UML.md` §2, §5).
-- **Is called by:** the JVM (`main`) and the JavaFX toolkit (`init`/`start`/`stop`). Nothing else.
-- **Must not depend on:** any `controller` class's internals, any DAO SQL, any business rule.
+`GymApp` → `app-shell.fxml` → **`AppShellController`** (in `controller/`; see that README for the
+full tour): hosts the `M3NavigationRail`, top app bar, `contentArea` swap, command palette and
+global snackbar; `loadScreen(String fxmlName)` swaps screens, `openScreenViaRail(...)` wires rail
+buttons, `beginLaunchGates()` hands off to **`LaunchGateController`** — built entirely in code (no
+FXML, no `fx:id`s, so the FXML test contracts stay byte-identical), with `beginLaunchGates()`,
+`showLoginGate()`, `isGateShowing()` as its public surface and `new LaunchGateController(shell)`
+as the single constructor.
 
 ## 6. How this package connects to the others
 
-Startup and session flow (the canonical version is `docs/UML.md` §2):
+| This package | Calls / starts | Called by |
+|---|---|---|
+| `MainApp` | every m3fx control (gallery), `M3Stylesheets`, `M3Overlay`, `M3CommandPalette`; opens `GymApp` on demand | JVM (`main`), Gradle `run` task |
+| `GymApp` | `AppShellController` (via `app-shell.fxml`), `LaunchGateController` (gates), `M3Stylesheets` | JVM (`main`), Gradle `runGym` task, `MainApp`'s shell button |
+| `M3Samples` | `MainApp.main` | JVM |
 
-1. `MainApp.start(Stage)` applies the theme, builds the nav shell and the overlay layer, and opens
-   `LoginController`.
-2. `LoginController.onLogin()` calls `AdminService.authenticate(username, password)`. It returns
-   `null` for an unknown username, a wrong password, or `Administrator.active == false` (rule 16).
-3. On success the controller stores the returned `Administrator` in `SessionContext` and opens
-   `DashboardController`; `SessionContext.requireRole(StaffRole.ADMIN)` later gates `StaffController`.
-4. `DashboardController.onLogout()` calls `SessionContext.clear()` and returns to `LoginController`;
-   `MainApp.stop()` clears it again as a safety net.
+**Planned wiring (not built).** When the backend lands, `GymApp`/the shell gains the composition
+root from `docs/UML.md` §2: a `DbConnection` implementation created exactly once, DAOs passed to
+services, services reachable from controllers, and `SessionContext` cleared on exit. None of those
+types exist yet — this package currently names no class outside `com.gym.controller` and the m3fx
+modules.
 
-| This package depends on | It is used by |
-|---|---|
-| `util/DbConnection`, `util/SqliteDbConnection`, `util/SessionContext`, `util/FxUtils` (owned by `util`, described in `../util/README.md`) | The JVM and the JavaFX toolkit only |
-| `dao/*DaoImpl` constructors (to wire services) | — |
-| `service/*Service` constructors (to hand to the shell) | — |
-| The library's public theme entry point (`M3Stylesheets.applyTo`) | — |
-| FXML files in `src/main/resources/fxml/` (`../../../resources/fxml/README.md`) | — |
-
-**The seam:** `DbConnection`. `MainApp` is the only place allowed to name `SqliteDbConnection`; every
-DAO below takes the interface (`DECISIONS.md` 33).
+**Tests.** The 9 harness classes in `src/test/java/com/gym/fxml/` call `GymApp.start(Stage)`
+directly with `SHOW_LAUNCH_GATES == false` (its default), which is why the launch-gate flag exists.
 
 ## 7. Common mistakes and review checklist
 
-**Mistakes we expect (and their symptoms).**
-
 | Symptom | Cause | Fix |
 |---|---|---|
-| Window opens unstyled, then "pops" into M3 | Theme applied after `show()`, or applied to the root node instead of the `Scene` | Apply to the `Scene` before `show()` |
-| `NullPointerException` at `loader.load()` | Resource path wrong (missing leading `/`, wrong folder, file not in `src/main/resources`) | Check the path against `src/main/resources/fxml/` |
-| Signed-in user survives a restart | `stop()` does not clear `SessionContext` | Clear it in `stop()` as well as on logout |
-| Dialogs appear as separate OS windows | Overlay layer not installed before screens open (`DECISIONS.md` 8/35) | Install it in `start`, before the first screen |
-| App "hangs" for seconds at startup | A query or file scan in `start`, on the FX thread | Move it off the FX thread (`Task`) or into the screen |
-| Second screen cannot be opened twice | A static `Stage`/controller field was introduced | Pass data explicitly; keep window state in `MainApp` only |
-| `gym.db` locked / `SQLITE_BUSY` | A connection opened here and never closed, or two app instances | Close connections in the DAO (`try`-with-resources); one instance per file |
+| Second window dies when one closes | Someone added `System.exit` to a launcher | Use `Platform.exit()`; the launcher exits the JVM |
+| Gallery appears unstyled for one frame | Theme applied after `show()` | Keep `applyTo` before `show()` (rule 3) |
+| Tests fail with the splash overlay in the way | `main()` flag leaked into a test path | Tests call `start(Stage)` directly; `SHOW_LAUNCH_GATES` stays `false` |
+| JVM will not exit after the window closes | A non-daemon background thread | Watchdog-style threads: `setDaemon(true)` |
+| Shell loads blank | `/fxml/app-shell.fxml` missing from resources | `GymApp` throws fast; check `src/main/resources/fxml/` |
 
-**Review checklist for a change to this package.**
+Checklist for a change here:
 
-- [ ] Only bootstrap concerns touched (theme, window, shell, overlay, first screen, session clear).
-- [ ] No SQL, no DAO call, no business rule added here.
-- [ ] Theme applied to the `Scene` before `show()`.
-- [ ] Title/size/min-size set in one place, not in screens.
-- [ ] `SessionContext.clear()` present in `stop()`.
-- [ ] No new `static` mutable field.
-- [ ] `main` is still a single `launch(args)` call.
-- [ ] The class still matches `docs/UML.md` §1 (declaration) and §2 (order of the startup steps); if
-      the order changed, `UML.md` §2 was updated in the same PR.
+- [ ] Only bootstrap concerns touched (theme, scene, window, shell load, gates).
+- [ ] No `System.exit`; no SQL/DAO/business rule; no new static mutable state beyond the
+      documented `SHOW_LAUNCH_GATES` flag.
+- [ ] Theme applied before `show()`; window title/size set here, not in screens.
+- [ ] Freeze watchdog still daemon + read-only.
+- [ ] `./gradlew test` green (the harness pins the pre-gate shell behaviour).
 
 ## 8. Learning exercises
 
-1. **Read the placeholder** and list, in order, the five startup steps from `UML.md` §2 that it does
-   not implement yet.
-2. **Explain the leading slash.** Why does `getResource("/fxml/main.fxml")` work while
-   `getResource("fxml/main.fxml")` fails, even though both "look" like the same path?
-3. **Write `stop()`.** Three lines: clear the session and release the bootstrap connection if you kept
-   one. Then explain which user-visible bug it prevents.
-4. **Find the layering violation.** This snippet is wrong — say why and rewrite it:
-   ```java
-   @Override public void start(Stage stage) throws Exception {
-       CustomerDao dao = new CustomerDaoImpl(new SqliteDbConnection());
-       long active = dao.findAll().stream().filter(c -> c.getStatus() == CustomerStatus.ACTIVE).count();
-       stage.setTitle("Active members: " + active);
-       stage.show();
-   }
-   ```
-5. **Defend the composition root.** A teammate proposes `DbProvider.get()` returning a static
-   singleton so DAOs can fetch a connection themselves. List three concrete problems this creates in
-   *this* project (hint: `DECISIONS.md` 33, the Swing branch, unit-testability of services).
+1. **Trace the launch.** List, in order, the five things `GymApp.start` does before `stage.show()`
+   — then explain why the theme must be created *before* the FXML loads.
+2. **Explain `SHOW_LAUNCH_GATES`.** Why is a mutable static flag acceptable here when rule 2 of the
+   old docs banned static mutable state? (Hint: who writes it, who reads it, and what breaks if a
+   test flips it.)
+3. **Write the watchdog's acceptance check.** Given "FX thread busy >60% for 4 s", why does the
+   watchdog also rate-limit dumps to one per 30 s? What console storm would you otherwise cause?
+4. **Find the layering violation.** A teammate adds `new M3Card()` styling helpers to `GymApp` so a
+   screen "can reuse them". Why is that wrong, and where do shared visuals belong?
+5. **Plan the composition root.** When `model/`/`dao/`/`service/` land, which class may name the
+   concrete `DbConnection` implementation, and which must receive only interfaces? Write the two
+   lines of the future wiring.
 
 <details>
 <summary>Answers</summary>
 
-1. (a) apply the theme with `M3Stylesheets.applyTo(scene, theme)`, (b) build the navigation shell,
-   (c) install the overlay layer, (d) open `LoginController`, (e) clear `SessionContext` on exit.
-   Today it does none of them: it loads the showcase with a hardcoded title and a fixed 600×400 scene.
-2. `getResource` resolves a path **relative to the class's package** unless it starts with `/`. With
-   the leading slash it is resolved from the classpath root, which is where `fxml/` sits inside the
-   built jar (`src/main/resources` is the classpath root at runtime).
-3. `SessionContext.clear();` — without it the signed-in administrator survives the window closing, and
-   the next launch (or the next user of a shared machine) starts already authenticated.
-4. The violation is a `MainApp` doing data access **and** a business decision ("which customers are
-   active"). The DAO must be created here but used by `CustomerService`; the count belongs in a service
-   method (or `CustomerDao.findByStatus` called by the service), and the wording is the dashboard
-   controller's job.
-5. A static provider hides the dependency (a caller cannot see what it needs), makes services
-   untestable without a real database file, and hard-wires SQLite into 26 DAO classes, so the Swing
-   port and any database change stop being one-file changes (`DECISIONS.md` 33).
+1. Theme (`M3Theme.fromSeed` + `setLatestTheme`) → load `app-shell.fxml` → scene + `applyTo` →
+   title/min-size/close-request → `setMaximized(true)`. The theme comes first because FXML
+   inflation constructs custom controls whose colors resolve from the latest theme; applying after
+   construction misses the lookups.
+2. It is written exactly once (`main()`), read once (`start`), documented in its Javadoc, and its
+   default (`false`) is what every test sees. The old ban targets *shared mutable app state* that
+   screens reach for; this flag is a launcher-scoped switch whose wrong value only changes whether
+   an overlay shows.
+3. A freeze loop triggers the dump condition every second; without a rate limit you would emit a
+   full stack dump per second, flooding the console and adding its own I/O cost while the FX thread
+   is already starving.
+4. `GymApp` is a launcher: adding widget-building code there makes it a second gallery and blurs
+   the composition root. Shared visuals belong in the m3fx library (or `controller/` helpers), not
+   in the `Application` class.
+5. The `Application` implementation (`GymApp`/the shell bootstrap) may name
+   `SqliteDbConnection`; every DAO and service receives the `DbConnection`/DAO interfaces. Sketch:
+   `DbConnection db = new SqliteDbConnection();` then `new CustomerDaoImpl(db)` passed into
+   `new CustomerService(dao)`.
 
 </details>
 
@@ -327,25 +220,15 @@ DAO below takes the interface (`DECISIONS.md` 33).
 
 | File | Responsibility | Owner | Status |
 |------|----------------|-------|--------|
-| `MainApp.java` | Entry point: window, nav shell, theme, overlay layer | Abdelrhman | Skeleton only (placeholder described in §5) |
+| `MainApp.java` | m3fx gallery: pages, theme bar, command palette, FXML screen viewer | Abdelrhman | Done |
+| `M3Samples.java` | Gallery alias launcher | Abdelrhman | Done |
+| `GymApp.java` | App shell launcher: theme, window, watchdog, launch gates | Abdelrhman | Done |
+| Backend composition root (DbConnection → DAOs → services) | Abdelrhman | Planned — see `docs/UML.md` §2 |
 
-| Task | Owner | Status |
-|------|-------|--------|
-| Skeleton created | Abdelrhman | Done |
-| Apply the M3 theme (`M3Stylesheets.applyTo(scene, theme)`) | Abdelrhman | To Do |
-| Install the overlay layer and nav shell | Abdelrhman | To Do (blocked on the library's public overlay entry point — `DECISIONS.md` 35) |
-| Open `LoginController` and clear `SessionContext` on exit | Abdelrhman | To Do |
+### Definition of done for a change in this package
 
-### Definition of done for a file in this package
-
-- [ ] `gradlew build` is green and `gradlew run` opens the window.
-- [ ] Startup follows `docs/UML.md` §2 in order (theme → shell → overlay → first screen).
-- [ ] Theme applied to the `Scene` before `show()`; no unstyled first frame.
-- [ ] `SessionContext.clear()` in `stop()`; verified by closing the window and restarting.
-- [ ] No SQL, no DAO access, no business rule, no new static mutable state in this package.
-- [ ] `main` is one line; window title/size defined once.
-- [ ] Placeholder replaced (title, size, theme call, real shell) — the five gaps in §5 closed.
-- [ ] No stack trace reaches the user; failures surface through `FxUtils`.
-
-Rules: all UI code runs on the FX thread. No static mutable state in this package. Do not
-reference DAOs or SQL from here — controller → service → DAO only.
+- [ ] `./gradlew build` is green (includes the 59 app-module harness tests).
+- [ ] `./gradlew run` opens the gallery; `./gradlew runGym` opens the shell, themed from the first
+      frame, maximized, closable without killing a co-open gallery window.
+- [ ] Launch gates appear only via `main()`; tests still drive the plain shell.
+- [ ] No `System.exit`, no backend classes named, no new static mutable state.

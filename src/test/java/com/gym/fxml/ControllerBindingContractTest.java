@@ -136,6 +136,54 @@ public class ControllerBindingContractTest {
         }
     }
 
+    /** Parses the set of distinct fx:id attribute values declared in an FXML file. */
+    private static Set<String> parseFxIdAttributes(String fxmlContent) {
+        Set<String> fxIds = new HashSet<>();
+        Matcher matcher = Pattern.compile("fx:id=\"([a-zA-Z0-9_]+)\"").matcher(fxmlContent);
+        while (matcher.find()) {
+            fxIds.add(matcher.group(1));
+        }
+        return fxIds;
+    }
+
+    /** Parses the set of onAction="#handler" method names referenced in an FXML file. */
+    private static Set<String> parseOnActionHandlers(String fxmlContent) {
+        Set<String> handlers = new HashSet<>();
+        Matcher matcher = Pattern.compile("onAction=\"#([a-zA-Z0-9_]+)\"").matcher(fxmlContent);
+        while (matcher.find()) {
+            handlers.add(matcher.group(1));
+        }
+        return handlers;
+    }
+
+    /** Collects every @FXML-annotated field of the controller class and its superclasses. */
+    private static List<Field> fxmlAnnotatedFields(Class<?> ctrlClass) {
+        List<Field> fields = new ArrayList<>();
+        Class<?> current = ctrlClass;
+        while (current != null && current != Object.class) {
+            for (Field field : current.getDeclaredFields()) {
+                if (field.isAnnotationPresent(FXML.class)) {
+                    fields.add(field);
+                }
+            }
+            current = current.getSuperclass();
+        }
+        return fields;
+    }
+
+    /** True when the controller declares a zero-arg or single-Event-arg method with the name. */
+    private static boolean hasCompatibleHandlerMethod(Class<?> ctrlClass, String handlerName) {
+        for (Method method : ctrlClass.getDeclaredMethods()) {
+            if (method.getName().equals(handlerName)) {
+                Class<?>[] pTypes = method.getParameterTypes();
+                if (pTypes.length == 0 || (pTypes.length == 1 && Event.class.isAssignableFrom(pTypes[0]))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     @ParameterizedTest(name = "Empirical Controller Injection: {0}")
     @ValueSource(strings = {
             "login.fxml",
@@ -286,7 +334,7 @@ public class ControllerBindingContractTest {
 
     @Test
     @Order(3)
-    @DisplayName("Verify total empirical @FXML binding counts across all 19 screens")
+    @DisplayName("Verify structural @FXML binding contracts across all 19 screens")
     void testTotalEmpiricalBindingCounts() throws Exception {
         // Ensure all screens have been tested
         for (String screen : SCREENS) {
@@ -318,8 +366,71 @@ public class ControllerBindingContractTest {
         System.out.println("===================================================================");
 
         assertEquals(19, INJECTED_FIELDS_PER_SCREEN.size(), "All 19 screens must be tested");
-        assertEquals(444, totalInjectedFields, "Expected 444 injected @FXML fields");
-        assertEquals(448, totalFxmlFxIds, "Expected 448 FXML fx:ids");
+
+        // Structural contract (replaces the brittle pinned totals): for every screen the
+        // recorded binding numbers must equal what the screen's FXML file and controller
+        // declare right now — recomputed from the actual sources, never pinned constants —
+        // so a legitimate UI change passes and a broken binding contract fails.
+        List<String> violations = new ArrayList<>();
+        for (String screen : SCREENS) {
+            String fxmlContent = readResourceContent("/fxml/" + screen);
+            Set<String> fxIds = parseFxIdAttributes(fxmlContent);
+            Set<String> handlers = parseOnActionHandlers(fxmlContent);
+
+            Integer recordedFxIds = FXML_FXID_COUNT_PER_SCREEN.get(screen);
+            Integer recordedHandlers = ON_ACTION_HANDLERS_PER_SCREEN.get(screen);
+            Integer recordedInjected = INJECTED_FIELDS_PER_SCREEN.get(screen);
+            if (recordedFxIds == null || recordedHandlers == null || recordedInjected == null) {
+                violations.add(screen + ": no binding record — screen was not tested");
+                continue;
+            }
+
+            // The per-screen fx:id count must match the fx:id attributes actually parsed
+            // from that screen's file.
+            if (recordedFxIds != fxIds.size()) {
+                violations.add(screen + ": recorded fx:id count " + recordedFxIds
+                        + " != " + fxIds.size() + " parsed from the file");
+            }
+            if (recordedHandlers != handlers.size()) {
+                violations.add(screen + ": recorded onAction count " + recordedHandlers
+                        + " != " + handlers.size() + " parsed from the file");
+            }
+
+            Matcher ctrlMatcher = Pattern.compile("fx:controller=\"([^\"]+)\"").matcher(fxmlContent);
+            assertTrue(ctrlMatcher.find(), "FXML " + screen + " must declare fx:controller");
+            Class<?> ctrlClass = Class.forName(ctrlMatcher.group(1));
+
+            // Every @FXML field injected non-null: the injected count must therefore equal
+            // the number of @FXML fields the controller actually declares.
+            List<Field> fxmlFields = fxmlAnnotatedFields(ctrlClass);
+            if (recordedInjected != fxmlFields.size()) {
+                violations.add(screen + ": injected @FXML fields " + recordedInjected
+                        + " != " + fxmlFields.size() + " declared in " + ctrlClass.getSimpleName()
+                        + " (an @FXML field is null or unaccounted for)");
+            }
+
+            // No orphan fields: every @FXML field name must exist among the parsed fx:ids.
+            Set<String> fieldNames = new HashSet<>();
+            for (Field field : fxmlFields) {
+                fieldNames.add(field.getName());
+            }
+            Set<String> orphanFields = new HashSet<>(fieldNames);
+            orphanFields.removeAll(fxIds);
+            if (!orphanFields.isEmpty()) {
+                violations.add(screen + ": @FXML fields with no matching fx:id " + orphanFields);
+            }
+
+            // Every onAction must resolve to a callable controller method.
+            for (String handlerName : handlers) {
+                if (!hasCompatibleHandlerMethod(ctrlClass, handlerName)) {
+                    violations.add(screen + ": onAction=\"#" + handlerName
+                            + "\" has no compatible method in " + ctrlClass.getSimpleName());
+                }
+            }
+        }
+
+        assertTrue(violations.isEmpty(),
+                "Structural binding contract violations found: " + violations);
         assertTrue(totalBindings > 450,
                 "Total verified bindings (" + totalBindings + ") must exceed empirical target of 450");
     }

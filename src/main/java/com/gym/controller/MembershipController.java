@@ -55,11 +55,11 @@ public class MembershipController {
         if (membershipDataTable == null || !membershipDataTable.getColumns().isEmpty()) {
             return;
         }
-        membershipDataTable.getColumns().addAll(
+        membershipDataTable.getColumns().addAll(List.of(
                 new M3DataTable.Column<>("Member", r -> r.split("\\|")[0], 190),
                 new M3DataTable.Column<>("Plan", r -> r.split("\\|")[1], 130),
                 new M3DataTable.Column<>("Status", r -> r.split("\\|")[2], 110),
-                new M3DataTable.Column<>("Renews", r -> r.split("\\|")[3], 120));
+                new M3DataTable.Column<>("Renews", r -> r.split("\\|")[3], 120)));
 
         masterLedger.setAll(
                 "Sarah Connor (#1042)|Yearly VIP|Active|2027-03-14",

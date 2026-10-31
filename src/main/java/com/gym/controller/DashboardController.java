@@ -111,8 +111,10 @@ public class DashboardController {
     }
 
     /**
-     * Ends the shift through a two-step confirm (destructive action) and answers with a
-     * snackbar; the button disables so the completed state is visible.
+     * Ends the shift through a two-step confirm (destructive action), then signs out through
+     * the owning shell: the shell routes into the Apple-style login gate
+     * ({@code LaunchGateController#showLoginGate}) in real runs. Standalone previews and FXML
+     * tests without the shell keep the previous visible answer (button disables + snackbar).
      */
     @FXML
     public void onLogout() {
@@ -125,12 +127,34 @@ public class DashboardController {
         dialog.setDefaultAction(confirm::activate);
         confirm.setOnAction(e -> {
             dialog.hide();
+            if (signOutViaShell()) {
+                return;
+            }
             logoutButton.setDisable(true);
             overlay.showSnackbar("Shift ended at " + clockText()
                     + " — check-ins handed to the next administrator.");
         });
         cancel.setOnAction(e -> dialog.hide());
         overlay.showDialog(dialog);
+    }
+
+    /**
+     * Signs out via the shell controller, published in the scene-root properties by
+     * {@link AppShellController} ({@code AppShellController.SHELL_CONTROLLER_KEY}): calling its
+     * public {@code onLogout} routes into the launch gate exactly like the shell's own logout
+     * button. Returns false when no shell is reachable (standalone preview / FXML test).
+     */
+    private boolean signOutViaShell() {
+        if (dashboardRoot == null || dashboardRoot.getScene() == null
+                || !(dashboardRoot.getScene().getRoot() instanceof javafx.scene.Parent sceneRoot)) {
+            return false;
+        }
+        Object shell = sceneRoot.getProperties().get(AppShellController.SHELL_CONTROLLER_KEY);
+        if (shell instanceof AppShellController controller) {
+            controller.onLogout();
+            return true;
+        }
+        return false;
     }
 
     // ------------------------------------------------------------------

@@ -311,6 +311,60 @@ public class TrainerListController {
     }
 
     /**
+     * Opens the chosen coach's dossier: navigates the shell to trainer-profile (firing the
+     * pinned {@code navTrainers} rail destination on the way, exactly like a rail click) and
+     * hands the coach's roster data over to {@link TrainerProfileController#showTrainer}.
+     * Standalone previews and FXML tests without the owning shell answer with a snackbar.
+     */
+    public void onOpenProfile(int trainerId) {
+        String row = demoTrainers.stream()
+                .filter(r -> field(r, 0).equals(String.valueOf(trainerId)))
+                .findFirst().orElse(null);
+        if (row == null) {
+            feedback.showSnackbar("Coach #" + trainerId + " is not on the roster (demo).");
+            return;
+        }
+        TrainerProfileController.TrainerSnapshot snapshot = snapshotOf(row);
+        AppShellController shell = shellFromScene();
+        if (shell != null) {
+            shell.openScreenViaRail("navTrainers", "trainer-profile.fxml", controller -> {
+                if (controller instanceof TrainerProfileController profile) {
+                    profile.showTrainer(snapshot);
+                }
+            });
+            return;
+        }
+        feedback.showSnackbar("Opening coach profile — " + field(row, 1) + " (standalone preview)");
+    }
+
+    /** Builds the profile-screen payload from a roster row (demo fields only, no backend). */
+    private TrainerProfileController.TrainerSnapshot snapshotOf(String row) {
+        return new TrainerProfileController.TrainerSnapshot(
+                Integer.parseInt(field(row, 0)),
+                field(row, 1),
+                field(row, 2),
+                (int) Math.round(parseNumber(field(row, 3))),
+                parseNumber(field(row, 4)),
+                (int) Math.round(parseNumber(field(row, 5))),
+                (int) Math.round(parseNumber(field(row, 6))),
+                field(row, 7));
+    }
+
+    /**
+     * The owning shell controller, published in the scene-root properties by
+     * {@link AppShellController} ({@code AppShellController.SHELL_CONTROLLER_KEY}); null in
+     * standalone previews and FXML tests.
+     */
+    private AppShellController shellFromScene() {
+        if (topAppBar == null || topAppBar.getScene() == null
+                || !(topAppBar.getScene().getRoot() instanceof javafx.scene.Parent sceneRoot)) {
+            return null;
+        }
+        Object shell = sceneRoot.getProperties().get(AppShellController.SHELL_CONTROLLER_KEY);
+        return shell instanceof AppShellController controller ? controller : null;
+    }
+
+    /**
      * Hosts the shared feedback overlay on the scene root while this screen is visible. Attach
      * and detach are deferred with {@link Platform#runLater(Runnable) Platform.runLater} so the
      * children list of the scene root (or of the pane hosting this screen) is never mutated
@@ -379,10 +433,6 @@ public class TrainerListController {
     @FXML
     public void onAdd(ActionEvent event) {
         onAdd();
-    }
-
-    public void onOpenProfile(int trainerId) {
-        feedback.showSnackbar("Opening coach profile #" + trainerId + " (demo)");
     }
 
     /** Destructive demo removal: confirms first, then removes with an Undo snackbar action. */

@@ -11,6 +11,7 @@ import io.m3fx.controls.iconbutton.M3IconButton;
 import io.m3fx.controls.internal.MotionUtil;
 import io.m3fx.controls.internal.SpringAnimation;
 import io.m3fx.controls.nav.M3NavigationRail;
+import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.selection.M3Switch;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.fxml.FXML;
@@ -29,6 +30,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Controller skeleton for Adaptive Application Shell (app-shell.fxml).
@@ -42,6 +44,13 @@ import java.util.List;
  * FXML binding contract counts are untouched.
  */
 public class AppShellController {
+
+    /**
+     * Scene-root property key under which this shell publishes itself so screen controllers can
+     * reach it with a guarded, static-free lookup (the same key
+     * {@code GymAppFullInteractiveAuditTest} reads). Plain constant, never mutable state.
+     */
+    public static final String SHELL_CONTROLLER_KEY = "appShellController";
 
     /** Mirrors the theme currently applied to the scene; GymApp starts with the dark scheme. */
     private boolean darkMode = true;
@@ -75,6 +84,22 @@ public class AppShellController {
      */
     private LaunchGateController launchGate;
 
+    /**
+     * Controller instance created by the most recent successful {@link #loadScreen(String)} call,
+     * so cross-screen handoffs ({@link #openScreenViaRail}) can pass data to the freshly loaded
+     * screen. Plain field on purpose: no @FXML annotation, so the pinned controller binding
+     * counts in ControllerBindingContractTest stay exact.
+     */
+    private Object lastLoadedController;
+
+    /**
+     * Lazy snackbar host for shell-level feedback (failed screen loads). Attached to the scene
+     * root on first use, mirroring the {@code installFeedbackLayer} pattern of the trainer
+     * screens. Plain field on purpose: no @FXML annotation, so the pinned controller binding
+     * counts in ControllerBindingContractTest stay exact.
+     */
+    private M3Overlay shellFeedback;
+
     @FXML private BorderPane rootShellPane;
     @FXML private M3TopAppBar topAppBar;
     @FXML private M3IconButton railToggleBtn;
@@ -105,6 +130,15 @@ public class AppShellController {
 
     @FXML
     public void initialize() {
+        if (rootShellPane != null) {
+            // Publish this shell in the scene-root properties once attached, so screen
+            // controllers can find it with a guarded lookup (SHELL_CONTROLLER_KEY).
+            rootShellPane.sceneProperty().addListener((obs, oldScene, scene) -> {
+                if (scene != null && scene.getRoot() != null) {
+                    scene.getRoot().getProperties().put(SHELL_CONTROLLER_KEY, this);
+                }
+            });
+        }
         if (navigationRail != null) {
             setupNavigationRail();
             javafx.application.Platform.runLater(() -> {
@@ -195,51 +229,142 @@ public class AppShellController {
         if (contentArea == null) return;
         try {
             java.net.URL url = getClass().getResource("/fxml/" + fxmlName);
-            if (url != null) {
-                javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(url);
-                javafx.scene.Parent view = loader.load();
-
-                // Clear any rigid prefHeight from root so it can expand dynamically. The min-height
-                // stretch applies ONLY to roots that are not already a ScrollPane: pinning a
-                // ScrollPane's min height to its own pref pins it to the FULL content height,
-                // which defeats its scrolling and forces enormous layout passes (the reported
-                // trainer-tab freeze).
-                if (view instanceof javafx.scene.layout.Region region) {
-                    region.setPrefHeight(javafx.scene.layout.Region.USE_COMPUTED_SIZE);
-                    if (!containsScrollPane(view)) {
-                        region.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
-                    }
-                }
-
-                javafx.scene.Node page;
-                if (containsScrollPane(view)) {
-                    // View already has its own dedicated ScrollPane layout
-                    applySmoothScrolling(view);
-                    contentArea.getChildren().setAll(view);
-                    page = view;
-                } else {
-                    // View needs smooth vertical scrolling
-                    javafx.scene.control.ScrollPane sp = new javafx.scene.control.ScrollPane(view);
-                    sp.setFitToWidth(true);
-                    sp.setFitToHeight(false);
-                    sp.setHbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER);
-                    sp.setVbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.AS_NEEDED);
-                    sp.setStyle("-fx-background-color: transparent; -fx-padding: 0;");
-                    enableSmoothScrolling(sp);
-                    contentArea.getChildren().setAll(sp);
-                    page = sp;
-                }
-
-                // Fluid entrance AFTER the synchronous swap: the page node is already in the
-                // scene graph, so callers (and tests) that inspect state right after this
-                // method returns always see the final navigation result. Exactly one page
-                // child is ever present, so rapid navigation can never stack duplicates.
-                MotionUtil.enter(page, MotionUtil.MotionDirection.UP, 1.0);
+            if (url == null) {
+                throw new java.io.IOException("FXML resource not found on the classpath");
             }
+            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(url);
+            javafx.scene.Parent view = loader.load();
+            lastLoadedController = loader.getController();
+
+            // Clear any rigid prefHeight from root so it can expand dynamically. The min-height
+            // stretch applies ONLY to roots that are not already a ScrollPane: pinning a
+            // ScrollPane's min height to its own pref pins it to the FULL content height,
+            // which defeats its scrolling and forces enormous layout passes (the reported
+            // trainer-tab freeze).
+            if (view instanceof javafx.scene.layout.Region region) {
+                region.setPrefHeight(javafx.scene.layout.Region.USE_COMPUTED_SIZE);
+                if (!containsScrollPane(view)) {
+                    region.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+                }
+            }
+
+            javafx.scene.Node page;
+            if (containsScrollPane(view)) {
+                // View already has its own dedicated ScrollPane layout
+                applySmoothScrolling(view);
+                contentArea.getChildren().setAll(view);
+                page = view;
+            } else {
+                // View needs smooth vertical scrolling
+                javafx.scene.control.ScrollPane sp = new javafx.scene.control.ScrollPane(view);
+                sp.setFitToWidth(true);
+                sp.setFitToHeight(false);
+                sp.setHbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER);
+                sp.setVbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.AS_NEEDED);
+                sp.setStyle("-fx-background-color: transparent; -fx-padding: 0;");
+                enableSmoothScrolling(sp);
+                contentArea.getChildren().setAll(sp);
+                page = sp;
+            }
+
+            // Realize the page synchronously (CSS pass, which creates every control skin).
+            // Without it, nodes that live under a Control whose skin is created lazily by the
+            // CSS pass (ScrollPane, M3Card, M3DataTable, ...) are unreachable through
+            // Node.lookup and getChildrenUnmodifiable traversal, so callers that inspect the
+            // freshly loaded screen right away — screen controllers handing data over, tests
+            // asserting the navigation result — see a half-detached subtree. This is
+            // idempotent: the next pulse would run the same pass.
+            page.applyCss();
+
+            // Fluid entrance AFTER the synchronous swap: the page node is already in the
+            // scene graph, so callers (and tests) that inspect state right after this
+            // method returns always see the final navigation result. Exactly one page
+            // child is ever present, so rapid navigation can never stack duplicates.
+            MotionUtil.enter(page, MotionUtil.MotionDirection.UP, 1.0);
         } catch (Exception e) {
             System.err.println("Failed to load /fxml/" + fxmlName + ": " + e.getMessage());
             e.printStackTrace();
+            showShellSnackbar("Could not open " + screenDisplayName(fxmlName));
         }
+    }
+
+    /**
+     * Navigates the shell to a detail screen on behalf of another screen: fires the pinned rail
+     * button with the given fx:id (the exact pathway of a rail click, so the ToggleGroup
+     * selection and the highlight pill stay consistent), then loads the detail FXML
+     * synchronously and hands its freshly created controller to {@code setup} for data passing.
+     * Both steps are guarded — a missing rail button or a failed load simply skips that step,
+     * and {@code setup} never runs with a controller of the wrong type (callers instanceof-check).
+     *
+     * @param railButtonId fx:id of the pinned rail destination to fire (e.g. {@code navTrainers})
+     * @param detailFxml   FXML file of the detail screen to load after the rail click
+     * @param setup        receives the detail screen's controller (may be any object; callers check)
+     */
+    public void openScreenViaRail(String railButtonId, String detailFxml, Consumer<Object> setup) {
+        fireRailButton(railButtonId);
+        loadScreen(detailFxml);
+        if (setup != null && lastLoadedController != null) {
+            setup.accept(lastLoadedController);
+        }
+    }
+
+    /** Fires the pinned rail destination with the given fx:id (no-op when absent or disabled). */
+    private void fireRailButton(String railButtonId) {
+        ToggleButton button = railButtonById(railButtonId);
+        if (button == null || button.isDisabled()) {
+            return;
+        }
+        boolean wasSelected = button.isSelected();
+        button.fire();
+        // JavaFX 21 ToggleButton.fire() toggles selection (setSelected(!isSelected())) before
+        // firing the action, so firing an already-selected rail destination would deselect it
+        // and leave the rail without a highlight. Restore it — the click pathway on a rail
+        // button never deselects the destination it navigates to.
+        if (wasSelected) {
+            button.setSelected(true);
+        }
+    }
+
+    /** Maps a rail button fx:id to its pinned @FXML field (direct, no tree search needed). */
+    private ToggleButton railButtonById(String railButtonId) {
+        return switch (railButtonId) {
+            case "navDashboard" -> navDashboard;
+            case "navCustomers" -> navCustomers;
+            case "navTrainers" -> navTrainers;
+            case "navSchedule" -> navSchedule;
+            case "navMemberships" -> navMemberships;
+            case "navEquipment" -> navEquipment;
+            case "navAttendance" -> navAttendance;
+            case "navPayments" -> navPayments;
+            case "navStaff" -> navStaff;
+            case "navHelp" -> navHelp;
+            default -> null;
+        };
+    }
+
+    /**
+     * Surfaces shell-level feedback as an M3Snackbar: the overlay host is created lazily and
+     * attached to the scene root (same pattern as the trainer screens'
+     * {@code installFeedbackLayer}); when no scene exists yet (early initialization, headless
+     * loads) the answer is skipped — the caller's stderr detail remains.
+     */
+    private void showShellSnackbar(String message) {
+        if (rootShellPane == null || rootShellPane.getScene() == null
+                || !(rootShellPane.getScene().getRoot() instanceof javafx.scene.layout.Pane sceneRoot)) {
+            return;
+        }
+        if (shellFeedback == null) {
+            shellFeedback = new M3Overlay();
+        }
+        if (!sceneRoot.getChildren().contains(shellFeedback)) {
+            sceneRoot.getChildren().add(shellFeedback);
+        }
+        shellFeedback.showSnackbar(message);
+    }
+
+    /** Strips the .fxml suffix for human-facing screen names ("trainer-profile"). */
+    private static String screenDisplayName(String fxmlName) {
+        return fxmlName.endsWith(".fxml") ? fxmlName.substring(0, fxmlName.length() - 5) : fxmlName;
     }
 
     private void applySmoothScrolling(javafx.scene.Node node) {
@@ -511,9 +636,8 @@ public class AppShellController {
             // its own MOUSE_CLICKED handler, so the read could see either the old or new value.
             darkMode = !darkMode;
             javafx.scene.Scene scene = rootShellPane.getScene();
-            javafx.scene.paint.Color seed = javafx.scene.paint.Color.web("#6750A4");
             io.m3fx.core.theme.M3Theme theme =
-                    io.m3fx.core.theme.M3Theme.fromSeed(seed, io.m3fx.core.theme.ThemeVariant.TONAL_SPOT, darkMode);
+                    io.m3fx.core.theme.M3Theme.fromSeed(com.gym.GymApp.SEED_PURPLE, io.m3fx.core.theme.ThemeVariant.TONAL_SPOT, darkMode);
             io.m3fx.controls.M3Stylesheets.applyTo(scene, theme);
         }
         if (themeModeSwitch != null) {

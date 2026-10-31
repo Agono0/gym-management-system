@@ -56,7 +56,7 @@ public class GymApp extends Application {
         stage.setMinHeight(700);
 
         // Route window close through Platform.exit() so Application.stop() cleanup runs first;
-        // stop() still force-exits the JVM afterwards so no thread can keep the process alive.
+        // stop() performs cleanup only — no System.exit, see stop().
         stage.setOnCloseRequest(e -> Platform.exit());
 
         // Maximize BEFORE show so Windows calculates decorations and work area properly
@@ -101,7 +101,7 @@ public class GymApp extends Application {
                     }
                 }
                 long now = System.nanoTime();
-                long cpu = mx.getThreadCpuTime(fxThread.getId());
+                long cpu = mx.getThreadCpuTime(fxThread.threadId());
                 if (lastSample == 0) {
                     lastSample = now;
                     lastCpu = cpu;
@@ -142,11 +142,23 @@ public class GymApp extends Application {
         }
     }
 
+    /**
+     * Cleans up on platform shutdown and lets the JVM exit normally instead of force-killing it.
+     *
+     * <p>{@link System#exit(int)} is deliberately NOT called. {@link MainApp}'s "Launch Full
+     * Application Shell Window" action starts a GymApp stage inside the same JVM as the running
+     * m3fx gallery, so killing the whole process from here would murder the gallery window too.
+     * JVM termination remains safe without it: the freeze-watchdog thread started in
+     * {@link #start(Stage)} is a daemon ({@code watchdog.setDaemon(true)}), so it cannot keep the
+     * process alive, and the JavaFX launcher (via {@link #launch(String[])}) performs the final
+     * JVM exit once the toolkit has shut down. The redundant {@link Platform#exit()} is a no-op
+     * while the toolkit is already shutting down and only guarantees the shutdown sequence is
+     * entered when {@code stop()} runs without a prior exit request.
+     */
     @Override
     public void stop() throws Exception {
         super.stop();
         Platform.exit();
-        System.exit(0);
     }
 
     public static void main(String[] args) {

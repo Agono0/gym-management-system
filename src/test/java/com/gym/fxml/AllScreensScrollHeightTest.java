@@ -17,6 +17,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 public class AllScreensScrollHeightTest {
 
     @BeforeAll
@@ -46,6 +50,7 @@ public class AllScreensScrollHeightTest {
                 shellRoot.layout();
 
                 StackPane contentArea = (StackPane) shellRoot.lookup("#contentArea");
+                assertNotNull(contentArea, "Shell must expose the #contentArea host");
 
                 String[] allScreens = {
                         "dashboard.fxml",
@@ -68,27 +73,57 @@ public class AllScreensScrollHeightTest {
                 };
 
                 System.out.println("=== ALL SCREENS VIEWPORT MEASUREMENTS (Scene H: 720, ContentArea H: " + contentArea.getHeight() + ") ===");
+                Parent previousView = null;
                 for (String screen : allScreens) {
                     controller.loadScreen(screen);
                     shellRoot.applyCss();
                     shellRoot.layout();
 
                     Parent currentView = (Parent) contentArea.getChildren().get(0);
+                    // Every listed screen must load: loadScreen() swallows loader errors, so a
+                    // failed load would leave the previous screen instance in place.
+                    assertNotNull(currentView, "Root of " + screen + " must be loaded into #contentArea");
+                    assertNotSame(previousView, currentView,
+                            "loadScreen(\"" + screen + "\") must replace the previous screen with a fresh root");
+                    previousView = currentView;
+                    assertTrue(currentView.isVisible(), "Root of " + screen + " must be visible after load");
+
+                    double viewWidth = currentView instanceof Region region
+                            ? region.getWidth()
+                            : currentView.getBoundsInLocal().getWidth();
+                    assertFiniteNonNegative(viewWidth, screen + " view width");
+
                     if (currentView instanceof ScrollPane sp) {
                         Region content = (Region) sp.getContent();
+                        double viewportH = sp.getViewportBounds().getHeight();
+                        double contentH = content == null ? 0 : content.getHeight();
+                        assertFiniteNonNegative(viewportH, screen + " viewport height");
+                        assertFiniteNonNegative(contentH, screen + " content height");
                         System.out.println(String.format("Screen: %-22s | [OUTER SCROLLPANE] Viewport H: %6.1f | Content H: %6.1f | Can Scroll: %s",
-                                screen, sp.getViewportBounds().getHeight(), content.getHeight(), (content.getHeight() > sp.getViewportBounds().getHeight())));
+                                screen, viewportH, contentH, (contentH > viewportH)));
                     } else {
                         // View has internal layout or inner scrollpane
                         ScrollPane innerSp = findScrollPane(currentView);
+                        double totalH = currentView instanceof Region region ? region.getHeight() : -1;
                         if (innerSp != null) {
                             Region innerContent = (Region) innerSp.getContent();
                             double innerH = innerContent != null ? innerContent.getHeight() : -1;
+                            double viewportH = innerSp.getViewportBounds().getHeight();
+                            assertFiniteNonNegative(viewportH, screen + " inner viewport height");
+                            if (innerContent != null) {
+                                assertFiniteNonNegative(innerH, screen + " inner content height");
+                            }
+                            if (currentView instanceof Region) {
+                                assertFiniteNonNegative(totalH, screen + " total view height");
+                            }
                             System.out.println(String.format("Screen: %-22s | [INNER SCROLLPANE] Viewport H: %6.1f | Content H: %6.1f | Total View H: %6.1f",
-                                    screen, innerSp.getViewportBounds().getHeight(), innerH, ((Region) currentView).getHeight()));
+                                    screen, viewportH, innerH, totalH));
                         } else {
+                            if (currentView instanceof Region) {
+                                assertFiniteNonNegative(totalH, screen + " total view height");
+                            }
                             System.out.println(String.format("Screen: %-22s | [NO SCROLLPANE] Total View H: %6.1f",
-                                    screen, ((Region) currentView).getHeight()));
+                                    screen, totalH));
                         }
                     }
                 }
@@ -101,11 +136,17 @@ public class AllScreensScrollHeightTest {
             }
         });
 
-        latch.await(10, TimeUnit.SECONDS);
+        assertTrue(latch.await(10, TimeUnit.SECONDS), "Timed out measuring screens on the JavaFX thread");
         if (err.get() != null) {
             err.get().printStackTrace();
             throw new AssertionError(err.get());
         }
+    }
+
+    /** A measured width/height must be a real, non-negative number: never NaN, infinite or negative. */
+    private static void assertFiniteNonNegative(double value, String what) {
+        assertTrue(Double.isFinite(value) && value >= 0,
+                what + " must be finite and non-negative but was " + value);
     }
 
     private ScrollPane findScrollPane(javafx.scene.Node node) {

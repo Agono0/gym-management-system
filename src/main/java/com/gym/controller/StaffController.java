@@ -80,12 +80,12 @@ public class StaffController {
         if (staffDataTable == null || !staffDataTable.getColumns().isEmpty()) {
             return;
         }
-        staffDataTable.getColumns().addAll(
+        staffDataTable.getColumns().addAll(List.of(
                 new M3DataTable.Column<>("ID", r -> field(r, 0), 60),
                 new M3DataTable.Column<>("Name", r -> field(r, 1), 150),
                 new M3DataTable.Column<>("Role", r -> field(r, 2), 110),
                 new M3DataTable.Column<>("Status", r -> field(r, 3), 100),
-                new M3DataTable.Column<>("Last Login", r -> field(r, 4), 110));
+                new M3DataTable.Column<>("Last Login", r -> field(r, 4), 110)));
         staffDataTable.getItems().setAll(demoStaff);
     }
 

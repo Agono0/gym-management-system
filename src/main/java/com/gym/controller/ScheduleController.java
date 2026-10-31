@@ -55,7 +55,7 @@ public class ScheduleController {
 
     @FXML private GridPane agendaGrid;
     @FXML private M3TextField searchTrainerField;
-    @FXML private ListView<?> trainerListView;
+    @FXML private ListView<String> trainerListView;
     @FXML private Label lblInspectorTitle;
     @FXML private Label lblSessionStatus;
     @FXML private Label lblAthleteName;
@@ -150,7 +150,7 @@ public class ScheduleController {
         if (trainerListView == null) {
             return;
         }
-        ListView<String> list = (ListView<String>) trainerListView;
+        ListView<String> list = trainerListView;
         list.setPlaceholder(new Label("No coaches match your search."));
         list.setItems(FXCollections.observableArrayList(coachSummaries(coaches)));
         if (searchTrainerField != null) {
@@ -591,7 +591,7 @@ public class ScheduleController {
         List<Coach> visible = showingAvailableOnly
                 ? coaches.stream().filter(Coach::availableThisWeek).toList()
                 : coaches;
-        ((ListView<String>) trainerListView).getItems().setAll(coachSummaries(visible));
+        trainerListView.getItems().setAll(coachSummaries(visible));
         if (btnShowAvailableTrainers != null) {
             btnShowAvailableTrainers.setText(showingAvailableOnly
                     ? "Show All Coaches"
@@ -614,7 +614,7 @@ public class ScheduleController {
 
     public GridPane getAgendaGrid() { return agendaGrid; }
     public M3TextField getSearchTrainerField() { return searchTrainerField; }
-    public ListView<?> getTrainerListView() { return trainerListView; }
+    public ListView<String> getTrainerListView() { return trainerListView; }
     public Label getLblInspectorTitle() { return lblInspectorTitle; }
     public Label getLblSessionStatus() { return lblSessionStatus; }
     public Label getLblAthleteName() { return lblAthleteName; }

@@ -106,8 +106,6 @@ public class CustomerListController {
     private int nextMemberNumber = 1043;
     /** Row currently shown in the quick-peek side sheet, or {@code null}. */
     private Object[] selectedRow;
-    /** Whether the side sheet shows the short peek or the full dossier. */
-    private boolean fullDossier;
 
     public CustomerListController() {
         // Public no-arg constructor for FXMLLoader
@@ -236,8 +234,11 @@ public class CustomerListController {
     }
 
     /**
-     * Toggles between the compact peek and the full dossier for the selected athlete;
-     * the button relabels so the state change is visible without any popup.
+     * Navigates the shell to the athlete's full dossier (customer-profile): fires the pinned
+     * {@code navCustomers} rail destination on the way, exactly like a rail click, and passes
+     * the selected member identity so {@link CustomerProfileController} prefills the name. The
+     * quick-peek side sheet stays the answer for the peek action (row click / row icon).
+     * Standalone previews and FXML tests without the owning shell answer with a snackbar.
      */
     @FXML
     public void onOpenSelectedProfile() {
@@ -245,9 +246,32 @@ public class CustomerListController {
             overlay.showSnackbar("Select an athlete row first.");
             return;
         }
-        fullDossier = !fullDossier;
-        fillSideSheet(selectedRow);
-        btnOpenFullProfile.setText(fullDossier ? "Collapse Dossier" : "Open Full Profile");
+        String name = String.valueOf(selectedRow[COL_NAME]);
+        String memberId = String.valueOf(selectedRow[COL_ID]);
+        AppShellController shell = shellFromScene();
+        if (shell != null) {
+            shell.openScreenViaRail("navCustomers", "customer-profile.fxml", controller -> {
+                if (controller instanceof CustomerProfileController profile) {
+                    profile.showMember(name, memberId);
+                }
+            });
+            return;
+        }
+        overlay.showSnackbar("Full profile opens in the app window — " + name + " (" + memberId + ").");
+    }
+
+    /**
+     * The owning shell controller, published in the scene-root properties by
+     * {@link AppShellController} ({@code AppShellController.SHELL_CONTROLLER_KEY}); null in
+     * standalone previews and FXML tests.
+     */
+    private AppShellController shellFromScene() {
+        if (rootContainer == null || rootContainer.getScene() == null
+                || !(rootContainer.getScene().getRoot() instanceof javafx.scene.Parent sceneRoot)) {
+            return null;
+        }
+        Object shell = sceneRoot.getProperties().get(AppShellController.SHELL_CONTROLLER_KEY);
+        return shell instanceof AppShellController controller ? controller : null;
     }
 
     /** Two-step delete of the selected athlete with an Undo snackbar answer. */
@@ -428,8 +452,6 @@ public class CustomerListController {
 
     private void openSideSheet(Object[] row) {
         selectedRow = row;
-        fullDossier = false;
-        btnOpenFullProfile.setText("Open Full Profile");
         fillSideSheet(row);
         sideSheetQuickPeek.setVisible(true);
         sideSheetQuickPeek.setManaged(true);
@@ -437,7 +459,6 @@ public class CustomerListController {
 
     private void hideSideSheet() {
         selectedRow = null;
-        fullDossier = false;
         if (sideSheetQuickPeek != null) {
             sideSheetQuickPeek.setVisible(false);
             sideSheetQuickPeek.setManaged(false);
@@ -446,7 +467,7 @@ public class CustomerListController {
 
     private void fillSideSheet(Object[] row) {
         holographicPassCard.setContent(identityPass(row));
-        biometricHudBox.getChildren().setAll(sheetItems(row, fullDossier));
+        biometricHudBox.getChildren().setAll(sheetItems(row));
     }
 
     private VBox identityPass(Object[] row) {
@@ -458,18 +479,12 @@ public class CustomerListController {
         return new VBox(6, name, meta);
     }
 
-    /** Peek shows the three headline facts; the full dossier lists everything on record. */
-    private List<M3ListItem> sheetItems(Object[] row, boolean full) {
+    /** The peek sheet shows the three headline facts; the full dossier lives in the profile screen. */
+    private List<M3ListItem> sheetItems(Object[] row) {
         List<M3ListItem> items = new ArrayList<>();
         items.add(listItem("person", "Status", row[COL_STATUS] + " · 8-week activity " + row[COL_ACTIVITY] + "%"));
         items.add(listItem("group", "Assigned coach", String.valueOf(row[COL_TRAINER])));
         items.add(listItem("calendar", "Member since", String.valueOf(row[COL_JOINED])));
-        if (full) {
-            items.add(listItem("search", "Phone", String.valueOf(row[COL_PHONE])));
-            items.add(listItem("info", "Email", String.valueOf(row[COL_EMAIL])));
-            items.add(listItem("stats", "Membership", "Monthly Standard · renews monthly"));
-            items.add(listItem("favorite", "Emergency contact", "On file with the front desk"));
-        }
         return items;
     }
 

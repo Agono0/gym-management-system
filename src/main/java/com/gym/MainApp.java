@@ -28,9 +28,8 @@ import io.m3fx.controls.fab.M3FabMenu;
 import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.iconbutton.IconButtonVariant;
 import io.m3fx.controls.iconbutton.M3IconButton;
-import io.m3fx.controls.internal.OverlayLayer;
 import io.m3fx.controls.internal.SpringAnimation;
-import io.m3fx.controls.internal.SpringAnimation.SpringParams;
+import io.m3fx.controls.common.SpringParams;
 import io.m3fx.controls.layout.M3AdaptiveScaffold;
 import io.m3fx.controls.list.M3ListItem;
 import io.m3fx.controls.menu.M3Menu;
@@ -155,8 +154,7 @@ public class MainApp extends Application {
     private M3CommandPalette commandPalette;
     private M3ModelViewer3D globalModelViewer;
 
-    // Palette seed presets
-    private static final Color SEED_PURPLE = Color.web("#6750A4");
+    // Palette seed presets (purple seed is shared with GymApp.SEED_PURPLE)
     private static final Color SEED_TEAL   = Color.web("#006A6A");
     private static final Color SEED_CORAL  = Color.web("#B3261E");
     private static final Color SEED_AZURE  = Color.web("#0061A4");
@@ -316,7 +314,7 @@ public class MainApp extends Application {
         // Seed preset color dots
         HBox seedSwatches = new HBox(6);
         seedSwatches.setAlignment(Pos.CENTER_LEFT);
-        for (Color c : List.of(SEED_PURPLE, SEED_TEAL, SEED_CORAL, SEED_AZURE, SEED_GREEN, SEED_AMBER)) {
+        for (Color c : List.of(GymApp.SEED_PURPLE, SEED_TEAL, SEED_CORAL, SEED_AZURE, SEED_GREEN, SEED_AMBER)) {
             Circle dot = new Circle(10, c);
             dot.setStroke(Color.WHITE);
             dot.setStrokeWidth(1.5);

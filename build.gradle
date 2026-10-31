@@ -23,12 +23,6 @@ javafx {
 }
 
 dependencies {
-    // Material Design 3 components / theme (pick one in Week 1, remove the other)
-    // implementation 'io.github.mkpaz:atlantafx:2.0.1'
-    // implementation 'io.github.palexdev:materialfx:11.17.0'
-
-    implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
-
     // Local reusable M3 library (separated so it can be reused in many projects).
     implementation(project(':m3fx-core'))
     implementation(project(':m3fx-controls'))
@@ -46,6 +40,16 @@ test {
         '--sun-misc-unsafe-memory-access=allow'
     ]
     systemProperties System.properties
+}
+
+// Same compile discipline as the m3fx library modules: target Java 21 bytecode,
+// always UTF-8 (Windows default encoding risk), and all lint warnings enabled.
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+    options.compilerArgs << '-Xlint:all,-processing'
+    // Do not silently truncate lint output (javac's default cap is 100 warnings).
+    options.compilerArgs << '-Xmaxwarns' << '10000'
 }
 
 application {

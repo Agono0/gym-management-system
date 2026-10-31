@@ -2,7 +2,6 @@ package com.gym.fxml;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import javafx.application.Platform;
@@ -27,6 +26,10 @@ import java.util.concurrent.atomic.AtomicReference;
  * Verifies Requirement R4:
  * "All created FXML files must be syntactically valid JavaFX 21 XML,
  * resolve all component imports, load cleanly without parse errors, and pass ./gradlew check."
+ *
+ * <p>Strict by default: a missing screen file FAILS. The lenient mode (missing screens are
+ * skipped via a failed assumption, for progressive milestone testing) is opt-in only, via
+ * the explicit {@code -Dtest.lenient=true} system property.</p>
  */
 public class FxmlIntegrityTest {
 
@@ -124,17 +127,18 @@ public class FxmlIntegrityTest {
     @DisplayName("Verify integrity of each of the 19 required FXML screens")
     void testFxmlScreenIntegrity(String fxmlFileName) {
         URL resource = getClass().getResource("/fxml/" + fxmlFileName);
-        boolean strictMode = Boolean.getBoolean("test.strict")
-                || "true".equalsIgnoreCase(System.getenv("STRICT_E2E"));
+        // Inverted default: a missing screen file fails unless lenient mode was requested
+        // explicitly with -Dtest.lenient=true.
+        boolean lenientMode = Boolean.getBoolean("test.lenient");
 
         if (resource == null) {
-            if (strictMode) {
-                fail("Mandatory screen '/fxml/" + fxmlFileName + "' does not exist on classpath.");
-            } else {
+            if (lenientMode) {
                 Assumptions.assumeTrue(false,
                         "Screen '/fxml/" + fxmlFileName + "' not yet created (progressive milestone testing).");
                 return;
             }
+            fail("Mandatory screen '/fxml/" + fxmlFileName + "' does not exist on classpath. "
+                    + "Run with -Dtest.lenient=true to skip missing screens instead.");
         }
 
         assertDoesNotThrow(() -> {
@@ -146,20 +150,24 @@ public class FxmlIntegrityTest {
     @Test
     @DisplayName("Summary check of screen inventory presence")
     void testScreenInventoryPresence() {
-        boolean strictMode = Boolean.getBoolean("test.strict")
-                || "true".equalsIgnoreCase(System.getenv("STRICT_E2E"));
+        boolean lenientMode = Boolean.getBoolean("test.lenient");
 
         List<String> missingScreens = ALL_19_SCREENS.stream()
                 .filter(name -> getClass().getResource("/fxml/" + name) == null)
                 .toList();
 
-        if (strictMode) {
-            assertTrue(missingScreens.isEmpty(),
-                    "Strict mode failure: Missing " + missingScreens.size() + "/19 screens: " + missingScreens);
-        } else {
+        if (missingScreens.isEmpty()) {
+            System.out.printf("[E2E HARNESS] Screen presence: %d/19 present.%n", ALL_19_SCREENS.size());
+            return;
+        }
+
+        if (lenientMode) {
             int presentCount = ALL_19_SCREENS.size() - missingScreens.size();
             System.out.printf("[E2E HARNESS] Screen presence: %d/19 present. Missing: %s%n",
                     presentCount, missingScreens);
+        } else {
+            fail("Missing " + missingScreens.size() + "/19 screens: " + missingScreens
+                    + ". Run with -Dtest.lenient=true to skip missing screens instead.");
         }
     }
 }
