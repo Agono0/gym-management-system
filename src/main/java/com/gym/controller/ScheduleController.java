@@ -21,6 +21,7 @@ import javafx.geometry.VPos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
+import javafx.scene.control.SplitPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Pane;
@@ -118,6 +119,9 @@ public class ScheduleController {
             buildDemoAgenda();
         }
         wireStatusFilters();
+        // The inspector is contextual: it starts collapsed so the agenda (this screen's primary
+        // answer) gets the full width, and opens over the session the user clicks.
+        collapseInspector();
     }
 
     /**
@@ -243,12 +247,33 @@ public class ScheduleController {
         onToday();
     }
 
+    /** Hides the inspector and hands its width back to the agenda (2-pane split). */
+    private void collapseInspector() {
+        if (inspectorContainer == null) {
+            return;
+        }
+        inspectorContainer.setVisible(false);
+        inspectorContainer.setManaged(false);
+        if (inspectorContainer.getParent() instanceof SplitPane split) {
+            split.setDividerPositions(0.28);
+        }
+    }
+
+    /** Reveals the inspector and rebalances the split to rail / agenda / inspector. */
+    private void expandInspector() {
+        if (inspectorContainer == null) {
+            return;
+        }
+        inspectorContainer.setVisible(true);
+        inspectorContainer.setManaged(true);
+        if (inspectorContainer.getParent() instanceof SplitPane split) {
+            split.setDividerPositions(0.25, 0.72);
+        }
+    }
+
     @FXML
     public void onCloseInspector() {
-        if (inspectorContainer != null) {
-            inspectorContainer.setVisible(false);
-            inspectorContainer.setManaged(false);
-        }
+        collapseInspector();
     }
 
     @FXML
@@ -269,12 +294,20 @@ public class ScheduleController {
         ColumnConstraints dayCol = new ColumnConstraints();
         dayCol.setHgrow(Priority.ALWAYS);
         agendaGrid.getColumnConstraints().setAll(timeCol, dayCol, dayCol, dayCol);
-        RowConstraints row = new RowConstraints(56);
-        agendaGrid.getRowConstraints().setAll(row);
+        // Every row needs its own constraint: one shared instance only sizes row 0, which used
+        // to collapse the other hour rows to bare text height and crush the matrix.
+        RowConstraints headerRow = new RowConstraints(32);
+        RowConstraints hourRow = new RowConstraints(56);
+        List<RowConstraints> rows = new ArrayList<>();
+        rows.add(headerRow);
+        for (int h = FIRST_HOUR; h <= LAST_HOUR; h++) {
+            rows.add(hourRow);
+        }
+        agendaGrid.getRowConstraints().setAll(rows);
 
         for (int d = 0; d < DEMO_DAY_COLUMNS; d++) {
             Label header = new Label(DAY_FMT.format(weekStart.plusDays(d)));
-            header.getStyleClass().add("title-small");
+            header.getStyleClass().add("m3-list-headline");
             GridPane.setHalignment(header, HPos.CENTER);
             agendaGrid.add(header, d + 1, 0);
         }
@@ -286,7 +319,7 @@ public class ScheduleController {
         };
         for (int h = FIRST_HOUR; h <= LAST_HOUR; h++) {
             Label time = new Label(String.format("%02d:00", h));
-            time.getStyleClass().add("body-small");
+            time.getStyleClass().add("m3-list-overline");
             GridPane.setValignment(time, VPos.TOP);
             agendaGrid.add(time, 0, h - FIRST_HOUR + 1);
         }
@@ -304,7 +337,11 @@ public class ScheduleController {
 
     /** Builds one agenda card: tagged, clickable, keyboard operable. */
     private M3Card createSessionCard(String[] session, LocalDate day) {
-        VBox box = new VBox(2, new Label(session[1]), new Label(session[0] + " · " + session[2]));
+        Label title = new Label(session[1]);
+        title.getStyleClass().add("m3-list-supporting");
+        Label caption = new Label(session[0] + " · " + session[2]);
+        caption.getStyleClass().add("m3-list-overline");
+        VBox box = new VBox(2, title, caption);
         box.setPadding(new Insets(6));
         M3Card card = new M3Card(CardVariant.OUTLINED);
         card.setContent(box);
@@ -366,8 +403,7 @@ public class ScheduleController {
             sessionTimeline.addItem("—", "Session start", "Pending", M3Timeline.Status.PENDING);
         }
         if (inspectorContainer != null) {
-            inspectorContainer.setVisible(true);
-            inspectorContainer.setManaged(true);
+            expandInspector();
         }
     }
 

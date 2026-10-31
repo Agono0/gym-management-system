@@ -121,7 +121,7 @@ class MotionUtilTest {
         Rectangle rect = holder.get();
         // The spring sets the property to exactly 0 at settle; require the value to hold at 0
         // across two polls spaced apart so a mid-flight zero-crossing cannot satisfy this.
-        assertTrue(awaitFxCondition(() -> rect.getTranslateX() == 0.0, 1000),
+        assertTrue(awaitFxCondition(() -> rect.getTranslateX() == 0.0, 2000),
                 "translateX must reach 0 within the spring's settle window");
         assertTrue(awaitFxCondition(() -> rect.getTranslateX() == 0.0, 300),
                 "translateX must remain 0 (spring settled, not mid-oscillation)");

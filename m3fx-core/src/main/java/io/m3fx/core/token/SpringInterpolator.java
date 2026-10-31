@@ -24,6 +24,9 @@ public class SpringInterpolator extends Interpolator {
     /** Gentle spring: critically damped (no overshoot) for fades and subtle changes. */
     public static final SpringInterpolator GENTLE = new SpringInterpolator(1.00, 8.0);
 
+    /** Liquid glass fluid spring: smooth Apple-style liquid settling with minimal overshoot. */
+    public static final SpringInterpolator FLUID = new SpringInterpolator(0.82, 6.0);
+
     private final double dampingRatio;
     private final double naturalFrequency;
     private final double rawZero;

@@ -428,3 +428,17 @@
     while the veil lifts → sign-out reverses into the gate. Invalid input shakes the card
     (`shake`), no dialogs. Demo auth: any email + 4+ char password (no backend by design —
     `controller` purity rules hold).
+
+72. **Orphaned stash recovery (Oct 2026).** `stash@{0}` ("WIP before undo restore") held a
+    43-file changeset that existed nowhere in history. Per-file diffing against main showed most
+    of it was already committed (carousel fix, nav-rail collapse, membership screen — commit
+    3bd958e) or was an older snapshot of since-improved files (M3GlassPane, M3Button, FXMLs).
+    The genuinely new content is an unfinished **liquid glass feature**: `GLASS`/`GLASS_PROMINENT`
+    button variants, a `GLASS` card variant, `ToolbarStyle.GLASS`, and `M3Stylesheets` loading for
+    a `glass.css` — whose stylesheet and `io.m3fx.controls.glass` package were untracked and were
+    never stashed, so the wiring ships unstyled without them. Recovered now: the self-contained
+    pieces (`SpringInterpolator.FLUID`, `MotionTokens.fluidSpring()`, a flaky-test timeout bump).
+    Deferred, stash deliberately KEPT: completing the liquid glass feature (write `glass.css` +
+    the `glass/` panel control, then land the variant wiring). Also recovered with this round:
+    the schedule screen responsive-layout fix (root prefWidth removal, contextual inspector,
+    hour-row constraints).

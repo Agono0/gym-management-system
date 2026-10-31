@@ -119,3 +119,4 @@ material-web-2.5.0/
 # Antigravity agent coordination artifacts
 .agents/
 
+.zcode/

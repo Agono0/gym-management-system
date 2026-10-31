@@ -131,6 +131,15 @@ public final class MotionTokens {
     }
 
     /**
+     * Liquid glass fluid spring interpolator (smooth Apple-style liquid settling).
+     *
+     * @return the fluid spring interpolator
+     */
+    public static Interpolator fluidSpring() {
+        return SpringInterpolator.FLUID;
+    }
+
+    /**
      * M3 spring physics token parameters (stiffness and damping ratio).
      *
      * @param stiffness spring stiffness (higher = faster response)
