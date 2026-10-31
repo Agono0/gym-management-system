@@ -19,6 +19,13 @@ import javafx.scene.text.TextAlignment;
  * M3 Radial Gauge / Speedometer Chart for real-time telemetry, athletic biometrics,
  * heart rate monitoring, and output metrics with spring-interpolated animations.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3GaugeChart extends Region {
 
     private final DoubleProperty value = new SimpleDoubleProperty(this, "value", 0.0);
@@ -190,10 +197,12 @@ public class M3GaugeChart extends Region {
         return value;
     }
 
+    /** Gets the raw gauge value. */
     public double getValue() {
         return value.get();
     }
 
+    /** Sets the raw gauge value; the change animates with the M3 gentle spring. */
     public void setValue(double value) {
         this.value.set(value);
     }
@@ -203,6 +212,7 @@ public class M3GaugeChart extends Region {
         return animatedValue;
     }
 
+    /** Gets the spring-animated value currently driving the rendered arc. */
     public double getAnimatedValue() {
         return animatedValue.get();
     }
@@ -212,10 +222,12 @@ public class M3GaugeChart extends Region {
         return minValue;
     }
 
+    /** Gets the lower bound of the gauge scale. */
     public double getMinValue() {
         return minValue.get();
     }
 
+    /** Sets the lower bound of the gauge scale. */
     public void setMinValue(double minValue) {
         this.minValue.set(minValue);
     }
@@ -225,10 +237,12 @@ public class M3GaugeChart extends Region {
         return maxValue;
     }
 
+    /** Gets the upper bound of the gauge scale. */
     public double getMaxValue() {
         return maxValue.get();
     }
 
+    /** Sets the upper bound of the gauge scale. */
     public void setMaxValue(double maxValue) {
         this.maxValue.set(maxValue);
     }
@@ -238,10 +252,12 @@ public class M3GaugeChart extends Region {
         return title;
     }
 
+    /** Gets the metric title rendered under the value. */
     public String getTitle() {
         return title.get();
     }
 
+    /** Sets the metric title rendered under the value. */
     public void setTitle(String title) {
         this.title.set(title);
     }
@@ -251,10 +267,12 @@ public class M3GaugeChart extends Region {
         return unit;
     }
 
+    /** Gets the unit suffix rendered under the value. */
     public String getUnit() {
         return unit.get();
     }
 
+    /** Sets the unit suffix rendered under the value. */
     public void setUnit(String unit) {
         this.unit.set(unit);
     }
@@ -264,10 +282,12 @@ public class M3GaugeChart extends Region {
         return startAngle;
     }
 
+    /** Gets the start angle of the track in JavaFX arc degrees. */
     public double getStartAngle() {
         return startAngle.get();
     }
 
+    /** Sets the start angle of the track in JavaFX arc degrees. */
     public void setStartAngle(double startAngle) {
         this.startAngle.set(startAngle);
     }
@@ -277,10 +297,12 @@ public class M3GaugeChart extends Region {
         return sweepAngle;
     }
 
+    /** Gets the clockwise angular extent of the track in degrees. */
     public double getSweepAngle() {
         return sweepAngle.get();
     }
 
+    /** Sets the clockwise angular extent of the track in degrees. */
     public void setSweepAngle(double sweepAngle) {
         this.sweepAngle.set(sweepAngle);
     }
@@ -290,10 +312,12 @@ public class M3GaugeChart extends Region {
         return trackColor;
     }
 
+    /** Gets the custom track color, or {@code null} for the dimmed default track. */
     public Color getTrackColor() {
         return trackColor.get();
     }
 
+    /** Sets the custom track color; {@code null} restores the dimmed outline-variant track. */
     public void setTrackColor(Color trackColor) {
         this.trackColor.set(trackColor);
     }
@@ -306,10 +330,12 @@ public class M3GaugeChart extends Region {
         return progressColor;
     }
 
+    /** Gets the custom progress color, or {@code null} for the dynamic threshold ramp. */
     public Color getProgressColor() {
         return progressColor.get();
     }
 
+    /** Sets the custom progress color; {@code null} restores the dynamic threshold ramp. */
     public void setProgressColor(Color progressColor) {
         this.progressColor.set(progressColor);
     }

@@ -18,6 +18,13 @@ import java.time.LocalTime;
  * Surface container high dial in the full spec; this control implements the text-input mode (hour
  * and minute fields plus AM/PM selector) which the spec supports for keyboard entry.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3TimePicker extends HBox {
 
     private final ObjectProperty<LocalTime> value =

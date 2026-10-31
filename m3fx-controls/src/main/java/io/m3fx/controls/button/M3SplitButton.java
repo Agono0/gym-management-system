@@ -23,6 +23,13 @@ import javafx.scene.layout.Region;
  * The leading button triggers the primary action; the trailing button triggers an attached
  * {@link M3Menu} with animated chevron rotation driven by {@link SpringAnimation}.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3SplitButton extends HBox {
 
     /** Split button sizing options. */
@@ -64,6 +71,8 @@ public class M3SplitButton extends HBox {
     private final StringProperty text = new SimpleStringProperty(this, "text", "");
     private final ObjectProperty<Node> leadingIcon = new SimpleObjectProperty<>(this, "leadingIcon");
     private final ObjectProperty<M3Menu> menu = new SimpleObjectProperty<>(this, "menu");
+    private final ObjectProperty<EventHandler<ActionEvent>> onAction =
+            new SimpleObjectProperty<>(this, "onAction");
 
     private final M3Button leadingButton;
     private final Region divider = new Region();
@@ -119,6 +128,20 @@ public class M3SplitButton extends HBox {
         updateSize(getSize());
 
         trailingButton.setOnAction(e -> toggleMenu());
+
+        // The primary action lives on this node, not on the inner leading button: ActionEvents
+        // fired at the split button itself (keyboard activation, tests, FXML controllers) and
+        // ACTION events bubbling up from the leading button both invoke onAction exactly once.
+        // The trailing chevron's own action (opening the menu) bubbles here too and is excluded.
+        this.addEventHandler(ActionEvent.ACTION, event -> {
+            if (event.getSource() != this && event.getSource() != leadingButton) {
+                return;
+            }
+            EventHandler<ActionEvent> handler = onAction.get();
+            if (handler != null) {
+                handler.handle(event);
+            }
+        });
     }
 
     /** Creates a filled split button. */
@@ -183,14 +206,19 @@ public class M3SplitButton extends HBox {
         };
     }
 
-    /** Sets primary action handler. */
+    /** Sets the primary action handler (leading button activation, or an ActionEvent fired at this split button). */
     public void setOnAction(EventHandler<ActionEvent> handler) {
-        leadingButton.setOnAction(handler);
+        onAction.set(handler);
     }
 
-    /** Returns primary action handler. */
+    /** Returns the primary action handler. */
     public EventHandler<ActionEvent> getOnAction() {
-        return leadingButton.getOnAction();
+        return onAction.get();
+    }
+
+    /** The primary action handler property. */
+    public ObjectProperty<EventHandler<ActionEvent>> onActionProperty() {
+        return onAction;
     }
 
     /** Returns the variant property. */

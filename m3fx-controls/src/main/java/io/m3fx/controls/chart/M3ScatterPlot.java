@@ -23,6 +23,13 @@ import java.util.List;
  * Features auto-scaling, dashed gridlines, 4-quadrant crosshairs, OLS regression trendlines,
  * and interactive floating tooltips.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3ScatterPlot extends Region {
 
     private final ObservableList<M3ScatterSeries> seriesList = FXCollections.observableArrayList();
@@ -45,6 +52,7 @@ public class M3ScatterPlot extends Region {
     private double hoverMouseY = -1;
     private boolean isHovering = false;
 
+    /** Creates an empty scatter plot with default VBT-style axis titles. */
     public M3ScatterPlot() {
         getStyleClass().add("m3-scatter-plot");
         getChildren().add(canvas);
@@ -108,10 +116,12 @@ public class M3ScatterPlot extends Region {
         return showGrid;
     }
 
+    /** Whether dashed gridlines and axis tick labels are drawn. */
     public boolean isShowGrid() {
         return showGrid.get();
     }
 
+    /** Sets whether dashed gridlines and axis tick labels are drawn. */
     public void setShowGrid(boolean show) {
         this.showGrid.set(show);
     }
@@ -121,10 +131,12 @@ public class M3ScatterPlot extends Region {
         return showQuadrants;
     }
 
+    /** Whether the dashed quadrant crosshair lines and quadrant captions are drawn. */
     public boolean isShowQuadrants() {
         return showQuadrants.get();
     }
 
+    /** Sets whether the dashed quadrant crosshair lines and quadrant captions are drawn. */
     public void setShowQuadrants(boolean show) {
         this.showQuadrants.set(show);
     }
@@ -134,10 +146,12 @@ public class M3ScatterPlot extends Region {
         return quadrantX;
     }
 
+    /** Gets the vertical crosshair position in data units. */
     public double getQuadrantX() {
         return quadrantX.get();
     }
 
+    /** Sets the vertical crosshair position in data units; {@link Double#NaN} uses the midpoint. */
     public void setQuadrantX(double qx) {
         this.quadrantX.set(qx);
     }
@@ -147,10 +161,12 @@ public class M3ScatterPlot extends Region {
         return quadrantY;
     }
 
+    /** Gets the horizontal crosshair position in data units. */
     public double getQuadrantY() {
         return quadrantY.get();
     }
 
+    /** Sets the horizontal crosshair position in data units; {@link Double#NaN} uses the midpoint. */
     public void setQuadrantY(double qy) {
         this.quadrantY.set(qy);
     }
@@ -160,10 +176,12 @@ public class M3ScatterPlot extends Region {
         return showTrendline;
     }
 
+    /** Whether per-series OLS regression trendlines are drawn. */
     public boolean isShowTrendline() {
         return showTrendline.get();
     }
 
+    /** Sets whether per-series OLS regression trendlines are drawn. */
     public void setShowTrendline(boolean show) {
         this.showTrendline.set(show);
     }
@@ -173,10 +191,12 @@ public class M3ScatterPlot extends Region {
         return showTrendlineStats;
     }
 
+    /** Whether the regression equation/R² badge is drawn in the plot corner. */
     public boolean isShowTrendlineStats() {
         return showTrendlineStats.get();
     }
 
+    /** Sets whether the regression equation/R² badge is drawn in the plot corner. */
     public void setShowTrendlineStats(boolean show) {
         this.showTrendlineStats.set(show);
     }
@@ -216,10 +236,12 @@ public class M3ScatterPlot extends Region {
         return xAxisTitle;
     }
 
+    /** Gets the label rendered under the X axis. */
     public String getXAxisTitle() {
         return xAxisTitle.get();
     }
 
+    /** Sets the label rendered under the X axis. */
     public void setXAxisTitle(String title) {
         this.xAxisTitle.set(title);
     }
@@ -229,10 +251,12 @@ public class M3ScatterPlot extends Region {
         return yAxisTitle;
     }
 
+    /** Gets the label rendered (rotated) beside the Y axis. */
     public String getYAxisTitle() {
         return yAxisTitle.get();
     }
 
+    /** Sets the label rendered (rotated) beside the Y axis. */
     public void setYAxisTitle(String title) {
         this.yAxisTitle.set(title);
     }
@@ -242,10 +266,12 @@ public class M3ScatterPlot extends Region {
         return xUnit;
     }
 
+    /** Gets the unit suffix appended to X values. */
     public String getXUnit() {
         return xUnit.get();
     }
 
+    /** Sets the unit suffix appended to X values. */
     public void setXUnit(String unit) {
         this.xUnit.set(unit);
     }
@@ -255,10 +281,12 @@ public class M3ScatterPlot extends Region {
         return yUnit;
     }
 
+    /** Gets the unit suffix appended to Y values. */
     public String getYUnit() {
         return yUnit.get();
     }
 
+    /** Sets the unit suffix appended to Y values. */
     public void setYUnit(String unit) {
         this.yUnit.set(unit);
     }

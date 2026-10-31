@@ -1,6 +1,6 @@
 package io.m3fx.controls.sheet;
 
-import io.m3fx.controls.internal.OverlayLayer;
+import io.m3fx.controls.overlay.OverlayLayer;
 import io.m3fx.core.token.MotionTokens;
 import javafx.animation.FadeTransition;
 import javafx.animation.ParallelTransition;
@@ -24,6 +24,13 @@ import javafx.util.Duration;
  * Shown via {@link #showIn(OverlayLayer)}; Escape, a scrim click or dragging the handle down past
  * the dismiss threshold hides the sheet.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3BottomSheet extends VBox {
 
     /** Dismiss drag distance beyond which the sheet closes (spec "drag to dismiss"). */

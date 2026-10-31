@@ -9,6 +9,7 @@ import io.m3fx.controls.chip.M3Chip;
 import io.m3fx.controls.internal.ThemeColors;
 import io.m3fx.controls.scene3d.M3ModelViewer3D.ModelType;
 import io.m3fx.core.theme.ColorRole;
+import io.m3fx.core.token.TypeScale;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
@@ -37,6 +38,13 @@ import java.util.function.Consumer;
  * Interactive 2D/2.5D Gym Facility Floorplan & Equipment Zone Map displaying real-time
  * equipment occupancy status pins, zone heat boundaries, and seamless one-click 3D inspection.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3GymFloorMap extends StackPane {
 
     /** Design-space width all equipment/zone coordinates are expressed against. */
@@ -44,8 +52,11 @@ public class M3GymFloorMap extends StackPane {
     /** Design-space height all equipment/zone coordinates are expressed against. */
     private static final double DESIGN_HEIGHT = 420.0;
 
-    private static final Font ZONE_TITLE_FONT = Font.font("Roboto", FontWeight.BOLD, 10);
-    private static final Font PIN_LABEL_FONT = Font.font("Roboto", FontWeight.BOLD, 10);
+    // Canvas labels: 10px mapped to M3 label-small (11sp), the nearest type role.
+    private static final Font ZONE_TITLE_FONT =
+            Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.BOLD, TypeScale.LABEL_SMALL.size());
+    private static final Font PIN_LABEL_FONT =
+            Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.BOLD, TypeScale.LABEL_SMALL.size());
 
     /**
      * Equipment operational status. Status colors are resolved from M3 theme roles at draw
@@ -196,11 +207,13 @@ public class M3GymFloorMap extends StackPane {
         detailCard.setManaged(false);
         detailCard.setMaxSize(240, 160);
 
-        detailTitle.setFont(Font.font("Roboto", FontWeight.BOLD, 13));
+        // Detail card title: 13px mapped to M3 title-small (14sp), the nearest title role.
+        detailTitle.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.BOLD, TypeScale.TITLE_SMALL.size()));
         detailTitle.setStyle("-fx-text-fill: -md-sys-color-on-surface;");
 
-        detailStatus.setFont(Font.font("Roboto", FontWeight.BOLD, 11));
-        detailUser.setFont(Font.font("Roboto", FontWeight.NORMAL, 11));
+        // Detail card metadata: M3 label-small (11sp) — exact match for the previous 11px fonts.
+        detailStatus.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.BOLD, TypeScale.LABEL_SMALL.size()));
+        detailUser.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
         detailUser.setStyle("-fx-text-fill: -md-sys-color-on-surface-variant;");
 
         inspect3DBtn.setOnAction(e -> {

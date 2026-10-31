@@ -2,6 +2,7 @@ package io.m3fx.controls.chart;
 
 import io.m3fx.controls.internal.ThemeColors;
 import io.m3fx.core.theme.ColorRole;
+import io.m3fx.core.token.TypeScale;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.FXCollections;
@@ -12,12 +13,21 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Region;
 import javafx.scene.paint.Color;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 import javafx.scene.text.TextAlignment;
 
 /**
  * M3 Expressive Bar Chart featuring rounded pill-top columns, grouped series,
  * dashed gridlines, and interactive hover tooltips.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3BarChart extends Region {
 
     private final ObservableList<M3DataSeries> seriesList = FXCollections.observableArrayList();
@@ -163,7 +173,8 @@ public class M3BarChart extends Region {
             gc.setLineDashes(4.0, 4.0);
 
             gc.setFill(textColor);
-            gc.setFont(javafx.scene.text.Font.font(11));
+            // Axis tick labels: M3 label-small (11sp) — exact match for the previous 11px font.
+            gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
 
             int ySteps = 4;
             for (int i = 0; i <= ySteps; i++) {
@@ -244,7 +255,8 @@ public class M3BarChart extends Region {
                 if (c < first.getData().size()) {
                     String lbl = first.getData().get(c).getLabel();
                     gc.setFill(textColor);
-                    gc.setFont(javafx.scene.text.Font.font(11));
+                    // Axis tick labels: M3 label-small (11sp) — exact match for the previous 11px font.
+                    gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
                     gc.setTextAlign(TextAlignment.CENTER);
                     gc.fillText(lbl, groupStartX + usableGroupW / 2.0, padTop + plotH + 18);
                     gc.setTextAlign(TextAlignment.LEFT);
@@ -309,10 +321,11 @@ public class M3BarChart extends Region {
         gc.fillRoundRect(tipX, tipY, tipW, tipH, 4, 4);
 
         gc.setFill(text);
-        gc.setFont(javafx.scene.text.Font.font("System", javafx.scene.text.FontWeight.BOLD, 10));
+        // Tooltip text: 10px mapped to M3 label-small (11sp), the nearest type role.
+        gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.BOLD, TypeScale.LABEL_SMALL.size()));
         gc.fillText(category == null || category.isEmpty() ? seriesName : category, tipX + 8, tipY + 16);
 
-        gc.setFont(javafx.scene.text.Font.font("System", javafx.scene.text.FontWeight.NORMAL, 10));
+        gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
         gc.fillText(seriesName + ": " + String.format("%.1f", value), tipX + 8, tipY + 32);
     }
 }

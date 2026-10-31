@@ -20,6 +20,13 @@ import javafx.scene.layout.VBox;
  * High-impact M3 Telemetry Metric Card displaying an analytic headline, delta badge,
  * optional embedded sparkline or graphic, and glowing border hover response.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3StatCard extends M3Card {
 
     private final StringProperty title = new SimpleStringProperty(this, "title", "");

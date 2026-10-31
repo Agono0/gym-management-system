@@ -32,6 +32,13 @@ import java.util.function.Function;
  *
  * @param <T> data item type
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3DataTable<T> extends VBox {
 
     /** Model for a table column. */
@@ -372,13 +379,14 @@ public class M3DataTable<T> extends VBox {
 
         if (total == 0) {
             // Quiet centered placeholder: "No items" for an empty data set, "No matching items"
-            // when a search filter removed everything. Static (no animation), theme-colored.
+            // when a search filter removed everything. Static (no animation), theme-colored via
+            // the .m3-data-table-empty style class in m3fx.css.
             Label empty = new Label(masterItems.isEmpty() ? "No items" : "No matching items");
             empty.getStyleClass().add("m3-data-table-empty");
             empty.setMaxWidth(Double.MAX_VALUE);
             empty.setAlignment(Pos.CENTER);
             empty.setMinHeight(52); // matches the M3 data-table minimum row height
-            empty.setStyle("-fx-text-fill: -md-sys-color-on-surface-variant; -fx-padding: 8 16 8 16;");
+            empty.setPadding(new Insets(8, 16, 8, 16)); // same inset the class used to inline
             rowsContainer.getChildren().add(empty);
             return;
         }

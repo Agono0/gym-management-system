@@ -125,8 +125,9 @@ public final class M3Theme {
      * {@code -md-sys-color-*} looked-up color plus the seed/variant marker classes.
      *
      * <p>For every role, translucent state variants are also emitted
-     * ({@code -md-sys-color-<role>-a08/-a10/-a12/-a16/-a38} for hover, focus/pressed, disabled
-     * container, dragged and disabled content). Because they are computed from the resolved theme
+     * ({@code -md-sys-color-<role>-a08/-a10/-a12/-a15/-a16/-a18/-a20/-a22/-a25/-a38}) at
+     * alphas 8-38%: the low alphas back hover/pressed/dragged state layers, the higher ones
+     * disabled content and elevation shadows. Because they are computed from the resolved theme
      * colors, layered state backgrounds stay correct in dark and high-contrast themes.
      *
      * @return CSS text to add to a scene (via {@code scene.getStylesheets()} data URL or a

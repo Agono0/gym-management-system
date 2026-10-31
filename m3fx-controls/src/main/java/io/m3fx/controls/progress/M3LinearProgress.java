@@ -35,6 +35,13 @@ import javafx.util.Duration;
  * translate/scale cycles with the exact keyframe fractions and easings from
  * {@code material-web/progress/internal/_linear-progress.scss} (2s infinite loop).
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3LinearProgress extends Control {
 
     /** Determinate value meaning "indeterminate". */
@@ -153,18 +160,8 @@ public class M3LinearProgress extends Control {
         LinearSkin(M3LinearProgress control) {
             super(control);
 
-            String trackStyle =
-                    "-fx-background-color: -md-sys-color-surface-container-highest;"
-                            + " -fx-background-radius: 2;";
-            String barStyle = "-fx-background-color: -md-sys-color-primary;"
-                    + " -fx-background-radius: 2;";
-            activeBar.setStyle(barStyle);
-            secondaryBar.setStyle(barStyle);
-            trackTail.setStyle(trackStyle);
-            track.setStyle(trackStyle);
-            stopDot.setStyle(
-                    "-fx-background-color: -md-sys-color-primary-container;"
-                            + " -fx-background-radius: 2;");
+            // Colors/radii come from the .m3-linear-track/-active/-secondary/-stop rules in
+            // m3fx.css (token lookups); no inline styles here.
 
             // Determinate row: active bar | 4dp gap | trailing track | 4dp gap | 4dp stop dot.
             // The 4dp cells stay managed so the stop area is always reserved.

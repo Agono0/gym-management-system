@@ -29,6 +29,21 @@ public final class Ripple {
     private static final String HANDLER = "m3fx.ripple-handler";
     private static final String ACTIVE = "m3fx.ripple-active";
 
+    /**
+     * Ripple ink alpha applied on top of the supplied base color. Not an M3 token: neither
+     * {@code io.m3fx.core.token.StateOpacity} (state layers are 8&ndash;16%, see
+     * {@link io.m3fx.core.token.StateOpacity}) nor the material-web ripple styles publish a
+     * ripple-ink opacity. This is the library's established visual, named so it is tuned here
+     * only.
+     */
+    private static final double INK_ALPHA = 0.14;
+
+    /**
+     * Initial ripple radius in px the press expands the ink from. Library visual (no spec source
+     * in the repo publishes a start radius); named so it is tuned here only.
+     */
+    private static final double INITIAL_RADIUS_PX = 5.0;
+
     private Ripple() {}
 
     /**
@@ -68,7 +83,7 @@ public final class Ripple {
                     double pressX = event.getX();
                     double pressY = event.getY();
                     double maxDist = Math.hypot(Math.max(pressX, w - pressX), Math.max(pressY, h - pressY));
-                    double initialRadius = 5.0;
+                    double initialRadius = INITIAL_RADIUS_PX;
                     double targetScale = Math.max(1.0, (maxDist * 1.08) / initialRadius);
                     Color base = ink == null ? Color.WHITE : ink.get();
                     if (base == null) {
@@ -83,7 +98,7 @@ public final class Ripple {
                                             base.getRed(),
                                             base.getGreen(),
                                             base.getBlue(),
-                                            0.14));
+                                            INK_ALPHA));
                     ripple.setMouseTransparent(true);
                     layer.getChildren().add(ripple);
                     ScaleTransition scale =

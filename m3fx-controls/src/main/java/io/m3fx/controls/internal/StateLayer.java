@@ -4,8 +4,10 @@ import io.m3fx.core.token.MotionTokens;
 import io.m3fx.core.token.StateOpacity;
 import java.util.Map;
 import java.util.WeakHashMap;
-import javafx.beans.value.ChangeListener;
+import javafx.animation.Animation;
 import javafx.animation.FadeTransition;
+import javafx.application.Platform;
+import javafx.beans.value.ChangeListener;
 import javafx.scene.Node;
 import javafx.scene.layout.Region;
 import javafx.scene.paint.Color;
@@ -20,6 +22,13 @@ import javafx.util.Duration;
  */
 public final class StateLayer {
 
+    /**
+     * The fade currently running per overlay. Entries exist only while that fade runs: each
+     * transition removes its own entry as soon as it stops, because the transition strongly
+     * references the overlay (its animated node) and would otherwise pin the WeakHashMap key
+     * forever. A stopped-but-present entry is exactly the classic self-referencing WeakHashMap
+     * leak.
+     */
     private static final Map<Region, FadeTransition> ACTIVE = new WeakHashMap<>();
     private static final String LISTENERS = "m3fx.state-layer-listeners";
 
@@ -35,6 +44,7 @@ public final class StateLayer {
      * @param overlay a full-size, mouse-transparent region stacked above the target content
      */
     public static void bind(Node target, Region overlay) {
+        requireFxThread("bind");
         unbind(target, overlay);
         overlay.setMouseTransparent(true);
         overlay.setOpacity(0);
@@ -66,6 +76,7 @@ public final class StateLayer {
 
     /** Removes state listeners and stops the overlay fade transition. */
     public static void unbind(Node target, Region overlay) {
+        requireFxThread("unbind");
         Object listeners = overlay.getProperties().remove(LISTENERS);
         if (listeners instanceof ChangeListener<?>[] registered) {
             @SuppressWarnings("unchecked")
@@ -96,7 +107,8 @@ public final class StateLayer {
             to = 0;
         }
         // One transition per overlay: stop the running one so rapid hover/press flapping
-        // never stacks competing fades (the main cause of flicker).
+        // never stacks competing fades (the main cause of flicker). Stopping fires the stopped
+        // fade's status listener, which removes its own ACTIVE entry before the new one is put.
         FadeTransition running = ACTIVE.get(overlay);
         if (running != null) {
             running.stop();
@@ -105,6 +117,15 @@ public final class StateLayer {
                 new FadeTransition(Duration.millis(MotionTokens.DURATION_SHORT_2), overlay);
         fade.setFromValue(overlay.getOpacity());
         fade.setToValue(to);
+        // Self-cleaning entry: the fade strongly references the overlay it animates, so an entry
+        // left behind after the fade stops would make the WeakHashMap value pin its own key and
+        // the overlay could never be collected. remove(key, value) only clears this fade's own
+        // slot, so a stale stop cannot evict a newer fade.
+        fade.statusProperty().addListener((obs, oldV, status) -> {
+            if (status != Animation.Status.RUNNING) {
+                ACTIVE.remove(overlay, fade);
+            }
+        });
         ACTIVE.put(overlay, fade);
         fade.play();
     }
@@ -115,5 +136,12 @@ public final class StateLayer {
                 (int) Math.round(color.getRed() * 255),
                 (int) Math.round(color.getGreen() * 255),
                 (int) Math.round(color.getBlue() * 255));
+    }
+
+    private static void requireFxThread(String operation) {
+        if (!Platform.isFxApplicationThread()) {
+            throw new IllegalStateException(
+                    "StateLayer." + operation + " must be called on the JavaFX Application Thread");
+        }
     }
 }

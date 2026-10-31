@@ -24,13 +24,24 @@ import javafx.scene.text.TextAlignment;
  * HIIT / Tabata High-Intensity Interval Countdown Timer featuring circular progress sweep,
  * Work/Rest state transitions, and round tracking.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3IntervalTimer extends VBox {
 
     /** Interval states. */
     public enum IntervalState {
+        /** Not started or reset; the dial shows the full work interval. */
         STOPPED,
+        /** High-intensity phase; arc drawn with the theme primary color. */
         WORK,
+        /** Recovery phase; arc drawn with the theme secondary color. */
         REST,
+        /** All rounds finished; the dial is drained and the loop stops. */
         COMPLETE
     }
 
@@ -287,86 +298,107 @@ public class M3IntervalTimer extends VBox {
         gc.fillText(st.name(), cx, cy + 24);
     }
 
+    /** Length of the high-intensity phase in seconds. */
     public IntegerProperty workSecondsProperty() {
         return workSeconds;
     }
 
+    /** Gets the length of the high-intensity phase in seconds. */
     public int getWorkSeconds() {
         return workSeconds.get();
     }
 
+    /** Sets the length of the high-intensity phase in seconds. */
     public void setWorkSeconds(int workSeconds) {
         this.workSeconds.set(workSeconds);
     }
 
+    /** Length of the recovery phase in seconds. */
     public IntegerProperty restSecondsProperty() {
         return restSeconds;
     }
 
+    /** Gets the length of the recovery phase in seconds. */
     public int getRestSeconds() {
         return restSeconds.get();
     }
 
+    /** Sets the length of the recovery phase in seconds. */
     public void setRestSeconds(int restSeconds) {
         this.restSeconds.set(restSeconds);
     }
 
+    /** Total number of work/rest rounds before the timer completes. */
     public IntegerProperty totalRoundsProperty() {
         return totalRounds;
     }
 
+    /** Gets the total number of rounds. */
     public int getTotalRounds() {
         return totalRounds.get();
     }
 
+    /** Sets the total number of work/rest rounds. */
     public void setTotalRounds(int totalRounds) {
         this.totalRounds.set(totalRounds);
     }
 
+    /** The round currently in progress, starting at 1. */
     public IntegerProperty currentRoundProperty() {
         return currentRound;
     }
 
+    /** Gets the round currently in progress, starting at 1. */
     public int getCurrentRound() {
         return currentRound.get();
     }
 
+    /** Sets the round currently in progress. */
     public void setCurrentRound(int currentRound) {
         this.currentRound.set(currentRound);
     }
 
+    /** Seconds left in the current phase, driving the countdown arc. */
     public DoubleProperty secondsRemainingProperty() {
         return secondsRemaining;
     }
 
+    /** Gets the seconds left in the current phase. */
     public double getSecondsRemaining() {
         return secondsRemaining.get();
     }
 
+    /** Sets the seconds left in the current phase. */
     public void setSecondsRemaining(double secondsRemaining) {
         this.secondsRemaining.set(secondsRemaining);
     }
 
+    /** The current {@link IntervalState} of the timer. */
     public ObjectProperty<IntervalState> stateProperty() {
         return state;
     }
 
+    /** Gets the current interval state. */
     public IntervalState getState() {
         return state.get();
     }
 
+    /** Sets the current interval state. */
     public void setState(IntervalState state) {
         this.state.set(state);
     }
 
+    /** Whether the countdown is actively ticking. */
     public BooleanProperty runningProperty() {
         return running;
     }
 
+    /** Whether the countdown is actively ticking. */
     public boolean isRunning() {
         return running.get();
     }
 
+    /** Sets whether the countdown is actively ticking. */
     public void setRunning(boolean running) {
         this.running.set(running);
     }

@@ -29,6 +29,13 @@ import java.util.List;
  * Kinetic M3 Repetition Counter featuring spring-assisted scale bounce physics,
  * real-time cadence velocity estimation (reps/min), circular set progress, and target celebrations.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3RepCounter extends VBox {
 
     private final IntegerProperty reps = new SimpleIntegerProperty(this, "reps", 0);
@@ -207,58 +214,72 @@ public class M3RepCounter extends VBox {
         gc.fillText(sub, cx, cy + 28);
     }
 
+    /** The rep count in the current set, resetting on set change. */
     public IntegerProperty repsProperty() {
         return reps;
     }
 
+    /** Gets the rep count in the current set. */
     public int getReps() {
         return reps.get();
     }
 
+    /** Sets the rep count in the current set. */
     public void setReps(int reps) {
         this.reps.set(reps);
     }
 
+    /** The goal reps per set; the arc turns tertiary once reached. */
     public IntegerProperty targetRepsProperty() {
         return targetReps;
     }
 
+    /** Gets the goal reps per set. */
     public int getTargetReps() {
         return targetReps.get();
     }
 
+    /** Sets the goal reps per set. */
     public void setTargetReps(int targetReps) {
         this.targetReps.set(targetReps);
     }
 
+    /** The set currently in progress, starting at 1. */
     public IntegerProperty currentSetProperty() {
         return currentSet;
     }
 
+    /** Gets the set currently in progress, starting at 1. */
     public int getCurrentSet() {
         return currentSet.get();
     }
 
+    /** Sets the set currently in progress. */
     public void setCurrentSet(int currentSet) {
         this.currentSet.set(currentSet);
     }
 
+    /** The total number of sets in the workout. */
     public IntegerProperty totalSetsProperty() {
         return totalSets;
     }
 
+    /** Gets the total number of sets in the workout. */
     public int getTotalSets() {
         return totalSets.get();
     }
 
+    /** Sets the total number of sets in the workout. */
     public void setTotalSets(int totalSets) {
         this.totalSets.set(totalSets);
     }
 
+    /** Estimated tempo from recent reps in reps/minute (0 until two reps are recorded). */
     public DoubleProperty cadenceProperty() {
         return cadence;
     }
 
+    /** Gets the estimated cadence in reps/minute. */
     public double getCadence() {
         return cadence.get();
     }

@@ -17,6 +17,22 @@
   -fx-text-fill: -md-sys-color-on-surface;
 }
 
+/* ============ typography roles (M3 type scale; used by app FXMLs) ============
+ * Sizes/weights from io.m3fx.core.token.TypeScale. JavaFX CSS has no 500 weight, so
+ * 500-weight roles render as bold, as this codebase renders labels/buttons. Label roles
+ * use on-surface-variant, matching the per-component label rules elsewhere in this file.
+ * Note: .title-large is rendered at 32px for this app's banner headers (TypeScale.TITLE_LARGE
+ * is the 22px spec role; 32px matches headline-large and the app's banner design). */
+.title-large { -fx-font-size: 32px; -fx-text-fill: -md-sys-color-on-surface; }
+.title-medium { -fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface; }
+.title-small { -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface; }
+.body-large { -fx-font-size: 16px; -fx-text-fill: -md-sys-color-on-surface; }
+.body-medium { -fx-font-size: 14px; -fx-text-fill: -md-sys-color-on-surface; }
+.body-small { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface; }
+.label-large { -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface-variant; }
+.label-medium { -fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface-variant; }
+.label-small { -fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface-variant; }
+
 /* ============ buttons (Control+Skin: bg + state + content + ripple layers) ============ */
 .m3-button { -fx-cursor: hand; -fx-min-height: 40px; }
 .m3-button-bg { -fx-background-radius: 20px; -fx-border-radius: 20px; }
@@ -277,8 +293,8 @@
 }
 .m3-text-field-support { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface-variant; }
 .m3-text-field-counter { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface-variant; }
-/* Counter at/over the maxLength limit. */
-.m3-text-field-counter.over { -fx-text-fill: -md-sys-color-error; }
+/* Counter at/over the maxLength limit (pseudo-class set from M3TextField). */
+.m3-text-field-counter:over { -fx-text-fill: -md-sys-color-error; }
 /* M3 selection colors for M3 text inputs. */
 .m3-text-field-input, .m3-command-palette-input {
   -fx-highlight-fill: -md-sys-color-secondary-container;
@@ -1432,6 +1448,13 @@
 .m3-command-palette-overlay {
   -fx-alignment: center;
 }
+/* Scrim: two stacked 32% scrim token layers (~54%) approximate the former hardcoded
+   55% black while staying on -md-sys-color lookups. */
+.m3-command-palette-scrim { -fx-background-color: -md-sys-color-scrim, -md-sys-color-scrim; }
+/* Results scroll area: transparent, like the card surface it sits on. Only the safe
+   -fx-background-color declaration is used; the inline '-fx-background: transparent'
+   construct it replaces is the known CssStyleHelper ClassCastException trigger. */
+.m3-command-palette-results { -fx-background-color: transparent; }
 .m3-command-palette-card {
   -fx-background-color: -md-sys-color-surface-container-high;
   -fx-background-radius: 16px;
@@ -1565,6 +1588,11 @@
   -fx-font-weight: bold;
   -fx-text-fill: -md-sys-color-primary;
   -fx-padding: 8px 12px 4px 12px;
+}
+/* Empty-state message when no action matches the query. */
+.m3-command-palette-empty {
+  -fx-text-fill: -md-sys-color-on-surface-variant;
+  -fx-padding: 20px;
 }
 .m3-command-palette-row {
   -fx-background-color: transparent;

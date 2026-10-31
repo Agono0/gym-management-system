@@ -1,7 +1,7 @@
 package io.m3fx.controls.iconbutton;
 
 import io.m3fx.controls.internal.MotionUtil;
-import io.m3fx.controls.internal.PressableControl;
+import io.m3fx.controls.common.PressableControl;
 import io.m3fx.controls.internal.Ripple;
 import io.m3fx.controls.internal.StateLayer;
 import io.m3fx.controls.internal.ThemeColors;
@@ -30,6 +30,13 @@ import javafx.scene.shape.Rectangle;
  * press-scale, all resolved from the theme (correct in dark mode). Toggle mode keeps a selected
  * state rendered like the filled variant. Keyboard operable via Space/Enter.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3IconButton extends PressableControl {
 
     /** M3 touch target size in px. */

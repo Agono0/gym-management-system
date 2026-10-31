@@ -29,7 +29,17 @@ import java.util.List;
  * collapses the menu; each action collapses after running its handler. The main FAB is anchored
  * and never moves — only the action rows rise from behind it with a stagger.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3FabMenu extends StackPane {
+
+    /** Property key holding the in-flight rotation on the main FAB graphic. */
+    private static final String ROTATE_KEY = "m3fx.fab-rotate";
 
     private final M3Fab mainFab;
     private final VBox actionsBox = new VBox(12);
@@ -64,6 +74,12 @@ public class M3FabMenu extends StackPane {
         getChildren().addAll(actionsBox, mainFab);
         mainFab.setOnAction(e -> toggle());
         expandedProperty().addListener((obs, oldV, isOpen) -> animate(isOpen));
+        // Disable propagation: disabling the menu disables every action FAB, and disabling the
+        // main FAB (the menu's trigger) does the same, so a dead trigger can never leave live
+        // actions behind. The main FAB itself derives disabled from the menu via the scene graph.
+        disableProperty().addListener((obs, was, now) -> propagateDisabled());
+        mainFab.disableProperty().addListener((obs, was, now) -> propagateDisabled());
+        propagateDisabled();
         setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.ESCAPE && isExpanded()) {
                 collapse();
@@ -106,6 +122,8 @@ public class M3FabMenu extends StackPane {
         });
         actionFabs.add(actionFab);
         actionsBox.getChildren().add(row);
+        // Actions added while the menu or its trigger is disabled start disabled too.
+        actionFab.setDisable(isDisable() || mainFab.isDisable());
         return this;
     }
 
@@ -165,12 +183,29 @@ public class M3FabMenu extends StackPane {
         setExpanded(false);
     }
 
+    /** Re-syncs every action FAB with the menu/trigger disabled state. */
+    private void propagateDisabled() {
+        boolean off = isDisable() || mainFab.isDisable();
+        for (M3Fab action : actionFabs) {
+            action.setDisable(off);
+        }
+    }
+
     private void animate(boolean open) {
-        RotateTransition rotate =
-                new RotateTransition(Duration.millis(MotionTokens.DURATION_SHORT_3), mainFab.getGraphic());
-        if (mainFab.getGraphic() != null) {
+        Node graphic = mainFab.getGraphic();
+        if (graphic != null) {
+            // Stop/restart like the row transitions below: rapid open/close must not stack
+            // competing rotations on the same graphic. The new transition has no explicit start
+            // angle, so it retargets smoothly from wherever the stopped rotation left the icon.
+            Object oldRotate = graphic.getProperties().get(ROTATE_KEY);
+            if (oldRotate instanceof RotateTransition running) {
+                running.stop();
+            }
+            RotateTransition rotate =
+                    new RotateTransition(Duration.millis(MotionTokens.DURATION_SHORT_3), graphic);
             rotate.setToAngle(open ? 45 : 0);
             rotate.setInterpolator(MotionTokens.emphasized());
+            graphic.getProperties().put(ROTATE_KEY, rotate);
             rotate.play();
         }
         int count = actionsBox.getChildren().size();

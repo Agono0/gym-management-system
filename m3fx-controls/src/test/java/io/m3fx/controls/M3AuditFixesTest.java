@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import io.m3fx.controls.chip.ChipVariant;
 import io.m3fx.controls.chip.M3Chip;
-import io.m3fx.controls.internal.OverlayLayer;
+import io.m3fx.controls.overlay.OverlayLayer;
 import io.m3fx.controls.search.M3SearchBar;
 import io.m3fx.controls.shape.M3ShapeMorph;
 import io.m3fx.controls.shape.M3ShapeMorph.ShapeType;

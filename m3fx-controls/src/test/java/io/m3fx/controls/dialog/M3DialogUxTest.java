@@ -56,8 +56,8 @@ class M3DialogUxTest {
     void enterFiresDefaultButton() throws Throwable {
         runOnFx(() -> {
             StackPane root = new StackPane();
-            io.m3fx.controls.internal.OverlayLayer layer =
-                    new io.m3fx.controls.internal.OverlayLayer();
+            io.m3fx.controls.overlay.OverlayLayer layer =
+                    new io.m3fx.controls.overlay.OverlayLayer();
             root.getChildren().add(layer);
             Scene scene = new Scene(root, 480, 320);
 
@@ -79,8 +79,8 @@ class M3DialogUxTest {
     void enterIsIgnoredWhileTextFieldHasFocus() throws Throwable {
         runOnFx(() -> {
             StackPane root = new StackPane();
-            io.m3fx.controls.internal.OverlayLayer layer =
-                    new io.m3fx.controls.internal.OverlayLayer();
+            io.m3fx.controls.overlay.OverlayLayer layer =
+                    new io.m3fx.controls.overlay.OverlayLayer();
             root.getChildren().add(layer);
             Scene scene = new Scene(root, 480, 320);
 
@@ -104,8 +104,8 @@ class M3DialogUxTest {
     void initialFocusLandsOnFirstAction() throws Throwable {
         runOnFx(() -> {
             StackPane root = new StackPane();
-            io.m3fx.controls.internal.OverlayLayer layer =
-                    new io.m3fx.controls.internal.OverlayLayer();
+            io.m3fx.controls.overlay.OverlayLayer layer =
+                    new io.m3fx.controls.overlay.OverlayLayer();
             root.getChildren().add(layer);
             Scene scene = new Scene(root, 480, 320);
 
@@ -120,8 +120,8 @@ class M3DialogUxTest {
     void scrimDismissalReturnsFocusToOpener() throws Throwable {
         runOnFx(() -> {
             StackPane root = new StackPane();
-            io.m3fx.controls.internal.OverlayLayer layer =
-                    new io.m3fx.controls.internal.OverlayLayer();
+            io.m3fx.controls.overlay.OverlayLayer layer =
+                    new io.m3fx.controls.overlay.OverlayLayer();
             M3Button opener = M3Button.filled("Open");
             root.getChildren().addAll(layer, opener);
             Scene scene = new Scene(root, 480, 320);

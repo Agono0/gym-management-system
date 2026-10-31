@@ -2,18 +2,25 @@ package io.m3fx.controls.picker;
 
 import io.m3fx.controls.button.M3Button;
 import io.m3fx.controls.dialog.M3Dialog;
-import io.m3fx.controls.internal.OverlayLayer;
+import io.m3fx.controls.overlay.OverlayHost;
 import java.time.LocalDate;
 import java.util.function.Consumer;
 
 /**
  * M3 date picker dialog: an {@link M3Calendar} month grid with Cancel/OK actions, shown in an
- * {@link OverlayLayer}.
+ * {@link OverlayHost}.
  *
  * <p>See <a href="https://m3.material.io/components/date-pickers/overview">M3 date pickers</a>.
  * Surface-container-high container, 28dp radius, headline + weekday + day cells (selected day is a
  * primary circle), text-button confirmation row.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3DateDialog extends M3Dialog {
 
     private final M3Calendar calendar = new M3Calendar();
@@ -48,25 +55,25 @@ public class M3DateDialog extends M3Dialog {
     /**
      * Shows the dialog and reports the confirmed date.
      *
-     * @param layer the overlay layer
+     * @param layer the overlay host, typically {@link io.m3fx.controls.overlay.M3Overlay#getLayer()}
      * @param onConfirm receives the selected date on OK (never {@code null} date), may be
      *     {@code null} for no callback
      * @return the dialog
      */
-    public static M3DateDialog showIn(OverlayLayer layer, Consumer<LocalDate> onConfirm) {
+    public static M3DateDialog showIn(OverlayHost layer, Consumer<LocalDate> onConfirm) {
         return showIn(layer, LocalDate.now(), onConfirm);
     }
 
     /**
      * Shows the dialog with an initial date and reports the confirmed date.
      *
-     * @param layer the overlay layer
+     * @param layer the overlay host, typically {@link io.m3fx.controls.overlay.M3Overlay#getLayer()}
      * @param initial initially selected date
      * @param onConfirm receives the selected date on OK, may be {@code null}
      * @return the dialog
      */
     public static M3DateDialog showIn(
-            OverlayLayer layer, LocalDate initial, Consumer<LocalDate> onConfirm) {
+            OverlayHost layer, LocalDate initial, Consumer<LocalDate> onConfirm) {
         M3DateDialog dialog = new M3DateDialog(initial);
         M3Button cancel = M3Button.text("Cancel");
         M3Button ok = M3Button.text("OK");

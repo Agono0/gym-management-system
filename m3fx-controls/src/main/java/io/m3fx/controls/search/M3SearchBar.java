@@ -1,7 +1,7 @@
 package io.m3fx.controls.search;
 
 import io.m3fx.controls.icon.M3Icon;
-import io.m3fx.controls.internal.OverlayLayer;
+import io.m3fx.controls.overlay.OverlayHost;
 import io.m3fx.core.token.MotionTokens;
 import javafx.animation.PauseTransition;
 import javafx.beans.property.ObjectProperty;
@@ -24,6 +24,13 @@ import javafx.stage.Popup;
  * 56dp, full shape, surface-container-high; expanded suggestions appear in a popup with matching
  * width. Suggestions filter as the user types.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3SearchBar extends VBox {
 
     private final TextField input = new TextField();
@@ -33,7 +40,7 @@ public class M3SearchBar extends VBox {
     private final Popup suggestionsPopup = new Popup();
     private final ListView<String> suggestionsView = new ListView<>(displayedSuggestions);
     private final VBox suggestionsPanel = new VBox();
-    private final ObjectProperty<OverlayLayer> overlay =
+    private final ObjectProperty<OverlayHost> overlay =
             new SimpleObjectProperty<>(this, "overlay");
     // Dismissal grace after the input loses focus: clicking a suggestion first moves focus
     // (popup window or list view), and an immediate hide would swallow the click before the
@@ -106,23 +113,24 @@ public class M3SearchBar extends VBox {
         setFocusTraversable(false);
     }
 
-    /** Returns the overlay layer property (anchored suggestions with scrim when set). */
-    public ObjectProperty<OverlayLayer> overlayProperty() {
+    /** Returns the overlay host property (anchored suggestions with scrim when set). */
+    public ObjectProperty<OverlayHost> overlayProperty() {
         return overlay;
     }
 
-    /** Returns the overlay layer, or {@code null} for popup suggestions. */
-    public OverlayLayer getOverlay() {
+    /** Returns the overlay host, or {@code null} for popup suggestions. */
+    public OverlayHost getOverlay() {
         return overlay.get();
     }
 
     /**
-     * Sets the overlay layer used to show suggestions anchored under the bar with a scrim.
-     * When {@code null} (default), a plain popup is used instead.
+     * Sets the overlay host used to show suggestions anchored under the bar with a scrim, typically
+     * {@link io.m3fx.controls.overlay.M3Overlay#getLayer()}. When {@code null} (default), a plain
+     * popup is used instead.
      *
-     * @param overlay the overlay layer, may be {@code null}
+     * @param overlay the overlay host, may be {@code null}
      */
-    public void setOverlay(OverlayLayer overlay) {
+    public void setOverlay(OverlayHost overlay) {
         this.overlay.set(overlay);
     }
 

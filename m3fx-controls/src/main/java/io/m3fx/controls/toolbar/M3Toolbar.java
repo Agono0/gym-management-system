@@ -24,6 +24,13 @@ import javafx.scene.paint.Color;
  * Supports horizontal and vertical orientations, floating pill and docked bar modes,
  * and standard vs vibrant color schemes.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3Toolbar extends Pane {
 
     /** Toolbar variant: floating above content or docked to an edge. */
@@ -108,38 +115,71 @@ public class M3Toolbar extends Pane {
         return items;
     }
 
+    /**
+     * Returns the variant property (floating or docked container).
+     *
+     * @return the variant property
+     */
     public ObjectProperty<ToolbarVariant> variantProperty() {
         return variant;
     }
 
+    /** Returns the current variant. */
     public ToolbarVariant getVariant() {
         return variant.get();
     }
 
+    /**
+     * Sets the variant; floating toolbars get elevation level 3.
+     *
+     * @param variant the new variant
+     */
     public void setVariant(ToolbarVariant variant) {
         this.variant.set(variant);
     }
 
+    /**
+     * Returns the style property (standard or vibrant emphasis).
+     *
+     * @return the toolbar style property
+     */
     public ObjectProperty<ToolbarStyle> toolbarStyleProperty() {
         return toolbarStyle;
     }
 
+    /** Returns the current style emphasis. */
     public ToolbarStyle getToolbarStyle() {
         return toolbarStyle.get();
     }
 
+    /**
+     * Sets the style emphasis.
+     *
+     * @param style standard or vibrant
+     */
     public void setToolbarStyle(ToolbarStyle style) {
         this.toolbarStyle.set(style);
     }
 
+    /**
+     * Returns the orientation property (horizontal or vertical item layout).
+     *
+     * @return the orientation property
+     */
     public ObjectProperty<Orientation> orientationProperty() {
         return orientation;
     }
 
+    /** Returns the current orientation. */
     public Orientation getOrientation() {
         return orientation.get();
     }
 
+    /**
+     * Sets the orientation and rebuilds the item container.
+     *
+     * @param orientation horizontal or vertical
+     */
     public void setOrientation(Orientation orientation) {
         this.orientation.set(orientation);
     }

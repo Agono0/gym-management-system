@@ -26,6 +26,13 @@ import javafx.scene.layout.VBox;
  * floating label shrinks to the top when the field has text or focus; supporting text and the
  * counter sit below the input; error state recolors the indicator, label and supporting text.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3TextField extends VBox {
 
     /** Container height in px (spec: 56dp). */
@@ -71,11 +78,8 @@ public class M3TextField extends VBox {
         floatingLabel.setMouseTransparent(true);
 
         input.getStyleClass().add("m3-text-field-input");
-        // M3 selection: secondary-container highlight with on-secondary-container text. Inline
-        // looked-up colors (never literals) because m3fx.css does not yet carry the rule; see the
-        // CSS REQUESTS entry, which should replace this line.
-        input.setStyle("-fx-highlight-fill: -md-sys-color-secondary-container;"
-                + " -fx-highlight-text-fill: -md-sys-color-on-secondary-container;");
+        // M3 selection colors (secondary-container highlight, on-secondary-container text) come
+        // from the .m3-text-field-input rule in m3fx.css; no inline style.
         inputRow.getChildren().add(input);
         inputRow.getStyleClass().add("m3-text-field-box");
         // Spec container height: 56dp for both filled and outlined variants.
@@ -278,12 +282,9 @@ public class M3TextField extends VBox {
             // exceeded state: hard-truncation blocks further typing, and the counter flags it in
             // the error color (M3 text-field spec: counter turns error color when exceeded).
             boolean atOrOverLimit = length >= getMaxLength();
+            // The :over pseudo-class drives the .m3-text-field-counter:over error-color rule
+            // in m3fx.css.
             counterLabel.pseudoClassStateChanged(OVER_PC, atOrOverLimit);
-            // Inline looked-up color until the matching :over rule lands in m3fx.css (see
-            // CSS REQUESTS); the pseudo-class above lets the stylesheet take over later.
-            counterLabel.setStyle(atOrOverLimit
-                    ? "-fx-text-fill: -md-sys-color-error;"
-                    : "");
             if (length > getMaxLength()) {
                 input.setText(input.getText().substring(0, getMaxLength()));
                 input.positionCaret(getMaxLength());
@@ -291,7 +292,6 @@ public class M3TextField extends VBox {
         } else {
             counterLabel.setText("");
             counterLabel.pseudoClassStateChanged(OVER_PC, false);
-            counterLabel.setStyle("");
         }
     }
 

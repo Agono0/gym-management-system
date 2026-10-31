@@ -2,7 +2,7 @@ package io.m3fx.controls.button;
 
 import io.m3fx.controls.internal.ElevationShadow;
 import io.m3fx.controls.internal.MotionUtil;
-import io.m3fx.controls.internal.PressableControl;
+import io.m3fx.controls.common.PressableControl;
 import io.m3fx.controls.internal.Ripple;
 import io.m3fx.controls.internal.StateLayer;
 import io.m3fx.controls.internal.ThemeColors;
@@ -36,6 +36,13 @@ import javafx.scene.shape.Rectangle;
  * colors resolved from the theme (correct in dark mode). Keyboard operable via Space/Enter, with
  * accessible text set from the label.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3Button extends PressableControl {
 
     /** Minimum interactive height in px (40dp container). */

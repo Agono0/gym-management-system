@@ -11,6 +11,13 @@ import javafx.scene.control.Label;
  * numbers (6dp dot when the count is zero and {@code showDotWhenZero} behavior applies); label-small
  * type in on-error on error.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3Badge extends Label {
 
     private final IntegerProperty count = new SimpleIntegerProperty(this, "count", 0);

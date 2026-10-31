@@ -19,6 +19,13 @@ import javafx.scene.paint.Stop;
  * Futuristic HUD Telemetry Scanline overlay with corner sci-fi bracket markers,
  * horizontal rolling scan sweep, and crosshair reticle.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3Scanline extends Region {
 
     private final BooleanProperty animated = new SimpleBooleanProperty(this, "animated", true);

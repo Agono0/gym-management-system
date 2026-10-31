@@ -2,6 +2,7 @@ package io.m3fx.controls.chart;
 
 import io.m3fx.controls.internal.ThemeColors;
 import io.m3fx.core.theme.ColorRole;
+import io.m3fx.core.token.MotionTokens;
 import javafx.beans.property.*;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
@@ -25,6 +26,13 @@ import java.util.Arrays;
  * M3 Multidimensional Radar / Spider Polar Chart for athletic biometrics, performance profiling,
  * and skill matrix visualization.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3RadarChart extends Region {
 
     private final ObservableList<M3DataSeries> seriesList = FXCollections.observableArrayList();
@@ -53,7 +61,8 @@ public class M3RadarChart extends Region {
         getChildren().add(canvas);
         Tooltip.install(this, tooltip);
         tooltip.getStyleClass().add("m3-tooltip"); // M3 inverse-surface tooltip styling
-        tooltip.setShowDelay(javafx.util.Duration.millis(80));
+        // Show delay: 80ms mapped to M3 motion DURATION_SHORT_2 (100ms), the nearest duration token.
+        tooltip.setShowDelay(javafx.util.Duration.millis(MotionTokens.DURATION_SHORT_2));
 
         canvas.widthProperty().bind(widthProperty());
         canvas.heightProperty().bind(heightProperty());
@@ -298,10 +307,12 @@ public class M3RadarChart extends Region {
         return maxValue;
     }
 
+    /** Gets the value mapped to the outermost web ring. */
     public double getMaxValue() {
         return maxValue.get();
     }
 
+    /** Sets the value mapped to the outermost web ring. */
     public void setMaxValue(double maxValue) {
         this.maxValue.set(maxValue);
     }
@@ -311,10 +322,12 @@ public class M3RadarChart extends Region {
         return webRings;
     }
 
+    /** Gets the number of concentric web rings. */
     public int getWebRings() {
         return webRings.get();
     }
 
+    /** Sets the number of concentric web rings. */
     public void setWebRings(int webRings) {
         this.webRings.set(webRings);
     }
@@ -324,10 +337,12 @@ public class M3RadarChart extends Region {
         return filled;
     }
 
+    /** Whether series polygons are filled with a translucent tint of the series color. */
     public boolean isFilled() {
         return filled.get();
     }
 
+    /** Sets whether series polygons are filled with a translucent tint of the series color. */
     public void setFilled(boolean filled) {
         this.filled.set(filled);
     }
@@ -337,10 +352,12 @@ public class M3RadarChart extends Region {
         return showPoints;
     }
 
+    /** Whether ringed vertex dots are drawn at each data point. */
     public boolean isShowPoints() {
         return showPoints.get();
     }
 
+    /** Sets whether ringed vertex dots are drawn at each data point. */
     public void setShowPoints(boolean showPoints) {
         this.showPoints.set(showPoints);
     }
@@ -350,10 +367,12 @@ public class M3RadarChart extends Region {
         return showLabels;
     }
 
+    /** Whether axis labels are drawn outside the web. */
     public boolean isShowLabels() {
         return showLabels.get();
     }
 
+    /** Sets whether axis labels are drawn outside the web. */
     public void setShowLabels(boolean showLabels) {
         this.showLabels.set(showLabels);
     }

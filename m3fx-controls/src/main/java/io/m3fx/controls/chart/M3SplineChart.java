@@ -2,6 +2,7 @@ package io.m3fx.controls.chart;
 
 import io.m3fx.controls.internal.ThemeColors;
 import io.m3fx.core.theme.ColorRole;
+import io.m3fx.core.token.TypeScale;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -19,6 +20,8 @@ import javafx.scene.paint.LinearGradient;
 import javafx.scene.paint.Stop;
 import javafx.scene.shape.StrokeLineCap;
 import javafx.scene.shape.StrokeLineJoin;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +30,13 @@ import java.util.List;
  * M3 Spline Chart rendering smooth Catmull-Rom cubic curves, gradient drop fills,
  * crosshair cursor tracking, and floating interactive tooltips.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3SplineChart extends Region {
 
     private final ObservableList<M3DataSeries> seriesList = FXCollections.observableArrayList();
@@ -103,10 +113,12 @@ public class M3SplineChart extends Region {
         return areaFill;
     }
 
+    /** Whether the gradient area under each curve is filled. */
     public boolean isAreaFill() {
         return areaFill.get();
     }
 
+    /** Sets whether the gradient area under each curve is filled. */
     public void setAreaFill(boolean areaFill) {
         this.areaFill.set(areaFill);
     }
@@ -116,10 +128,12 @@ public class M3SplineChart extends Region {
         return fillOpacity;
     }
 
+    /** Gets the gradient fill opacity under the curves. */
     public double getFillOpacity() {
         return fillOpacity.get();
     }
 
+    /** Sets the gradient fill opacity under the curves. */
     public void setFillOpacity(double fillOpacity) {
         this.fillOpacity.set(fillOpacity);
     }
@@ -129,10 +143,12 @@ public class M3SplineChart extends Region {
         return showPoints;
     }
 
+    /** Whether vertex dots are drawn at every data point. */
     public boolean isShowPoints() {
         return showPoints.get();
     }
 
+    /** Sets whether vertex dots are drawn at every data point. */
     public void setShowPoints(boolean showPoints) {
         this.showPoints.set(showPoints);
     }
@@ -142,10 +158,12 @@ public class M3SplineChart extends Region {
         return showGrid;
     }
 
+    /** Whether dashed gridlines and Y-axis labels are drawn. */
     public boolean isShowGrid() {
         return showGrid.get();
     }
 
+    /** Sets whether dashed gridlines and Y-axis labels are drawn. */
     public void setShowGrid(boolean showGrid) {
         this.showGrid.set(showGrid);
     }
@@ -155,10 +173,12 @@ public class M3SplineChart extends Region {
         return showCrosshair;
     }
 
+    /** Whether the vertical crosshair, node highlights and hover tooltip track the cursor. */
     public boolean isShowCrosshair() {
         return showCrosshair.get();
     }
 
+    /** Sets whether the vertical crosshair, node highlights and hover tooltip track the cursor. */
     public void setShowCrosshair(boolean showCrosshair) {
         this.showCrosshair.set(showCrosshair);
     }
@@ -246,7 +266,8 @@ public class M3SplineChart extends Region {
             gc.setLineDashes(4.0, 4.0);
 
             gc.setFill(textColor);
-            gc.setFont(javafx.scene.text.Font.font(11));
+            // Axis tick labels: M3 label-small (11sp) — exact match for the previous 11px font.
+            gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
 
             int ySteps = 4;
             for (int i = 0; i <= ySteps; i++) {
@@ -333,7 +354,8 @@ public class M3SplineChart extends Region {
             M3DataSeries firstSeries = seriesList.get(0);
             int n = firstSeries.getData().size();
             gc.setFill(textColor);
-            gc.setFont(javafx.scene.text.Font.font(11));
+            // Axis tick labels: M3 label-small (11sp) — exact match for the previous 11px font.
+            gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
 
             int step = Math.max(1, n / 7);
             for (int i = 0; i < n; i += step) {
@@ -405,13 +427,15 @@ public class M3SplineChart extends Region {
 
         // Header Line (bold)
         gc.setFill(text);
-        gc.setFont(javafx.scene.text.Font.font("System", javafx.scene.text.FontWeight.BOLD, 11));
+        // Tooltip header: M3 label-small (11sp) — exact match for the previous 11px font.
+        gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.BOLD, TypeScale.LABEL_SMALL.size()));
         if (!lines.isEmpty()) {
             gc.fillText(lines.get(0), tipX + pad, tipY + pad + 11);
         }
 
         // Body Lines
-        gc.setFont(javafx.scene.text.Font.font("System", javafx.scene.text.FontWeight.NORMAL, 10));
+        // Tooltip body: 10px mapped to M3 label-small (11sp), the nearest type role.
+        gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
         for (int i = 1; i < lines.size(); i++) {
             gc.fillText(lines.get(i), tipX + pad, tipY + pad + 11 + i * lineH);
         }

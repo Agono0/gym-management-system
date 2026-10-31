@@ -2,6 +2,7 @@ package io.m3fx.controls.chart;
 
 import io.m3fx.controls.internal.ThemeColors;
 import io.m3fx.core.theme.ColorRole;
+import io.m3fx.core.token.TypeScale;
 import javafx.beans.property.*;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
@@ -24,6 +25,13 @@ import java.util.Map;
  * 4-level color intensity ramp, month and day labels, streak calculations,
  * and date-precise hover inspection tooltips.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3ActivityCalendar extends Region {
 
     private static final int WEEKS = 53;
@@ -47,6 +55,7 @@ public class M3ActivityCalendar extends Region {
 
     private static final DateTimeFormatter TOOLTIP_DATE_FMT = DateTimeFormatter.ofPattern("EEEE, MMM d, yyyy");
 
+    /** Creates a calendar for the current year with all labels and the stats footer shown. */
     public M3ActivityCalendar() {
         getStyleClass().add("m3-activity-calendar");
         getChildren().add(canvas);
@@ -70,6 +79,11 @@ public class M3ActivityCalendar extends Region {
         setMinSize(420, 140);
     }
 
+    /**
+     * Creates a calendar for the given year.
+     *
+     * @param year calendar year to display
+     */
     public M3ActivityCalendar(int year) {
         this();
         setYear(year);
@@ -165,11 +179,13 @@ public class M3ActivityCalendar extends Region {
         return year;
     }
 
+    /** Gets the calendar year being displayed. */
     public int getYear() {
         return year.get();
     }
 
-    public void setYear(int year) {
+    /** Sets the calendar year to display. */
+    public final void setYear(int year) {
         this.year.set(year);
     }
 
@@ -178,10 +194,12 @@ public class M3ActivityCalendar extends Region {
         return accentColor;
     }
 
+    /** Gets the custom accent color, or {@code null} for theme primary. */
     public Color getAccentColor() {
         return accentColor.get();
     }
 
+    /** Sets the custom accent color; {@code null} restores the theme primary ramp. */
     public void setAccentColor(Color color) {
         this.accentColor.set(color);
     }
@@ -191,10 +209,12 @@ public class M3ActivityCalendar extends Region {
         return showDayLabels;
     }
 
+    /** Whether the Mon/Wed/Fri day labels are currently drawn on the left. */
     public boolean isShowDayLabels() {
         return showDayLabels.get();
     }
 
+    /** Sets whether the Mon/Wed/Fri day labels are drawn on the left. */
     public void setShowDayLabels(boolean show) {
         this.showDayLabels.set(show);
     }
@@ -204,10 +224,12 @@ public class M3ActivityCalendar extends Region {
         return showMonthLabels;
     }
 
+    /** Whether the month labels are currently drawn across the top. */
     public boolean isShowMonthLabels() {
         return showMonthLabels.get();
     }
 
+    /** Sets whether the month labels are drawn across the top. */
     public void setShowMonthLabels(boolean show) {
         this.showMonthLabels.set(show);
     }
@@ -217,10 +239,12 @@ public class M3ActivityCalendar extends Region {
         return showStatsFooter;
     }
 
+    /** Whether the totals/streaks footer and legend are currently drawn. */
     public boolean isShowStatsFooter() {
         return showStatsFooter.get();
     }
 
+    /** Sets whether the totals/streaks footer and legend are drawn. */
     public void setShowStatsFooter(boolean show) {
         this.showStatsFooter.set(show);
     }
@@ -321,7 +345,8 @@ public class M3ActivityCalendar extends Region {
         // Day Labels (Mon, Wed, Fri)
         if (isShowDayLabels()) {
             gc.setFill(textColor);
-            gc.setFont(Font.font("System", FontWeight.NORMAL, 9));
+            // Day labels: 9px mapped to M3 label-small (11sp), the nearest type role.
+            gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
             gc.fillText("Mon", 6, padTop + 0 * (cellSize + gap) + cellSize * 0.8);
             gc.fillText("Wed", 6, padTop + 2 * (cellSize + gap) + cellSize * 0.8);
             gc.fillText("Fri", 6, padTop + 4 * (cellSize + gap) + cellSize * 0.8);
@@ -353,7 +378,8 @@ public class M3ActivityCalendar extends Region {
                         prevMonth = m;
                         String monthName = date.getMonth().getDisplayName(TextStyle.SHORT, Locale.ENGLISH);
                         gc.setFill(textColor);
-                        gc.setFont(Font.font("System", FontWeight.BOLD, 9));
+                        // Month labels: 9px mapped to M3 label-small (11sp), the nearest type role.
+                        gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.BOLD, TypeScale.LABEL_SMALL.size()));
                         gc.fillText(monthName, cellX, padTop - 6);
                     }
                 }
@@ -399,7 +425,8 @@ public class M3ActivityCalendar extends Region {
             double footerY = padTop + DAYS_IN_WEEK * (cellSize + gap) + 16.0;
 
             gc.setFill(textColor);
-            gc.setFont(Font.font("System", FontWeight.NORMAL, 10));
+            // Footer stats: 10px mapped to M3 label-small (11sp), the nearest type role.
+            gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
             String statsStr = String.format("Year %d: %d total workouts  •  Current streak: %d days  •  Longest streak: %d days",
                     getYear(), getTotalWorkouts(), getCurrentStreak(), getLongestStreak());
             gc.fillText(statsStr, padLeft, footerY);
@@ -437,11 +464,13 @@ public class M3ActivityCalendar extends Region {
         gc.fillRoundRect(tipX, tipY, tipW, tipH, 4, 4);
 
         gc.setFill(text);
-        gc.setFont(Font.font("System", FontWeight.BOLD, 10));
+        // Tooltip text: 10px mapped to M3 label-small (11sp), the nearest type role.
+        gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.BOLD, TypeScale.LABEL_SMALL.size()));
         String countText = (count == 0) ? "No workouts recorded" : (count + (count == 1 ? " workout completed" : " workouts completed"));
         gc.fillText(countText, tipX + 8, tipY + 16);
 
-        gc.setFont(Font.font("System", FontWeight.NORMAL, 9.5));
+        // Tooltip date: 9.5px mapped to M3 label-small (11sp), the nearest type role.
+        gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
         gc.setFill(textVariant);
         gc.fillText(date.format(TOOLTIP_DATE_FMT), tipX + 8, tipY + 32);
     }

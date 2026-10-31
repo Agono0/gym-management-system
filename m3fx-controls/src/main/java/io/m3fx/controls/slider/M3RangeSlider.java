@@ -13,6 +13,13 @@ import javafx.scene.layout.HBox;
  * {@code max} properties mirror the range bounds of both thumbs (FXML-friendly, matching the
  * {@code M3Slider} attribute set).
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3RangeSlider extends HBox {
 
     private final DoubleProperty min = new SimpleDoubleProperty(this, "min", 0);

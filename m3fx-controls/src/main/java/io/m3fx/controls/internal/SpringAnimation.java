@@ -1,8 +1,10 @@
 package io.m3fx.controls.internal;
 
+import io.m3fx.controls.common.SpringParams;
 import io.m3fx.core.token.MotionTokens;
 import io.m3fx.core.token.MotionTokens.SpringToken;
 import javafx.animation.AnimationTimer;
+import javafx.application.Platform;
 import javafx.beans.property.DoubleProperty;
 import javafx.scene.Node;
 import java.util.Map;
@@ -17,14 +19,6 @@ import java.util.WeakHashMap;
  * interrupted so rapid taps or gesture retargets maintain continuous physical momentum.
  */
 public final class SpringAnimation {
-
-    /** Spring tuning: stiffness (mass = 1) plus damping ratio (1 = critically damped, &lt;1 = bounce). */
-    public record SpringParams(double stiffness, double dampingRatio) {
-        /** Creates SpringParams from an M3 {@link SpringToken}. */
-        public static SpringParams fromToken(SpringToken token) {
-            return new SpringParams(token.stiffness(), token.dampingRatio());
-        }
-    }
 
     /** Default spatial spring: M3 Expressive standard overshoot, settles fast. */
     public static final SpringParams DEFAULT =
@@ -93,6 +87,7 @@ public final class SpringAnimation {
      */
     public static void animate(
             DoubleProperty property, double toValue, SpringParams params, Runnable onFinished) {
+        requireFxThread("animate");
         SpringParams p = params == null ? DEFAULT : params;
         // Degenerate springs (zero/negative stiffness or non-finite inputs) would never settle:
         // snap to the target instead of running an infinite AnimationTimer.
@@ -223,10 +218,19 @@ public final class SpringAnimation {
      * @param property the property to halt
      */
     public static void stop(DoubleProperty property) {
+        requireFxThread("stop");
         AnimationTimer timer = ACTIVE.remove(property);
         if (timer != null) {
             timer.stop();
         }
         VELOCITIES.remove(property);
+    }
+
+    private static void requireFxThread(String operation) {
+        if (!Platform.isFxApplicationThread()) {
+            throw new IllegalStateException(
+                    "SpringAnimation." + operation
+                    + " must be called on the JavaFX Application Thread");
+        }
     }
 }

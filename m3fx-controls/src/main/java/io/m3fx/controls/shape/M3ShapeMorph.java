@@ -1,7 +1,7 @@
 package io.m3fx.controls.shape;
 
 import io.m3fx.controls.internal.SpringAnimation;
-import io.m3fx.controls.internal.SpringAnimation.SpringParams;
+import io.m3fx.controls.common.SpringParams;
 import io.m3fx.controls.internal.ThemeColors;
 import io.m3fx.core.theme.ColorRole;
 import javafx.beans.property.DoubleProperty;
@@ -20,6 +20,13 @@ import javafx.scene.paint.Color;
  * <p>See <a href="https://m3.material.io/styles/shape/overview">M3 shape spec</a>.
  * Morphing is driven by {@link SpringAnimation} physics and rendered via a high-performance Canvas.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3ShapeMorph extends Region {
 
     /** M3 Expressive shape presets. */

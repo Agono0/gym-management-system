@@ -16,6 +16,13 @@ import javafx.scene.text.FontWeight;
  * Unified Live Smart Gym Workout HUD Cockpit bringing together kinetic rep counting,
  * cardiac intensity zones, and HIIT interval timing.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3WorkoutHUD extends VBox {
 
     private final M3RepCounter repCounter = new M3RepCounter(12, 4);

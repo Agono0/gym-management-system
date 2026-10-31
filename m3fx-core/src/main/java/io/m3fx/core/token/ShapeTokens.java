@@ -1,4 +1,4 @@
-/**
+/*
  * M3 shape corner tokens.
  *
  * <p>See <a href="https://m3.material.io/styles/shape/overview">M3 shape spec</a>,

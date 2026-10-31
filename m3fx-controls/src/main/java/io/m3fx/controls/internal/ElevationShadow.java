@@ -66,7 +66,7 @@ public final class ElevationShadow {
         }
         applyLevel(node, to, shadowColor);
         if (node.getEffect() instanceof javafx.scene.effect.DropShadow shadow) {
-            javafx.scene.paint.Color target = (javafx.scene.paint.Color) shadow.getColor();
+            javafx.scene.paint.Color target = shadow.getColor();
             javafx.scene.paint.Color start =
                     new javafx.scene.paint.Color(
                             target.getRed(), target.getGreen(), target.getBlue(), 0);

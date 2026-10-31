@@ -8,6 +8,13 @@ import javafx.beans.property.StringProperty;
 /**
  * A single data point in an M3 chart with a category/time label and numeric value.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3DataPoint {
 
     private final StringProperty label = new SimpleStringProperty(this, "label", "");
@@ -41,7 +48,7 @@ public class M3DataPoint {
         return label.get();
     }
 
-    public void setLabel(String label) {
+    public final void setLabel(String label) {
         this.label.set(label == null ? "" : label);
     }
 
@@ -53,7 +60,7 @@ public class M3DataPoint {
         return value.get();
     }
 
-    public void setValue(double value) {
+    public final void setValue(double value) {
         this.value.set(value);
     }
 

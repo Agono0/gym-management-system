@@ -13,6 +13,13 @@ import java.util.Collection;
 /**
  * A named series of data points in an M3 chart with an optional custom accent color.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3DataSeries {
 
     private final StringProperty name = new SimpleStringProperty(this, "name", "");
@@ -92,7 +99,7 @@ public class M3DataSeries {
         return name.get();
     }
 
-    public void setName(String name) {
+    public final void setName(String name) {
         this.name.set(name == null ? "" : name);
     }
 
@@ -104,7 +111,7 @@ public class M3DataSeries {
         return color.get();
     }
 
-    public void setColor(Color color) {
+    public final void setColor(Color color) {
         this.color.set(color);
     }
 

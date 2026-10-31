@@ -2,6 +2,7 @@ package io.m3fx.controls.chart;
 
 import io.m3fx.controls.internal.ThemeColors;
 import io.m3fx.core.theme.ColorRole;
+import io.m3fx.core.token.TypeScale;
 import javafx.beans.property.*;
 import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
@@ -19,6 +20,13 @@ import javafx.scene.text.FontWeight;
  * Renders stacked tapered horizontal trapezoids or centered pill bars with
  * drop-off indicators, conversion chips, and interactive stage breakdown tooltips.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3FunnelChart extends Region {
 
     /** Rendering visual styles for the funnel. */
@@ -220,10 +228,12 @@ public class M3FunnelChart extends Region {
 
             // Left Stage Label
             gc.setFill(isTierHovered ? textColor : textVariant);
-            gc.setFont(Font.font("System", FontWeight.BOLD, 11));
+            // Stage label: M3 label-small (11sp) — exact match for the previous 11px font.
+            gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.BOLD, TypeScale.LABEL_SMALL.size()));
             gc.fillText(stage.getName(), padLeft, y + tierH * 0.45);
 
-            gc.setFont(Font.font("System", FontWeight.NORMAL, 10));
+            // Stage subtext: 10px mapped to M3 label-small (11sp), the nearest type role.
+            gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
             gc.setFill(textVariant);
             String subtext = String.format("%.0f units", stage.getCount());
             if (stage.getValue() > 0) {
@@ -282,7 +292,8 @@ public class M3FunnelChart extends Region {
                 gc.fillRoundRect(chipX, chipY, chipW, chipH, 6, 6);
 
                 gc.setFill(textColor);
-                gc.setFont(Font.font("System", FontWeight.BOLD, 10));
+                // Conversion chip: 10px mapped to M3 label-small (11sp), the nearest type role.
+                gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.BOLD, TypeScale.LABEL_SMALL.size()));
                 gc.fillText(String.format("%.1f%%", overallConv), chipX + 8, chipY + chipH * 0.70);
             }
 
@@ -295,7 +306,8 @@ public class M3FunnelChart extends Region {
                 if (dropCount > 0) {
                     double dropY = y + tierH + (spacing / 2.0);
                     gc.setFill(Color.color(errorColor.getRed(), errorColor.getGreen(), errorColor.getBlue(), 0.70));
-                    gc.setFont(Font.font("System", FontWeight.NORMAL, 8.5));
+                    // Drop-off indicator: 8.5px mapped to M3 label-small (11sp), the nearest type role.
+                    gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
                     String dropStr = String.format("▼ -%.1f%% (-%.0f)", dropPct, dropCount);
                     gc.fillText(dropStr, padLeft + leftColW + centerW + 16.0, dropY + 3.0);
                 }
@@ -336,10 +348,12 @@ public class M3FunnelChart extends Region {
         gc.fillRoundRect(tipX, tipY, tipW, tipH, 4, 4);
 
         gc.setFill(text);
-        gc.setFont(Font.font("System", FontWeight.BOLD, 10.5));
+        // Tooltip title: 10.5px mapped to M3 label-small (11sp), the nearest type role.
+        gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.BOLD, TypeScale.LABEL_SMALL.size()));
         gc.fillText(stage.getName(), tipX + 8, tipY + 16);
 
-        gc.setFont(Font.font("System", FontWeight.NORMAL, 9.5));
+        // Tooltip body: 9.5px mapped to M3 label-small (11sp), the nearest type role.
+        gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
         gc.setFill(textVariant);
         gc.fillText(String.format("Volume: %.0f (%.1f%% of Total)", stage.getCount(), overallConv), tipX + 8, tipY + 32);
         gc.fillText(String.format("Step Conversion: %.1f%%", stepConv), tipX + 8, tipY + 46);

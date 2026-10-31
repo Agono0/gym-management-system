@@ -2,6 +2,7 @@ package io.m3fx.controls.effect;
 
 import io.m3fx.controls.internal.ThemeColors;
 import io.m3fx.core.theme.ColorRole;
+import io.m3fx.core.token.TypeScale;
 import javafx.animation.AnimationTimer;
 import javafx.beans.property.*;
 import javafx.geometry.Pos;
@@ -17,14 +18,26 @@ import javafx.scene.text.FontWeight;
  * Real-time Telemetry Status Beacon featuring concentric pulsing sonar ripple waves
  * and M3 role-driven status colors.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3PulseBeacon extends HBox {
 
     /** Status states for the telemetry beacon. */
     public enum BeaconStatus {
+        /** Normal operation; rendered with the theme primary color. */
         ONLINE,
+        /** Attention needed; rendered with the theme tertiary color. */
         WARNING,
+        /** Failure state; rendered with the theme error color. */
         CRITICAL,
+        /** Data update in progress; rendered with the theme secondary color. */
         SYNCING,
+        /** No signal; rendered with the theme outline color and no pulse waves. */
         OFFLINE
     }
 
@@ -59,7 +72,8 @@ public class M3PulseBeacon extends HBox {
         setSpacing(8);
 
         label.getStyleClass().add("m3-pulse-beacon-label");
-        label.setFont(Font.font("Roboto", FontWeight.BOLD, 12));
+        // Beacon label: M3 label-medium (12sp) — exact match for the previous 12px Roboto font.
+        label.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.BOLD, TypeScale.LABEL_MEDIUM.size()));
         label.textProperty().bind(labelText);
 
         getChildren().add(canvas);
@@ -193,38 +207,47 @@ public class M3PulseBeacon extends HBox {
         };
     }
 
+    /** The current telemetry status; drives the orb color and pulse behavior. */
     public ObjectProperty<BeaconStatus> statusProperty() {
         return status;
     }
 
+    /** Gets the current telemetry status. */
     public BeaconStatus getStatus() {
         return status.get();
     }
 
+    /** Sets the current telemetry status. */
     public void setStatus(BeaconStatus status) {
         this.status.set(status);
     }
 
+    /** Whether the sonar pulse waves animate ({@code OFFLINE} never animates). */
     public BooleanProperty pulsingProperty() {
         return pulsing;
     }
 
+    /** Whether the sonar pulse waves are currently animating. */
     public boolean isPulsing() {
         return pulsing.get();
     }
 
+    /** Sets whether the sonar pulse waves animate. */
     public void setPulsing(boolean pulsing) {
         this.pulsing.set(pulsing);
     }
 
+    /** The descriptive label shown beside the beacon; hidden when empty. */
     public StringProperty labelTextProperty() {
         return labelText;
     }
 
+    /** Gets the descriptive label shown beside the beacon. */
     public String getLabelText() {
         return labelText.get();
     }
 
+    /** Sets the descriptive label shown beside the beacon; an empty string hides the label. */
     public void setLabelText(String labelText) {
         this.labelText.set(labelText);
     }

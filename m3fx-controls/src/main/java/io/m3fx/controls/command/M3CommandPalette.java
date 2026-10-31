@@ -32,6 +32,13 @@ import java.util.List;
  * Global Spotlight Command Palette (Ctrl+K / Cmd+K) for high-speed operator actions,
  * fuzzy keyword filtering, categorized navigation, and keyboard arrow execution.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3CommandPalette extends StackPane {
 
     /** Action command descriptor. */
@@ -71,9 +78,9 @@ public class M3CommandPalette extends StackPane {
         setVisible(false);
         setManaged(false);
 
-        // Scrim background: two stacked 32% scrim token layers (~54%) approximate the previous
-        // hardcoded 55% black while staying on -md-sys-color lookups.
-        scrim.setStyle("-fx-background-color: -md-sys-color-scrim, -md-sys-color-scrim;");
+        // Scrim background: two stacked 32% scrim token layers (~54%), styled via the
+        // .m3-command-palette-scrim rule in m3fx.css (token lookups, no inline style).
+        scrim.getStyleClass().add("m3-command-palette-scrim");
         scrim.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> close());
 
         // Card Container
@@ -97,9 +104,11 @@ public class M3CommandPalette extends StackPane {
         searchRow.setAlignment(Pos.CENTER_LEFT);
         searchRow.setPadding(new Insets(4, 16, 4, 16));
 
-        // Results Scroll Container
+        // Results Scroll Container. Styled via the .m3-command-palette-results rule: the inline
+        // '-fx-background: transparent;' this replaces is the exact construct that triggered a
+        // CssStyleHelper ClassCastException, so the stylesheet rule uses only -fx-background-color.
         scrollPane.setFitToWidth(true);
-        scrollPane.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
+        scrollPane.getStyleClass().add("m3-command-palette-results");
         scrollPane.setPadding(new Insets(8));
         VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
@@ -245,7 +254,7 @@ public class M3CommandPalette extends StackPane {
 
         if (filteredActions.isEmpty()) {
             Label empty = new Label("No matching commands found");
-            empty.setStyle("-fx-text-fill: -md-sys-color-on-surface-variant; -fx-padding: 20;");
+            empty.getStyleClass().add("m3-command-palette-empty");
             resultsContainer.getChildren().add(empty);
             return null;
         }
@@ -293,6 +302,11 @@ public class M3CommandPalette extends StackPane {
 
             row.getChildren().addAll(icon, textCol, runHint);
 
+            // Screen readers: the row is a plain mouse-driven HBox, so expose the result as
+            // "title — subtitle" accessible text instead of unlabeled chrome.
+            row.setAccessibleText(act.title
+                    + (act.subtitle == null || act.subtitle.isBlank() ? "" : " — " + act.subtitle));
+
             row.addEventHandler(MouseEvent.MOUSE_ENTERED, e -> {
                 selectedIndex = actionIndex;
                 renderResults();
@@ -336,6 +350,15 @@ public class M3CommandPalette extends StackPane {
         });
     }
 
+    /**
+     * Returns the full command catalog, unfiltered.
+     *
+     * <p>The palette filters this list against the search query; add or remove actions here to
+     * change what {@link #registerAction(String, String, String, String, Runnable)} and callers
+     * elsewhere have registered.
+     *
+     * @return the observable list of registered {@link CommandAction}s
+     */
     public ObservableList<CommandAction> getMasterActions() {
         return masterActions;
     }

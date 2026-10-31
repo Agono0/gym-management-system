@@ -1,4 +1,4 @@
-/**
+/*
  * M3 type scale (15 roles).
  *
  * <p>See <a href="https://m3.material.io/styles/typography/overview">M3 typography spec</a> and

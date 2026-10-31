@@ -1,4 +1,4 @@
-package io.m3fx.controls.internal;
+package io.m3fx.controls.common;
 
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
@@ -24,6 +24,13 @@ import javafx.scene.input.MouseEvent;
  * control), fires {@link ActionEvent} on click/Space/Enter, and mirrors selection to the
  * {@code :selected} pseudo-class. Skins add visuals (background, state layer, ripple) on top.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public abstract class PressableControl extends Control implements Toggle {
 
     private static final PseudoClass SELECTED_PC = PseudoClass.getPseudoClass("selected");

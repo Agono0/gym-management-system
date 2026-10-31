@@ -1,9 +1,12 @@
 /** M3 controls: JavaFX components styled by the M3 theme. Public API only; internals hidden. */
 module io.m3fx.controls {
-    requires io.m3fx.core;
-    requires javafx.base;
-    requires javafx.graphics;
-    requires javafx.controls;
+    // 'transitive': the exported API (Node/Region signatures, ObjectProperty accessors, Skin
+    // returns, PressableControl superclasses, M3Theme parameters) exposes these modules' types,
+    // so readers of io.m3fx.controls must be able to read them too.
+    requires transitive io.m3fx.core;
+    requires transitive javafx.base;
+    requires transitive javafx.graphics;
+    requires transitive javafx.controls;
 
     exports io.m3fx.controls;
     exports io.m3fx.controls.appbar;
@@ -12,11 +15,13 @@ module io.m3fx.controls {
     exports io.m3fx.controls.carousel;
     exports io.m3fx.controls.chart;
     exports io.m3fx.controls.chip;
+    exports io.m3fx.controls.command;
     exports io.m3fx.controls.common;
     exports io.m3fx.controls.data;
     exports io.m3fx.controls.dialog;
     exports io.m3fx.controls.effect;
     exports io.m3fx.controls.fab;
+    exports io.m3fx.controls.floorplan;
     exports io.m3fx.controls.icon;
     exports io.m3fx.controls.iconbutton;
     exports io.m3fx.controls.layout;
@@ -37,4 +42,5 @@ module io.m3fx.controls {
     exports io.m3fx.controls.tabs;
     exports io.m3fx.controls.textfield;
     exports io.m3fx.controls.toolbar;
+    exports io.m3fx.controls.workout;
 }

@@ -20,6 +20,38 @@ class M3CarouselTest {
         }
     }
 
+    /**
+     * Runs the body on the JavaFX Application Thread: skins, CSS passes and the shared state
+     * layer are FX-thread-bound (StateLayer.bind enforces it), so UI work must not run on the
+     * plain test thread. Assertions are unchanged; only the execution thread moves.
+     */
+    private static void onFx(Runnable body) throws Exception {
+        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicReference<Throwable> err = new java.util.concurrent.atomic.AtomicReference<>();
+        Platform.runLater(() -> {
+            try {
+                body.run();
+            } catch (Throwable t) {
+                err.set(t);
+            } finally {
+                latch.countDown();
+            }
+        });
+        if (!latch.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out on the JavaFX Application Thread");
+        }
+        Throwable t = err.get();
+        if (t instanceof RuntimeException runtime) {
+            throw runtime;
+        }
+        if (t instanceof Error error) {
+            throw error;
+        }
+        if (t != null) {
+            throw new IllegalStateException(t);
+        }
+    }
+
     @Test
     void managesItemsAndIndex() {
         M3Carousel carousel = new M3Carousel(M3Carousel.CarouselLayout.MULTI_BROWSE);
@@ -39,7 +71,8 @@ class M3CarouselTest {
     }
 
     @Test
-    void testCarouselNavVisibilityAndClamping() {
+    void testCarouselNavVisibilityAndClamping() throws Exception {
+        onFx(() -> {
         M3Carousel carousel = new M3Carousel(M3Carousel.CarouselLayout.MULTI_BROWSE);
         carousel.resize(800, 300);
 
@@ -87,6 +120,7 @@ class M3CarouselTest {
             carousel.scrollNext();
         }
         assertEquals(7, carousel.getActiveIndex()); // Clamped to last item index (0..7)
+        });
     }
 }
 

@@ -22,6 +22,13 @@ import java.util.List;
 /**
  * Radial Speed Dial Action Wheel expanding outward with spring physics and rotating trigger FAB.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3SpeedDial extends StackPane {
 
     /** Side of the dial pane frame; dial items center on the FAB center. */

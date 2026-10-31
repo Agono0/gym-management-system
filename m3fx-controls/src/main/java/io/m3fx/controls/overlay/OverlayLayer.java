@@ -1,5 +1,9 @@
-package io.m3fx.controls.internal;
+package io.m3fx.controls.overlay;
 
+import io.m3fx.controls.internal.MotionUtil;
+import io.m3fx.core.token.MotionTokens;
+
+import io.m3fx.controls.overlay.OverlayHost;
 import io.m3fx.core.token.MotionTokens;
 import io.m3fx.core.token.StateOpacity;
 import javafx.geometry.Pos;
@@ -14,8 +18,12 @@ import javafx.scene.layout.StackPane;
  * <p>Place one {@link OverlayLayer} at the root of a scene; dialogs and snackbars show themselves
  * in it with a scrim, instead of opening extra stages. Must be constructed on the FX thread.
  * Sub-layers ensure that transient toasts/snackbars do not dismiss open modal dialogs or sheets.
+ *
+ * <p>Implements the exported {@link OverlayHost} interface, which is how public API signatures
+ * ({@code M3Overlay.getLayer()}, {@code M3Dialog.showIn}, ...) accept this layer without exposing
+ * this internal package.
  */
-public final class OverlayLayer extends StackPane {
+public final class OverlayLayer extends StackPane implements OverlayHost {
 
     private final Pane scrim = new Pane();
     private final StackPane sheetLayer = new StackPane();

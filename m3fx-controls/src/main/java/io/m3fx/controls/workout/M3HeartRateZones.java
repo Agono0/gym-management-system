@@ -23,6 +23,13 @@ import javafx.scene.text.TextAlignment;
  * 5-Zone Cardiac Intensity Biometrics Visualizer adhering to sports science standards
  * with real-time spring marker tracking and live telemetry pulse indications.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3HeartRateZones extends VBox {
 
     /**

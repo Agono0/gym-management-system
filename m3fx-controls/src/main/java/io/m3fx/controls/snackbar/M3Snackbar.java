@@ -1,6 +1,6 @@
 package io.m3fx.controls.snackbar;
 
-import io.m3fx.controls.internal.OverlayLayer;
+import io.m3fx.controls.overlay.OverlayHost;
 import io.m3fx.core.token.MotionTokens;
 import javafx.animation.FadeTransition;
 import javafx.animation.PauseTransition;
@@ -25,6 +25,13 @@ import java.util.Deque;
  * action inverse-primary. Messages queue FIFO; each shows for {@link #DEFAULT_DURATION_MS} unless
  * it has an action ({@link #ACTION_DURATION_MS} per spec).
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3Snackbar {
 
     /** Default short-message duration in ms. */
@@ -36,7 +43,7 @@ public class M3Snackbar {
     public record Message(String text, String actionText, Runnable action) {}
 
     private final Deque<Message> queue = new ArrayDeque<>();
-    private final OverlayLayer layer;
+    private final OverlayHost layer;
     private final PauseTransition gap = new PauseTransition(
             Duration.millis(MotionTokens.DURATION_SHORT_2));
     private PauseTransition autoDismiss;
@@ -44,11 +51,12 @@ public class M3Snackbar {
     private boolean showing;
 
     /**
-     * Creates a snackbar bound to an overlay layer.
+     * Creates a snackbar bound to an overlay host, typically
+     * {@link io.m3fx.controls.overlay.M3Overlay#getLayer()}.
      *
-     * @param layer the overlay layer transient messages show in
+     * @param layer the overlay host transient messages show in
      */
-    public M3Snackbar(OverlayLayer layer) {
+    public M3Snackbar(OverlayHost layer) {
         if (layer == null) {
             throw new IllegalArgumentException("layer must not be null");
         }

@@ -22,6 +22,38 @@ class M3ExpandedModelsTest {
         }
     }
 
+    /**
+     * Runs the body on the JavaFX Application Thread: camera resets go through
+     * {@code SpringAnimation.animate}, which is FX-thread-bound. Assertions are unchanged;
+     * only the execution thread moves.
+     */
+    private static void onFx(Runnable body) throws Exception {
+        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicReference<Throwable> err = new java.util.concurrent.atomic.AtomicReference<>();
+        Platform.runLater(() -> {
+            try {
+                body.run();
+            } catch (Throwable t) {
+                err.set(t);
+            } finally {
+                latch.countDown();
+            }
+        });
+        if (!latch.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out on the JavaFX Application Thread");
+        }
+        Throwable t = err.get();
+        if (t instanceof RuntimeException runtime) {
+            throw runtime;
+        }
+        if (t instanceof Error error) {
+            throw error;
+        }
+        if (t != null) {
+            throw new IllegalStateException(t);
+        }
+    }
+
     @Test
     void testAllTwelveModelTypesDefined() {
         ModelType[] types = ModelType.values();
@@ -67,10 +99,12 @@ class M3ExpandedModelsTest {
     }
 
     @Test
-    void testResetCamera() {
-        M3ModelViewer3D viewer = new M3ModelViewer3D(ModelType.TREADMILL);
-        viewer.resetCamera();
-        assertNotNull(viewer.currentModelProperty());
+    void testResetCamera() throws Exception {
+        onFx(() -> {
+            M3ModelViewer3D viewer = new M3ModelViewer3D(ModelType.TREADMILL);
+            viewer.resetCamera();
+            assertNotNull(viewer.currentModelProperty());
+        });
     }
 }
 

@@ -48,8 +48,8 @@ class M3SheetUxTest {
     void bottomSheetFocusesContentAndReturnsFocusOnScrimDismissal() throws Throwable {
         runOnFx(() -> {
             StackPane root = new StackPane();
-            io.m3fx.controls.internal.OverlayLayer layer =
-                    new io.m3fx.controls.internal.OverlayLayer();
+            io.m3fx.controls.overlay.OverlayLayer layer =
+                    new io.m3fx.controls.overlay.OverlayLayer();
             javafx.scene.control.Button opener = new Button("Open");
             root.getChildren().addAll(layer, opener);
             Scene scene = new Scene(root, 480, 400);
@@ -71,8 +71,8 @@ class M3SheetUxTest {
     void sideSheetFocusReturnsOnScrimDismissal() throws Throwable {
         runOnFx(() -> {
             StackPane root = new StackPane();
-            io.m3fx.controls.internal.OverlayLayer layer =
-                    new io.m3fx.controls.internal.OverlayLayer();
+            io.m3fx.controls.overlay.OverlayLayer layer =
+                    new io.m3fx.controls.overlay.OverlayLayer();
             javafx.scene.control.Button opener = new Button("Open");
             root.getChildren().addAll(layer, opener);
             Scene scene = new Scene(root, 640, 400);

@@ -3,14 +3,62 @@ package io.m3fx.controls.internal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.m3fx.controls.common.SpringParams;
+import javafx.application.Platform;
 import javafx.beans.property.SimpleDoubleProperty;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Verifies the spring integrator converges and that underdamped tunings overshoot while
  * critically damped ones do not (pure math — no FX toolkit needed).
  */
 class SpringAnimationTest {
+
+    @BeforeAll
+    static void initFx() {
+        try {
+            Platform.startup(() -> {});
+        } catch (IllegalStateException ignored) {
+            // Toolkit already started
+        }
+    }
+
+    /**
+     * Runs the body on the JavaFX Application Thread: {@code SpringAnimation.animate} is
+     * FX-thread-bound (it starts AnimationTimers and mutates properties), so the one test that
+     * calls it must run there. Assertions are unchanged; only the execution thread moves.
+     */
+    private static void onFx(Runnable body) throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<Throwable> err = new AtomicReference<>();
+        Platform.runLater(() -> {
+            try {
+                body.run();
+            } catch (Throwable t) {
+                err.set(t);
+            } finally {
+                latch.countDown();
+            }
+        });
+        if (!latch.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Timed out on the JavaFX Application Thread");
+        }
+        Throwable t = err.get();
+        if (t instanceof RuntimeException runtime) {
+            throw runtime;
+        }
+        if (t instanceof Error error) {
+            throw error;
+        }
+        if (t != null) {
+            throw new IllegalStateException(t);
+        }
+    }
 
     private static double settle(double stiffness, double dampingRatio) {
         double x = 0;
@@ -47,12 +95,14 @@ class SpringAnimationTest {
     }
 
     @Test
-    void degenerateSpringSnapsWithoutAnimating() {
+    void degenerateSpringSnapsWithoutAnimating() throws Exception {
         // Zero stiffness can never settle; the animation must snap to the target instead of
         // running an infinite timer. The snap path is synchronous (no AnimationTimer started).
-        SimpleDoubleProperty property = new SimpleDoubleProperty(5);
-        SpringAnimation.animate(property, 42, new SpringAnimation.SpringParams(0, 0.5), null);
-        assertEquals(42, property.get(), 1e-9);
+        onFx(() -> {
+            SimpleDoubleProperty property = new SimpleDoubleProperty(5);
+            SpringAnimation.animate(property, 42, new SpringParams(0, 0.5), null);
+            assertEquals(42, property.get(), 1e-9);
+        });
     }
 
     @Test

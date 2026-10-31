@@ -30,6 +30,13 @@ import javafx.scene.shape.Rectangle;
  * 40dp circular state layer behind the handle (hover 8% / focus 10% / pressed 10%). Keyboard
  * operable via Space/Enter; announces on/off through the accessible role.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3Switch extends Control {
 
     private static final PseudoClass SELECTED_PC = PseudoClass.getPseudoClass("selected");
@@ -192,6 +199,10 @@ public class M3Switch extends Control {
                 control.pressedProperty().removeListener(pressedListener);
                 StateLayer.unbind(control, stateLayer);
             }
+            // Kill any in-flight thumb springs even if the skinnable is already gone, so a
+            // disposed skin leaves no AnimationTimer writing into dead nodes.
+            io.m3fx.controls.internal.SpringAnimation.stop(thumbHolder.translateXProperty());
+            io.m3fx.controls.internal.SpringAnimation.stop(thumb.radiusProperty());
             super.dispose();
         }
 

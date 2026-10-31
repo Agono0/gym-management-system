@@ -8,6 +8,13 @@ import javafx.beans.property.StringProperty;
 /**
  * A multidimensional data point in an {@link M3ScatterPlot}.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3ScatterPoint {
 
     private final DoubleProperty x = new SimpleDoubleProperty(this, "x", 0.0);
@@ -16,6 +23,12 @@ public class M3ScatterPoint {
     private final StringProperty label = new SimpleStringProperty(this, "label", "");
     private final StringProperty extra = new SimpleStringProperty(this, "extra", "");
 
+    /**
+     * Creates an unlabeled point at the given coordinates.
+     *
+     * @param x X value
+     * @param y Y value
+     */
     public M3ScatterPoint(double x, double y) {
         this("", x, y, 6.0, "");
     }
@@ -77,11 +90,13 @@ public class M3ScatterPoint {
         return x;
     }
 
+    /** Gets the X value in data units. */
     public double getX() {
         return x.get();
     }
 
-    public void setX(double x) {
+    /** Sets the X value in data units. */
+    public final void setX(double x) {
         this.x.set(x);
     }
 
@@ -90,11 +105,13 @@ public class M3ScatterPoint {
         return y;
     }
 
+    /** Gets the Y value in data units. */
     public double getY() {
         return y.get();
     }
 
-    public void setY(double y) {
+    /** Sets the Y value in data units. */
+    public final void setY(double y) {
         this.y.set(y);
     }
 
@@ -103,11 +120,13 @@ public class M3ScatterPoint {
         return radius;
     }
 
+    /** Gets the bubble radius in px. */
     public double getRadius() {
         return radius.get();
     }
 
-    public void setRadius(double radius) {
+    /** Sets the bubble radius in px (clamped to a 3px minimum at render time). */
+    public final void setRadius(double radius) {
         this.radius.set(radius);
     }
 
@@ -116,11 +135,13 @@ public class M3ScatterPoint {
         return label;
     }
 
+    /** Gets the point label used as the tooltip title. */
     public String getLabel() {
         return label.get();
     }
 
-    public void setLabel(String label) {
+    /** Sets the point label used as the tooltip title; {@code null} becomes an empty string. */
+    public final void setLabel(String label) {
         this.label.set(label == null ? "" : label);
     }
 
@@ -129,11 +150,13 @@ public class M3ScatterPoint {
         return extra;
     }
 
+    /** Gets the optional extra note appended to the tooltip. */
     public String getExtra() {
         return extra.get();
     }
 
-    public void setExtra(String extra) {
+    /** Sets the optional extra note appended to the tooltip; {@code null} becomes an empty string. */
+    public final void setExtra(String extra) {
         this.extra.set(extra == null ? "" : extra);
     }
 

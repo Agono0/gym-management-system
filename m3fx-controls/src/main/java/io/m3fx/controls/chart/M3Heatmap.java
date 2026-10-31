@@ -2,6 +2,7 @@ package io.m3fx.controls.chart;
 
 import io.m3fx.controls.internal.ThemeColors;
 import io.m3fx.core.theme.ColorRole;
+import io.m3fx.core.token.TypeScale;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.scene.canvas.Canvas;
@@ -9,6 +10,8 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Region;
 import javafx.scene.paint.Color;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 import javafx.scene.text.TextAlignment;
 
 import java.util.ArrayList;
@@ -19,6 +22,13 @@ import java.util.List;
  * M3 Heatmap matrix displaying cell intensity levels across two axes (e.g., days of week vs. hours of day),
  * with smooth color grading and interactive hover inspection.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3Heatmap extends Region {
 
     private int rows = 7;
@@ -178,7 +188,8 @@ public class M3Heatmap extends Region {
 
         // Draw Row Labels (left)
         gc.setFill(textColor);
-        gc.setFont(javafx.scene.text.Font.font(10));
+        // Axis tick labels: 10px mapped to M3 label-small (11sp), the nearest type role.
+        gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
         for (int r = 0; r < rows; r++) {
             if (r < rowLabels.size()) {
                 String lbl = rowLabels.get(r);
@@ -261,10 +272,11 @@ public class M3Heatmap extends Region {
         gc.fillRoundRect(tipX, tipY, tipW, tipH, 4, 4);
 
         gc.setFill(text);
-        gc.setFont(javafx.scene.text.Font.font("System", javafx.scene.text.FontWeight.BOLD, 10));
+        // Tooltip text: 10px mapped to M3 label-small (11sp), the nearest type role.
+        gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.BOLD, TypeScale.LABEL_SMALL.size()));
         gc.fillText(rowName + " " + colName, tipX + 8, tipY + 16);
 
-        gc.setFont(javafx.scene.text.Font.font("System", javafx.scene.text.FontWeight.NORMAL, 10));
+        gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
         String desc = val > 0.8 ? "Peak Occupancy" : (val > 0.5 ? "Moderate" : "Light / Idle");
         gc.fillText(String.format("Intensity: %.0f%% (%s)", val * 100, desc), tipX + 8, tipY + 32);
     }

@@ -21,21 +21,40 @@ import javafx.scene.transform.Rotate;
  * 3D Commercial Gym Equipment Inspector featuring procedural 3D models across 12 equipment
  * categories, rendered with M3 dynamic theme materials, wireframe mode, and orbit controls.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3ModelViewer3D extends M3Scene3D {
 
     /** Available 3D equipment models. */
     public enum ModelType {
+        /** Fixed-handle dumbbell pair. */
         DUMBBELL,
+        /** Olympic barbell with loaded plates. */
         BARBELL,
+        /** Cast-iron kettlebell. */
         KETTLEBELL,
+        /** Flat/incline workout bench. */
         WORKOUT_BENCH,
+        /** Power squat cage with spotter arms and J-hooks. */
         SQUAT_RACK,
+        /** Dual-tower cable crossover machine. */
         CABLE_CROSSOVER,
+        /** 45-degree incline leg press. */
         LEG_PRESS,
+        /** Motorized treadmill with console. */
         TREADMILL,
+        /** Stationary exercise bike with flywheel. */
         EXERCISE_BIKE,
+        /** Indoor water-resistance rowing machine. */
         ROWING_MACHINE,
+        /** Ceiling-mounted punching bag. */
         PUNCHING_BAG,
+        /** Preacher curl bench with EZ-bar cradle. */
         PREACHER_BENCH
     }
 
@@ -89,38 +108,47 @@ public class M3ModelViewer3D extends M3Scene3D {
         return isAutoRotate() && getScene() != null && isVisible() && !isDisable();
     }
 
+    /** The equipment model currently built and rendered in the scene. */
     public ObjectProperty<ModelType> currentModelProperty() {
         return currentModel;
     }
 
+    /** Gets the equipment model currently rendered. */
     public ModelType getCurrentModel() {
         return currentModel.get();
     }
 
+    /** Sets the equipment model to build and render. */
     public void setCurrentModel(ModelType model) {
         this.currentModel.set(model);
     }
 
+    /** Whether the model slowly spins on its Y axis when visible and enabled. */
     public BooleanProperty autoRotateProperty() {
         return autoRotate;
     }
 
+    /** Whether the model is currently auto-rotating. */
     public boolean isAutoRotate() {
         return autoRotate.get();
     }
 
+    /** Sets whether the model slowly spins on its Y axis. */
     public void setAutoRotate(boolean rotate) {
         this.autoRotate.set(rotate);
     }
 
+    /** Whether models render as wireframes ({@link DrawMode#LINE}) instead of solid fills. */
     public BooleanProperty wireframeProperty() {
         return wireframe;
     }
 
+    /** Whether models currently render as wireframes. */
     public boolean isWireframe() {
         return wireframe.get();
     }
 
+    /** Sets whether models render as wireframes instead of solid fills. */
     public void setWireframe(boolean wireframe) {
         this.wireframe.set(wireframe);
     }

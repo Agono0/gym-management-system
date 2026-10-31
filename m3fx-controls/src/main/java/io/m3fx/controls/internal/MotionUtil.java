@@ -5,7 +5,6 @@ import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
-import javafx.animation.TranslateTransition;
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.geometry.Bounds;
@@ -101,24 +100,38 @@ public final class MotionUtil {
     }
 
     /**
-     * Slides and fades a node in using spring physics (used by snackbar, sheets, menus).
+     * Slides and fades a node in (used by snackbar, sheets, menus): translateY from
+     * {@code fromY} to rest with the emphasized-decelerate ease while opacity fades 0&rarr;1
+     * linearly, both over {@code millis}. Only translate/opacity are touched (translateX and
+     * scale are left as they are). Tracked like {@link #enter(Node, MotionDirection)}: in-flight
+     * motion on the node is cancelled first, and the animation is stopped and the transform reset
+     * if the node leaves the scene mid-flight.
      *
      * @param node the entering node
      * @param fromY starting vertical offset in px
      * @param millis duration in ms
      */
     public static void slideIn(Node node, double fromY, int millis) {
+        requireFxThread("slideIn");
+        stopTracked(node);
+        SpringAnimation.stopTransforms(node);
+        installSceneExitCleanup(node);
+
         node.setOpacity(0);
-        TranslateTransition slide =
-                new TranslateTransition(Duration.millis(millis), node);
-        slide.setFromY(fromY);
-        slide.setToY(0);
-        slide.setInterpolator(MotionTokens.emphasizedDecelerate());
-        slide.play();
-        javafx.animation.FadeTransition fade =
-                new javafx.animation.FadeTransition(Duration.millis(millis), node);
-        fade.setToValue(1);
-        fade.play();
+        node.setTranslateY(fromY);
+
+        Timeline timeline = new Timeline(new KeyFrame(
+                Duration.millis(millis),
+                new KeyValue(node.translateYProperty(), 0, MotionTokens.emphasizedDecelerate()),
+                // Fade stays linear, matching the FadeTransition this helper used previously.
+                new KeyValue(node.opacityProperty(), 1.0, Interpolator.LINEAR)));
+        timeline.setOnFinished(e -> {
+            node.setOpacity(1.0);
+            node.setTranslateY(0);
+            clearTracked(node);
+        });
+        track(node, timeline);
+        timeline.play();
     }
 
     /**

@@ -1,7 +1,7 @@
 package io.m3fx.controls.overlay;
 
 import io.m3fx.controls.dialog.M3Dialog;
-import io.m3fx.controls.internal.OverlayLayer;
+import io.m3fx.controls.overlay.OverlayLayer;
 import io.m3fx.controls.sheet.M3BottomSheet;
 import io.m3fx.controls.sheet.M3SideSheet;
 import io.m3fx.controls.snackbar.M3Snackbar;
@@ -11,9 +11,17 @@ import javafx.scene.layout.StackPane;
 /**
  * Public M3 overlay facade resolving Decision #35.
  *
- * <p>Wraps the internal {@link OverlayLayer} to expose a clean public API for showing dialogs,
- * bottom sheets, side sheets, and snackbars without stage popups.
+ * <p>Wraps the library's internal overlay layer to expose a clean public API for showing dialogs,
+ * bottom sheets, side sheets, and snackbars without stage popups. Pass the layer to other
+ * components through the public {@link OverlayHost} interface returned by {@link #getLayer()}.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3Overlay extends StackPane {
 
     private final OverlayLayer layer = new OverlayLayer();
@@ -27,11 +35,12 @@ public class M3Overlay extends StackPane {
     }
 
     /**
-     * Returns the underlying {@link OverlayLayer}.
+     * Returns the underlying overlay layer as the public {@link OverlayHost} interface, usable on
+     * the module path (e.g. for {@code M3Dialog.showIn(host)} or {@code M3SearchBar.setOverlay(host)}).
      *
-     * @return the overlay layer
+     * @return the overlay host
      */
-    public OverlayLayer getLayer() {
+    public OverlayHost getLayer() {
         return layer;
     }
 

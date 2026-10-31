@@ -24,6 +24,13 @@ import javafx.scene.text.FontWeight;
  * Futuristic Holographic UI Container featuring animated laser scan sweeps,
  * HUD corner reticle brackets, cybernetic dot matrix backdrop, and glowing border accents.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3Hologram extends StackPane {
 
     private final BooleanProperty scanning = new SimpleBooleanProperty(this, "scanning", true);
@@ -201,34 +208,42 @@ public class M3Hologram extends StackPane {
         gc.strokeLine(w - 4, h - 4 - cornerLen, w - 4, h - 4);
     }
 
+    /** Whether the animated laser scan sweep is drawn. */
     public BooleanProperty scanningProperty() {
         return scanning;
     }
 
+    /** Whether the animated laser scan sweep is currently drawn. */
     public boolean isScanning() {
         return scanning.get();
     }
 
+    /** Sets whether the animated laser scan sweep is drawn. */
     public void setScanning(boolean scanning) {
         this.scanning.set(scanning);
     }
 
+    /** The badge title rendered at the top-left of the hologram frame. */
     public StringProperty titleProperty() {
         return title;
     }
 
+    /** Gets the badge title rendered at the top-left of the hologram frame. */
     public String getTitle() {
         return title.get();
     }
 
+    /** Sets the badge title rendered at the top-left of the hologram frame. */
     public void setTitle(String title) {
         this.title.set(title);
     }
 
+    /** Gets the wrapper pane holding the hologram's content child. */
     public StackPane getContentWrapper() {
         return contentWrapper;
     }
 
+    /** Replaces the hologram's content child. */
     public void setContent(Node content) {
         contentWrapper.getChildren().setAll(content);
     }

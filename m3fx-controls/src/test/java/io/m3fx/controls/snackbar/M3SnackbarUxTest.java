@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicReference;
 class M3SnackbarUxTest {
 
     private final AtomicReference<M3Snackbar> snackbar = new AtomicReference<>();
-    private final AtomicReference<io.m3fx.controls.internal.OverlayLayer> layer =
+    private final AtomicReference<io.m3fx.controls.overlay.OverlayLayer> layer =
             new AtomicReference<>();
 
     @BeforeAll
@@ -70,8 +70,8 @@ class M3SnackbarUxTest {
     void queueOrderIsPreservedAcrossDismissals() throws Throwable {
         runOnFx(() -> {
             StackPane root = new StackPane();
-            io.m3fx.controls.internal.OverlayLayer overlay =
-                    new io.m3fx.controls.internal.OverlayLayer();
+            io.m3fx.controls.overlay.OverlayLayer overlay =
+                    new io.m3fx.controls.overlay.OverlayLayer();
             root.getChildren().add(overlay);
             new Scene(root, 480, 320);
             layer.set(overlay);

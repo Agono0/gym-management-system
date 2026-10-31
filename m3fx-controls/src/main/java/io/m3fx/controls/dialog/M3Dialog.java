@@ -1,7 +1,7 @@
 package io.m3fx.controls.dialog;
 
 import io.m3fx.controls.button.M3Button;
-import io.m3fx.controls.internal.OverlayLayer;
+import io.m3fx.controls.overlay.OverlayHost;
 import io.m3fx.core.token.MotionTokens;
 import javafx.animation.FadeTransition;
 import javafx.beans.property.ObjectProperty;
@@ -20,13 +20,20 @@ import javafx.scene.layout.VBox;
 import javafx.util.Duration;
 
 /**
- * M3 basic dialog (plus a fullscreen mode) shown in an {@link OverlayLayer}, never a new stage.
+ * M3 basic dialog (plus a fullscreen mode) shown in an {@link OverlayHost}, never a new stage.
  *
  * <p>See <a href="https://m3.material.io/components/dialogs/overview">M3 dialogs</a>. Surface
  * container high, extra-large shape (28dp), headline-small title, icon, content and text-button
- * actions. Call {@link #showIn(OverlayLayer)} and {@link #hide()}. Escape closes the dialog and
+ * actions. Call {@link #showIn(OverlayHost)} and {@link #hide()}. Escape closes the dialog and
  * focus returns to the node that owned it before the dialog opened.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3Dialog extends VBox {
 
     private final Label iconLabel = new Label();
@@ -34,7 +41,7 @@ public class M3Dialog extends VBox {
     private final VBox contentBox = new VBox();
     private final HBox actionsBox = new HBox(8);
 
-    private OverlayLayer host;
+    private OverlayHost host;
     private Node previousFocus;
     private FadeTransition exitTransition;
     private final ObjectProperty<Runnable> defaultAction =
@@ -176,12 +183,12 @@ public class M3Dialog extends VBox {
     }
 
     /**
-     * Shows this dialog in an overlay layer with a scrim. Focus moves into the dialog and returns
+     * Shows this dialog in an overlay host with a scrim. Focus moves into the dialog and returns
      * to the previous owner when it hides.
      *
-     * @param layer the overlay layer
+     * @param layer the overlay host, typically {@link io.m3fx.controls.overlay.M3Overlay#getLayer()}
      */
-    public void showIn(OverlayLayer layer) {
+    public void showIn(OverlayHost layer) {
         if (exitTransition != null) {
             exitTransition.stop();
             exitTransition = null;
@@ -199,7 +206,7 @@ public class M3Dialog extends VBox {
         if (host == null) {
             return;
         }
-        OverlayLayer layer = host;
+        OverlayHost layer = host;
         host = null;
         if (getScene() == null) {
             layer.hideModal();

@@ -19,6 +19,13 @@ import javafx.scene.transform.Translate;
  * Hardware-accelerated M3 3D Viewport featuring orbit camera controls, ambient and specular
  * point lighting, cyber-grid ground plane, and smooth spring-assisted zoom and rotation.
  */
+// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
+// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
+// constructor only stores the bean reference, exactly like every built-in control;
+// (2) constructor calls to JavaFX final methods (getStyleClass(), setAccessibleRole())
+// - final, but javac does not honor ACC_FINAL for symbols from another module. This
+// class's own overridable methods are never called during construction.
+@SuppressWarnings("this-escape")
 public class M3Scene3D extends Region {
 
     /** Default orbit camera pose, shared by the constructor and {@link #resetCamera()}. */
