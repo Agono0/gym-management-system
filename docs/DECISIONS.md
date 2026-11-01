@@ -501,3 +501,22 @@
     honest); chromatic aberration is deferred; adaptation is single-signal (average luminance).
     Tests lock the math and the documented thresholds: `GlassRefractionTest`,
     `GlassEffectParamsTest`, `GlassAdaptivityTest`.
+
+75. **Liquid Glass re-implemented from the user-provided reference engines (Nov 2026).** The first
+    glass implementation approximated refraction with a squircle height profile feeding a
+    `DisplacementMap`. The user supplied two open-source engines and asked for their exact physics:
+    `liquidGL-main` (WebGPU/WebGL, true SDF refraction) and `liquid-glass-main` (nikdelvin's SVG
+    displacement map). GlassRefraction now ports the liquidGL fragment shader line-for-line into a
+    per-pixel Java render over the cached backdrop capture (rounded-box SDF, edge factor,
+    `edge*refraction + edge^10*bevelDepth`, centreBlend flat centre, corner normals, 16-tap frost,
+    per-channel aberration, magnify, tint mix, in-shape alpha mask, fluid-interaction
+    deformPoint + SDF-gradient blending) — a literal port beats a DisplacementMap approximation
+    because JavaFX effects cannot express per-channel displaced sampling or variable tap counts.
+    liquidGL's two time-animated specular lights run as radial overlays. The nikdelvin construction
+    ships as the `SVG_DISPLACEMENT` map style (`nikdelvinChannels`, box-blur approximating the SVG
+    blur chain). Defaults are the engines' verbatim (`refraction 0.01`, `bevelDepth 0.08`,
+    `bevelWidth 0.15`; nikdelvin depth 10 / strength 100). The old `maxDisplacement` auto-formula
+    property was removed (never shipped beyond this round); `blurRadius` now maps to the frost
+    knob for the legacy wrapper. Known limits: the backdrop is a cached snapshot (animated
+    backdrops refresh on invalidation), the container merge is a convex-hull union (no metaball),
+    chromatic aberration displaces the R/B sample positions exactly as the shader does.

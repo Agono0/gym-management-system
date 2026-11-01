@@ -33,7 +33,7 @@ import javafx.scene.paint.Color;
  * {@link #cornerRadiusProperty() cornerRadius}, {@link #glassOpacityProperty() glassOpacity},
  * {@link #refractionProperty() refraction}, {@link #specularProperty() specular},
  * {@link #specularAngleProperty() specularAngle}, {@link #saturationProperty() saturation},
- * {@link #maxDisplacementProperty() maxDisplacement}, {@link #shadowProperty() shadow} and
+ * {@link #shadowProperty() shadow} and
  * {@link #interactiveProperty() interactive}. Setting {@code glassEffect} copies the bundle into
  * the individual properties (the bundle itself is immutable). The bundle accessor is named
  * {@code glassEffect} rather than {@code effect} because {@code Node} already owns
@@ -59,10 +59,6 @@ public class M3GlassPane extends Control {
     /** Saturation sentinel: negative means "derive from the variant" (0.18 regular / 0.10 clear). */
     public static final double SATURATION_AUTO = -1.0;
 
-    /** Max-displacement sentinel: &le; 0 means auto from the spec formula
-     * {@code refraction * min(w,h) * 0.08}. */
-    public static final double MAX_DISPLACEMENT_AUTO = 0.0;
-
     private final ObjectProperty<GlassEffectParams> effect =
             new SimpleObjectProperty<>(this, "effect");
     private final ObjectProperty<GlassVariant> variant =
@@ -76,13 +72,31 @@ public class M3GlassPane extends Control {
     private final DoubleProperty blurRadius = new SimpleDoubleProperty(this, "blurRadius", 16.0);
     private final DoubleProperty cornerRadius = new SimpleDoubleProperty(this, "cornerRadius", 16.0);
     private final DoubleProperty glassOpacity = new SimpleDoubleProperty(this, "glassOpacity", 0.65);
-    private final DoubleProperty refraction = new SimpleDoubleProperty(this, "refraction", 1.0);
+    private final DoubleProperty refraction =
+            new SimpleDoubleProperty(this, "refraction", GlassRefraction.DEFAULT_REFRACTION);
     private final DoubleProperty specular = new SimpleDoubleProperty(this, "specular", 0.35);
     private final DoubleProperty specularAngle = new SimpleDoubleProperty(this, "specularAngle", 110.0);
     private final DoubleProperty saturation =
             new SimpleDoubleProperty(this, "saturation", SATURATION_AUTO);
-    private final DoubleProperty maxDisplacement =
-            new SimpleDoubleProperty(this, "maxDisplacement", MAX_DISPLACEMENT_AUTO);
+
+    private final ObjectProperty<GlassEffectParams.MapStyle> mapStyle =
+            new SimpleObjectProperty<>(this, "mapStyle", GlassEffectParams.MapStyle.LIQUIDGL);
+    private final DoubleProperty bevelDepth =
+            new SimpleDoubleProperty(this, "bevelDepth", GlassRefraction.DEFAULT_BEVEL_DEPTH);
+    private final DoubleProperty bevelWidth =
+            new SimpleDoubleProperty(this, "bevelWidth", GlassRefraction.DEFAULT_BEVEL_WIDTH);
+    private final DoubleProperty frost = new SimpleDoubleProperty(this, "frost", 0.0);
+    private final DoubleProperty aberration = new SimpleDoubleProperty(this, "aberration", 0.0);
+    private final DoubleProperty magnify =
+            new SimpleDoubleProperty(this, "magnify", GlassRefraction.DEFAULT_MAGNIFY);
+    private final DoubleProperty nikdelvinDepth =
+            new SimpleDoubleProperty(this, "nikdelvinDepth", GlassRefraction.DEFAULT_NIKDELVIN_DEPTH);
+    private final DoubleProperty nikdelvinStrength =
+            new SimpleDoubleProperty(this, "nikdelvinStrength", GlassRefraction.DEFAULT_NIKDELVIN_STRENGTH);
+    private final BooleanProperty fluidInteraction =
+            new SimpleBooleanProperty(this, "fluidInteraction", false);
+    private final DoubleProperty interactionRadius =
+            new SimpleDoubleProperty(this, "interactionRadius", 0.35);
 
     /** Content holder floated above the glass layers (owned by the control so it exists pre-skin). */
     final StackPane contentBox = new StackPane();
@@ -186,6 +200,17 @@ public class M3GlassPane extends Control {
             setInteractive(params.isInteractive());
             setGlassShape(params.shape());
             setCornerRadius(params.cornerRadius());
+            setMapStyle(params.mapStyle());
+            setRefraction(params.refraction());
+            setBevelDepth(params.bevelDepth());
+            setBevelWidth(params.bevelWidth());
+            setFrost(params.frost());
+            setAberration(params.aberration());
+            setMagnify(params.magnify());
+            setNikdelvinDepth(params.nikdelvinDepth());
+            setNikdelvinStrength(params.nikdelvinStrength());
+            setFluidInteraction(params.isFluidInteraction());
+            setInteractionRadius(params.interactionRadius());
         }
     }
 
@@ -364,6 +389,156 @@ public class M3GlassPane extends Control {
         refraction.set(newRefraction);
     }
 
+    /** Returns the map-style property (liquidGL shader vs nikdelvin SVG displacement). */
+    public ObjectProperty<GlassEffectParams.MapStyle> mapStyleProperty() {
+        return mapStyle;
+    }
+
+    /** Returns the displacement-field source. */
+    public GlassEffectParams.MapStyle getMapStyle() {
+        return mapStyle.get();
+    }
+
+    /** Sets the displacement-field source. */
+    public void setMapStyle(GlassEffectParams.MapStyle newMapStyle) {
+        mapStyle.set(newMapStyle);
+    }
+
+    /** Returns the bevel-depth property (UV, the {@code edge^10} rim term). */
+    public DoubleProperty bevelDepthProperty() {
+        return bevelDepth;
+    }
+
+    /** Returns the bevel depth. */
+    public double getBevelDepth() {
+        return bevelDepth.get();
+    }
+
+    /** Sets the bevel depth. */
+    public void setBevelDepth(double newBevelDepth) {
+        bevelDepth.set(newBevelDepth);
+    }
+
+    /** Returns the bevel-width property (fraction of the smaller side). */
+    public DoubleProperty bevelWidthProperty() {
+        return bevelWidth;
+    }
+
+    /** Returns the bevel width. */
+    public double getBevelWidth() {
+        return bevelWidth.get();
+    }
+
+    /** Sets the bevel width. */
+    public void setBevelWidth(double newBevelWidth) {
+        bevelWidth.set(newBevelWidth);
+    }
+
+    /** Returns the frost property (liquidGL {@code u_frost}, 0 = sharp). */
+    public DoubleProperty frostProperty() {
+        return frost;
+    }
+
+    /** Returns the frost strength. */
+    public double getFrost() {
+        return frost.get();
+    }
+
+    /** Sets the frost strength. */
+    public void setFrost(double newFrost) {
+        frost.set(newFrost);
+    }
+
+    /** Returns the chromatic-aberration property (px). */
+    public DoubleProperty aberrationProperty() {
+        return aberration;
+    }
+
+    /** Returns the chromatic aberration. */
+    public double getAberration() {
+        return aberration.get();
+    }
+
+    /** Sets the chromatic aberration. */
+    public void setAberration(double newAberration) {
+        aberration.set(newAberration);
+    }
+
+    /** Returns the magnification property. */
+    public DoubleProperty magnifyProperty() {
+        return magnify;
+    }
+
+    /** Returns the backdrop magnification. */
+    public double getMagnify() {
+        return magnify.get();
+    }
+
+    /** Sets the backdrop magnification. */
+    public void setMagnify(double newMagnify) {
+        magnify.set(newMagnify);
+    }
+
+    /** Returns the nikdelvin bezel-depth property (px). */
+    public DoubleProperty nikdelvinDepthProperty() {
+        return nikdelvinDepth;
+    }
+
+    /** Returns the nikdelvin bezel depth. */
+    public double getNikdelvinDepth() {
+        return nikdelvinDepth.get();
+    }
+
+    /** Sets the nikdelvin bezel depth. */
+    public void setNikdelvinDepth(double newDepth) {
+        nikdelvinDepth.set(newDepth);
+    }
+
+    /** Returns the nikdelvin displacement-scale property (px). */
+    public DoubleProperty nikdelvinStrengthProperty() {
+        return nikdelvinStrength;
+    }
+
+    /** Returns the nikdelvin displacement scale. */
+    public double getNikdelvinStrength() {
+        return nikdelvinStrength.get();
+    }
+
+    /** Sets the nikdelvin displacement scale. */
+    public void setNikdelvinStrength(double newStrength) {
+        nikdelvinStrength.set(newStrength);
+    }
+
+    /** Returns the fluid-interaction property (pointer-deformed SDF). */
+    public BooleanProperty fluidInteractionProperty() {
+        return fluidInteraction;
+    }
+
+    /** Returns whether the fluid interaction is enabled. */
+    public boolean isFluidInteraction() {
+        return fluidInteraction.get();
+    }
+
+    /** Enables or disables the fluid interaction. */
+    public void setFluidInteraction(boolean enabled) {
+        fluidInteraction.set(enabled);
+    }
+
+    /** Returns the interaction-reach property (fraction of the smaller side). */
+    public DoubleProperty interactionRadiusProperty() {
+        return interactionRadius;
+    }
+
+    /** Returns the interaction reach. */
+    public double getInteractionRadius() {
+        return interactionRadius.get();
+    }
+
+    /** Sets the interaction reach. */
+    public void setInteractionRadius(double newRadius) {
+        interactionRadius.set(newRadius);
+    }
+
     /** Returns the specular intensity property. */
     public DoubleProperty specularProperty() {
         return specular;
@@ -421,27 +596,6 @@ public class M3GlassPane extends Control {
      */
     public void setSaturation(double newSaturation) {
         saturation.set(newSaturation);
-    }
-
-    /** Returns the max displacement property. */
-    public DoubleProperty maxDisplacementProperty() {
-        return maxDisplacement;
-    }
-
-    /** Returns the maximum refraction pixel shift, or {@link #MAX_DISPLACEMENT_AUTO} when
-     * derived from {@code refraction * min(w,h) * 0.08}. */
-    public double getMaxDisplacement() {
-        return maxDisplacement.get();
-    }
-
-    /**
-     * Sets the maximum refraction pixel shift; &le; 0 restores the auto formula
-     * {@code refraction * min(w,h) * 0.08}.
-     *
-     * @param newMaxDisplacement pixel shift or {@link #MAX_DISPLACEMENT_AUTO}
-     */
-    public void setMaxDisplacement(double newMaxDisplacement) {
-        maxDisplacement.set(newMaxDisplacement);
     }
 
     /** Returns the content container floated above the glass layers. */

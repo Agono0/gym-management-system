@@ -12,9 +12,7 @@ import javafx.scene.Node;
 import javafx.scene.control.SkinBase;
 import javafx.scene.effect.BlurType;
 import javafx.scene.effect.ColorAdjust;
-import javafx.scene.effect.DisplacementMap;
 import javafx.scene.effect.DropShadow;
-import javafx.scene.effect.GaussianBlur;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
 import javafx.scene.input.MouseEvent;
@@ -42,15 +40,14 @@ import javafx.scene.shape.Rectangle;
  *       background + surrounding siblings) with the glass node's own contribution suppressed by
  *       temporarily setting its opacity to 0. Invalidated on scene/parent/bounds/theme changes;
  *       never per frame. Live-animated backdrops refresh only on invalidation
- *       ({@link M3GlassPane#invalidateBackdrop()}). The capture is padded outward by
- *       {@code maxDisplacement + blurRadius} so rim refraction and blur spread can sample real
+ *       ({@link M3GlassPane#invalidateBackdrop()}). The capture is padded outward by the
+ *       shader's maximum sample pull plus the blur radius so rim refraction can sample real
  *       content.</li>
- *   <li><b>Blur layer</b> &mdash; {@link GaussianBlur} at {@code blurRadius} on the backdrop
- *       image. Variable blur is approximated with a second sharp copy clipped to the inner region
- *       (inset by bezel + blur radius), so the center stays clearer than the diffused rim.</li>
- *   <li><b>Refraction</b> &mdash; {@link DisplacementMap} with the {@link GlassRefraction} float
- *       map, rebuilt only when size/radius/shape/refraction/maxDisplacement change (cached by
- *       key). Pressing animates the map SCALE only (no rebuild).</li>
+ *   <li><b>Shader render</b> &mdash; {@link GlassRefraction#render} ports the liquidGL fragment
+ *       shader per pixel over the capture: rim refraction with the flat centre, frost taps,
+ *       chromatic aberration, magnification and the tint mix. Re-rendered on invalidation,
+ *       while the press spring animates the bevel, and while the fluid-interaction pointer
+ *       deforms the field.</li>
  *   <li><b>Saturation</b> &mdash; {@link ColorAdjust} +0.18 regular / +0.10 clear (property
  *       override supported).</li>
  *   <li><b>Tint layer</b> &mdash; optional tint color at 0.25 alpha, else the theme surface
@@ -96,12 +93,12 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
     private final ImageView sharpView = new ImageView();
     private final Region tintLayer = new Region();
     private final Region specularRing = new Region();
+    private final Region specularLight1 = new Region();
+    private final Region specularLight2 = new Region();
     private final Region edgeStroke = new Region();
     private final Rectangle layersClip = new Rectangle();
     private final Rectangle sharpClip = new Rectangle();
 
-    private final GaussianBlur blur = new GaussianBlur();
-    private final DisplacementMap displacement = new DisplacementMap();
     private final ColorAdjust saturationAdjust = new ColorAdjust();
     private final DropShadow dropShadow = new DropShadow();
 
@@ -110,12 +107,26 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
             new javafx.beans.property.SimpleDoubleProperty(this, "bevelFlatten", 0.0);
 
     private WritableImage backdropImage;
+    private WritableImage refractedImage;
     private double captureOffsetX;
     private double captureOffsetY;
     private boolean backdropDirty = true;
     private boolean layersDirty = true;
-    private String mapKey = "";
+    private boolean renderDirty = true;
     private double baseSpecularAngle = 110.0;
+
+    /** Fluid interaction: pointer UV + viscously smoothed displacement deltas (pane UV). */
+    private double interactionPointerX = 0.5;
+    private double interactionPointerY = 0.5;
+    private double interactionDeltaX;
+    private double interactionDeltaY;
+    private double lastPointerX;
+    private double lastPointerY;
+    private boolean hasLastPointer;
+
+    /** Drives liquidGL's two time-animated specular lights while showing and specular > 0. */
+    private javafx.animation.AnimationTimer specularTimer;
+    private long specularStartNanos;
 
     // Listener/handler fields so dispose() can remove everything the skin registered.
     private final ChangeListener<Object> invalidateListener;
@@ -123,10 +134,12 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
     private final ChangeListener<Boolean> pressedListener;
     private final ChangeListener<Number> specularAngleListener;
     private final ChangeListener<Number> bevelFlattenListener;
+    private final ChangeListener<Number> renderPropertyListener;
     private final MapChangeListener<Object, Object> themeListener;
     private final EventHandler<MouseEvent> pressHandler;
     private final EventHandler<MouseEvent> releaseHandler;
     private final EventHandler<MouseEvent> moveHandler;
+    private final EventHandler<MouseEvent> exitHandler;
     private javafx.scene.Scene currentScene;
 
     GlassPaneSkin(M3GlassPane control) {
@@ -168,10 +181,27 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
         root.getChildren().addAll(glassLayers, content);
         getChildren().add(root);
 
-        // Effect chain: blur -> displacement -> saturation (spec pipeline order).
-        saturationAdjust.setInput(displacement);
-        displacement.setInput(blur);
+        // Render pipeline: the captured backdrop is refracted per-pixel by the liquidGL shader
+        // port (GlassRefraction.render) into refractedImage; saturation is a post effect.
+        saturationAdjust.setInput(null);
         backdropView.setEffect(saturationAdjust);
+
+        // liquidGL's two time-animated specular lights, composited above the rim ring.
+        specularLight1.setMouseTransparent(true);
+        specularLight2.setMouseTransparent(true);
+        specularLight1.setManaged(false);
+        specularLight2.setManaged(false);
+        glassLayers.getChildren().addAll(specularLight1, specularLight2);
+        specularTimer = new javafx.animation.AnimationTimer() {
+            @Override
+            public void handle(long now) {
+                if (specularStartNanos == 0) {
+                    specularStartNanos = now;
+                }
+                double t = (now - specularStartNanos) / 1_000_000_000.0;
+                placeSpecularLights(t);
+            }
+        };
 
         invalidateListener = (obs, o, n) -> invalidateAll();
         hoverListener = (obs, oldV, hover) -> {
@@ -186,7 +216,18 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
                 baseSpecularAngle = n.doubleValue();
             }
         };
-        bevelFlattenListener = (obs, o, n) -> updateShadow();
+        bevelFlattenListener = (obs, o, n) -> {
+            updateShadow();
+            // The bevel flatten changes the live refraction strength: re-render the shader pass.
+            renderDirty = true;
+        };
+        renderPropertyListener = (obs, o, n) -> {
+            renderDirty = true;
+            M3GlassPane owner = getSkinnable();
+            if (owner != null) {
+                owner.requestLayout();
+            }
+        };
         themeListener = change -> {
             if ("m3fx.theme".equals(change.getKey())) {
                 invalidateAll();
@@ -203,12 +244,38 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
             }
         };
         moveHandler = e -> {
-            if (!control.isInteractive() || !control.isHover()) {
+            M3GlassPane controlRef = getSkinnable();
+            if (controlRef == null) {
                 return;
             }
-            double w = control.getWidth();
-            double h = control.getHeight();
+            double w = controlRef.getWidth();
+            double h = controlRef.getHeight();
             if (w <= 0 || h <= 0) {
+                return;
+            }
+            // Fluid interaction (liquidGL): track the pointer and accumulate a viscously
+            // smoothed displacement delta that deforms the SDF field.
+            if (controlRef.isFluidInteraction()) {
+                double pux = e.getX() / w;
+                double puy = e.getY() / h;
+                if (hasLastPointer) {
+                    double targetX = (e.getX() - lastPointerX) / w;
+                    double targetY = (e.getY() - lastPointerY) / h;
+                    double viscosity = 0.65;
+                    interactionDeltaX = interactionDeltaX * viscosity
+                            + targetX * (1.0 - viscosity);
+                    interactionDeltaY = interactionDeltaY * viscosity
+                            + targetY * (1.0 - viscosity);
+                }
+                interactionPointerX = pux;
+                interactionPointerY = puy;
+                lastPointerX = e.getX();
+                lastPointerY = e.getY();
+                hasLastPointer = true;
+                renderDirty = true;
+                controlRef.requestLayout();
+            }
+            if (!controlRef.isInteractive() || !controlRef.isHover()) {
                 return;
             }
             double ux = e.getX() - w / 2.0;
@@ -222,7 +289,7 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
             // Light "from the pointer": gradient bright start at the pointer side. CSS-convention
             // angle (0 = to top, clockwise): direction d = (sin t, -cos t), here d = -u.
             double target = Math.toDegrees(Math.atan2(-ux, uy));
-            double base = control.getSpecularAngle();
+            double base = controlRef.getSpecularAngle();
             double delta = target - base;
             while (delta > 180.0) {
                 delta -= 360.0;
@@ -231,8 +298,22 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
                 delta += 360.0;
             }
             SpringAnimation.animate(
-                    control.specularAngleProperty(), base + delta * HOVER_SHIFT,
+                    controlRef.specularAngleProperty(), base + delta * HOVER_SHIFT,
                     SpringAnimation.APPLE_SETTLE, null);
+        };
+        exitHandler = e -> {
+            // Pointer left: relax the fluid deformation back to rest.
+            if (!hasLastPointer) {
+                return;
+            }
+            hasLastPointer = false;
+            interactionDeltaX = 0.0;
+            interactionDeltaY = 0.0;
+            renderDirty = true;
+            M3GlassPane controlRef = getSkinnable();
+            if (controlRef != null) {
+                controlRef.requestLayout();
+            }
         };
 
         // Invalidation sources: geometry (bounds cover position, size and transforms), scene,
@@ -247,7 +328,15 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
         control.blurRadiusProperty().addListener(invalidateListener);
         control.glassOpacityProperty().addListener(invalidateListener);
         control.refractionProperty().addListener(invalidateListener);
-        control.maxDisplacementProperty().addListener(invalidateListener);
+        control.bevelDepthProperty().addListener(renderPropertyListener);
+        control.bevelWidthProperty().addListener(renderPropertyListener);
+        control.frostProperty().addListener(renderPropertyListener);
+        control.aberrationProperty().addListener(renderPropertyListener);
+        control.magnifyProperty().addListener(renderPropertyListener);
+        control.mapStyleProperty().addListener(invalidateListener);
+        control.nikdelvinDepthProperty().addListener(renderPropertyListener);
+        control.nikdelvinStrengthProperty().addListener(renderPropertyListener);
+        control.fluidInteractionProperty().addListener(invalidateListener);
         control.specularProperty().addListener(invalidateListener);
         control.shadowProperty().addListener(invalidateListener);
         control.specularAngleProperty().addListener(specularAngleListener);
@@ -257,6 +346,7 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
         control.addEventHandler(MouseEvent.MOUSE_PRESSED, pressHandler);
         control.addEventHandler(MouseEvent.MOUSE_RELEASED, releaseHandler);
         control.addEventHandler(MouseEvent.MOUSE_MOVED, moveHandler);
+        control.addEventHandler(MouseEvent.MOUSE_EXITED, exitHandler);
         attachSceneListeners(control.getScene());
 
         paintLayers();
@@ -294,9 +384,21 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
             if (backdropDirty) {
                 captureBackdrop();
             }
-            rebuildMapIfNeeded();
+            renderRefractedIfNeeded();
             if (layersDirty) {
                 paintLayers();
+            }
+            // liquidGL's specular lights are time-animated: run while visible and enabled.
+            boolean lightsOn = control.getSpecular() > 0.0
+                    && control.getScene() != null
+                    && control.getScene().getWindow() != null
+                    && control.getScene().getWindow().isShowing()
+                    && control.isVisible();
+            if (lightsOn) {
+                specularTimer.start();
+            } else {
+                specularTimer.stop();
+                specularStartNanos = 0;
             }
         }
         // SkinBase.layoutChildren fills root to the skin area; glassLayers and content follow
@@ -328,7 +430,11 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
             sharpView.setImage(null);
             return;
         }
-        double pad = Math.max(0.0, effectiveMaxDisplacement()) + Math.max(0.0, control.getBlurRadius()) + 2.0;
+        // Pad covers the shader's maximum sample pull: (refraction + edge^10 bevel) UV
+        // across the larger axis, plus the legacy blur radius and a safety margin.
+        double maxPullPx = (Math.max(0.0, control.getRefraction()) + Math.max(0.0, control.getBevelDepth()))
+                * Math.max(control.getWidth(), control.getHeight());
+        double pad = maxPullPx + Math.max(0.0, control.getBlurRadius()) + 2.0;
         Bounds b = control.getBoundsInParent();
         double vw = b.getWidth() + 2.0 * pad;
         double vh = b.getHeight() + 2.0 * pad;
@@ -397,35 +503,41 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
         return Math.max(0.0, Math.min(effectiveRadius() + Math.max(0.0, control.getBlurRadius()), halfMin - 0.5));
     }
 
-    // ------------------------------------------------------------------ refraction map
+    // ------------------------------------------------------------------ shader render
 
-    /** Rebuilds the DisplacementMap only when size/radius/shape/refraction/maxDisplacement changed. */
-    private void rebuildMapIfNeeded() {
+    /** Runs the liquidGL shader pass when the capture, uniforms or interaction changed. */
+    private void renderRefractedIfNeeded() {
         M3GlassPane control = getSkinnable();
-        double w = backdropImage == null ? control.getWidth() : backdropImage.getWidth();
-        double h = backdropImage == null ? control.getHeight() : backdropImage.getHeight();
-        double scale = effectiveMaxDisplacement();
-        String key = (int) w + "x" + (int) h + "|" + effectiveRadius()
-                + "|" + control.getGlassShape() + "|" + scale;
-        if (key.equals(mapKey)) {
+        if (control == null || backdropImage == null) {
             return;
         }
-        mapKey = key;
-        GlassRefraction.Profile profile = GlassRefraction.Profile.CONVEX;
-        // Refraction strength flows through maxDisplacement (auto: refraction * min(w,h) * 0.08),
-        // so the unit-magnitude map (refraction=1) plus the scale encodes the shift exactly once.
-        displacement.setMapData(GlassRefraction.buildFloatMap(
-                w, h, control.getCornerRadius(), control.getGlassShape(), profile, 1.0, scale));
-        displacement.setOffsetX(0.0);
-        displacement.setOffsetY(0.0);
-        updateDisplacementScale();
-    }
-
-    /** Sets the DisplacementMap scale: maxDisplacement reduced by the press bevel flattening. */
-    private void updateDisplacementScale() {
-        double scale = Math.max(0.0, effectiveMaxDisplacement()) * (1.0 - PRESS_FLATTEN * bevelFlatten.get());
-        displacement.setScaleX(scale);
-        displacement.setScaleY(scale);
+        if (!renderDirty && refractedImage != null) {
+            return;
+        }
+        renderDirty = false;
+        double flatten = bevelFlatten.get();
+        GlassRefraction.ShaderParams params = new GlassRefraction.ShaderParams(
+                control.getWidth(), control.getHeight(), effectiveRadius(),
+                Math.max(0.0, control.getRefraction()) * (1.0 - PRESS_FLATTEN * flatten),
+                control.getBevelDepth(), control.getBevelWidth(), control.getFrost(),
+                control.getAberration(), control.getMagnify(), control.getTint(),
+                control.isFluidInteraction()
+                        ? new GlassRefraction.Interaction(interactionPointerX,
+                        interactionPointerY, interactionDeltaX, interactionDeltaY,
+                        control.getInteractionRadius())
+                        : null);
+        if (refractedImage == null
+                || (int) refractedImage.getWidth() != (int) Math.ceil(control.getWidth())
+                || (int) refractedImage.getHeight() != (int) Math.ceil(control.getHeight())) {
+            refractedImage = new WritableImage(
+                    Math.max(1, (int) Math.ceil(control.getWidth())),
+                    Math.max(1, (int) Math.ceil(control.getHeight())));
+        }
+        GlassRefraction.render(backdropImage, refractedImage, captureOffsetX, captureOffsetY,
+                params, params.interaction());
+        backdropView.setImage(refractedImage);
+        sharpView.setImage(refractedImage);
+        placeBackdropViews();
     }
 
     // ------------------------------------------------------------------ layers
@@ -444,17 +556,12 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
 
     private void paintTint(double radius) {
         M3GlassPane control = getSkinnable();
-        Color fill;
-        Color tint = control.getTint();
-        if (tint != null) {
-            fill = Color.color(
-                    clamp01(tint.getRed()), clamp01(tint.getGreen()), clamp01(tint.getBlue()), TINT_ALPHA);
-        } else {
-            Color surface = ThemeColors.resolve(control, ColorRole.SURFACE_CONTAINER_HIGH);
-            fill = Color.color(
-                    surface.getRed(), surface.getGreen(), surface.getBlue(),
-                    clamp01(control.getGlassOpacity()));
-        }
+        // The liquidGL tint mix lives in the shader render (GlassRefraction.render); this layer
+        // only carries the neutral surface fill driven by glassOpacity.
+        Color surface = ThemeColors.resolve(control, ColorRole.SURFACE_CONTAINER_HIGH);
+        Color fill = Color.color(
+                surface.getRed(), surface.getGreen(), surface.getBlue(),
+                clamp01(control.getGlassOpacity()));
         tintLayer.setBackground(new Background(new BackgroundFill(
                 fill, new CornerRadii(radius), null)));
     }
@@ -491,7 +598,6 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
 
     private void updateEffects() {
         M3GlassPane control = getSkinnable();
-        blur.setRadius(Math.max(0.0, control.getBlurRadius()));
         saturationAdjust.setSaturation(effectiveSaturation());
     }
 
@@ -517,7 +623,6 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
         } else {
             root.setEffect(null);
         }
-        updateDisplacementScale();
     }
 
     // ------------------------------------------------------------------ helpers
@@ -529,14 +634,44 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
                 Math.max(1.0, control.getWidth()), Math.max(1.0, control.getHeight()));
     }
 
-    private double effectiveMaxDisplacement() {
+    /** Positions liquidGL's two time-animated specular lights over the pane (t in seconds). */
+    private void placeSpecularLights(double t) {
         M3GlassPane control = getSkinnable();
-        double configured = control.getMaxDisplacement();
-        if (configured > 0.0) {
-            return configured;
+        if (control == null) {
+            return;
         }
-        double size = Math.min(Math.max(1.0, control.getWidth()), Math.max(1.0, control.getHeight()));
-        return Math.max(0.0, control.getRefraction()) * size * 0.08;
+        double w = control.getWidth();
+        double h = control.getHeight();
+        double intensity = clamp01(control.getSpecular());
+        if (w <= 0 || h <= 0 || intensity <= 0.0) {
+            specularLight1.setVisible(false);
+            specularLight2.setVisible(false);
+            return;
+        }
+        specularLight1.setVisible(true);
+        specularLight2.setVisible(true);
+        // Exact shader lights: lp1 = (sin(t*0.2), cos(t*0.3))*0.6 + 0.5; lp2 = (sin(-t*0.4+1.5),
+        // cos(t*0.25-0.5))*0.6 + 0.5, in box-normalized coordinates; bump alphas 0.10 / 0.08.
+        double l1x = (Math.sin(t * 0.2) * 0.6 + 0.5) * w;
+        double l1y = (Math.cos(t * 0.3) * 0.6 + 0.5) * h;
+        double l2x = (Math.sin(t * -0.4 + 1.5) * 0.6 + 0.5) * w;
+        double l2y = (Math.cos(t * 0.25 - 0.5) * 0.6 + 0.5) * h;
+        double r1 = 0.4 * Math.min(w, h);
+        double r2 = 0.5 * Math.min(w, h);
+        specularLight1.setBackground(new Background(new BackgroundFill(
+                new javafx.scene.paint.RadialGradient(0, 0, 0.5, 0.5, 0.5, true,
+                        javafx.scene.paint.CycleMethod.NO_CYCLE,
+                        new javafx.scene.paint.Stop(0.0, Color.color(1, 1, 1, 0.10 * intensity)),
+                        new javafx.scene.paint.Stop(1.0, Color.TRANSPARENT)),
+                new CornerRadii(9999), null)));
+        specularLight2.setBackground(new Background(new BackgroundFill(
+                new javafx.scene.paint.RadialGradient(0, 0, 0.5, 0.5, 0.5, true,
+                        javafx.scene.paint.CycleMethod.NO_CYCLE,
+                        new javafx.scene.paint.Stop(0.0, Color.color(1, 1, 1, 0.08 * intensity)),
+                        new javafx.scene.paint.Stop(1.0, Color.TRANSPARENT)),
+                new CornerRadii(9999), null)));
+        specularLight1.resizeRelocate(l1x - r1, l1y - r1, r1 * 2, r1 * 2);
+        specularLight2.resizeRelocate(l2x - r2, l2y - r2, r2 * 2, r2 * 2);
     }
 
     private double effectiveSaturation() {
@@ -566,7 +701,15 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
             control.blurRadiusProperty().removeListener(invalidateListener);
             control.glassOpacityProperty().removeListener(invalidateListener);
             control.refractionProperty().removeListener(invalidateListener);
-            control.maxDisplacementProperty().removeListener(invalidateListener);
+            control.bevelDepthProperty().removeListener(renderPropertyListener);
+            control.bevelWidthProperty().removeListener(renderPropertyListener);
+            control.frostProperty().removeListener(renderPropertyListener);
+            control.aberrationProperty().removeListener(renderPropertyListener);
+            control.magnifyProperty().removeListener(renderPropertyListener);
+            control.mapStyleProperty().removeListener(invalidateListener);
+            control.nikdelvinDepthProperty().removeListener(renderPropertyListener);
+            control.nikdelvinStrengthProperty().removeListener(renderPropertyListener);
+            control.fluidInteractionProperty().removeListener(invalidateListener);
             control.specularProperty().removeListener(invalidateListener);
             control.shadowProperty().removeListener(invalidateListener);
             control.specularAngleProperty().removeListener(specularAngleListener);
@@ -575,6 +718,7 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
             control.removeEventHandler(MouseEvent.MOUSE_PRESSED, pressHandler);
             control.removeEventHandler(MouseEvent.MOUSE_RELEASED, releaseHandler);
             control.removeEventHandler(MouseEvent.MOUSE_MOVED, moveHandler);
+            control.removeEventHandler(MouseEvent.MOUSE_EXITED, exitHandler);
             if (currentScene != null) {
                 currentScene.getProperties().removeListener(themeListener);
                 currentScene = null;
@@ -584,12 +728,14 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
         if (control != null) {
             SpringAnimation.stop(control.specularAngleProperty());
         }
+        specularTimer.stop();
         backdropImage = null;
+        refractedImage = null;
+        renderDirty = true;
         backdropView.setImage(null);
         sharpView.setImage(null);
         backdropView.setEffect(null);
         root.setEffect(null);
-        displacement.setMapData(new javafx.scene.effect.FloatMap(1, 1));
         super.dispose();
     }
 }

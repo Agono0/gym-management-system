@@ -24,33 +24,30 @@ JavaFX mapping decisions are ours (documented, not claimed as Apple values).
    user's stash) drives morph/flex; press flattens the bevel + deepens shadow (ybouane `button`
    behavior); shadow 0.30 opacity / 10 spread / +1 offsetY defaults.
 
-## Physics math (the refraction displacement map)
-- Height profile over the bezel, x in [0,1] outer edge → bezel end:
-  - `convex(x) = (1 - (1-x)^4)^(1/4)` (squircle — chosen; circle is `(1-(1-x)^2)^(1/2)`)
-  - `concave(x) = 1 - convex(x)`; `lip(x) = mix(convex, concave, smootherstep(x))`
-- Surface normal from numeric derivative (central difference, dx=0.001), rotated -90°.
-- Displacement = refracted ray offset (Snell, n=1.5, single refraction, orthographic), simulated
-  on 127 rays per radius, magnitudes normalized to [0,1]; the real max pixel shift is the map scale.
-- JavaFX encoding: `DisplacementMap` + `FloatMap` — channel offsets at 0.5, per-channel scale =
-  maxDisplacement px; x-displacement in R channel, y in G (same as feDisplacementMap).
-  `maxDisplacement ≈ refraction * min(w,h) * 0.08` (tuned so refraction=1.0 ≈ ybouane default 0.69
-  visually).
-- **Variable blur**: clearest center → diffused edges. Approximate with 2 backdrop layers:
-  full-copy + blurred copy, the blurred one clipped by a bezel ring inset (blurred edge mask), so
-  the center stays sharp. Cheap and close to the real thing.
+## Physics (the liquidGL shader, ported per-pixel)
+The displacement field reproduces the liquidGL fragment shader exactly
+(`liquidGL-main/scripts/liquidGL.js`, main `fs`), evaluated per pixel over the cached backdrop
+capture in `GlassRefraction.render` (a literal Java port of `main()`; no FloatMap approximations):
 
-## Rendering pipeline (JavaFX, per glass node)
-1. Backdrop capture: `snapshot` of the node BEHIND the glass (parent background + earlier
-   siblings), cached, invalidated on scene/layout/theme change — never per frame.
-2. Blur layer (regular variant): GaussianBlur ~16px on the backdrop; clear variant ~4px.
-3. Refraction: apply the DisplacementMap (rebuilt only on size/radius/shape change; the map is a
-   pure function — unit-testable).
-4. Saturation: ColorAdjust saturation +0.18 (regular) / +0.10 (clear).
-5. Tint (optional): semi-transparent fill of the tint color at 0.25 alpha.
-6. Specular rim: gradient rim light (default angle 110°, top-left), intensity 0.35; edge glow
-   stroke 1px at 0.45 of outline-variant.
-7. Shadow: DropShadow 0.30 / 10 / +1 (skip for `circle` in toolbars per Apple's floating chrome).
-8. Content floats above, never blurred.
+    d        = -udRoundBox(p, b, r)                                   signed distance, px
+    edge     = 1 - smoothstep(0, bevelWidth*min(boxW,boxH), d)         1 at rim, 0 inward
+    offset   = edge*refraction + edge^10 * bevelDepth                  UV units
+    centre   = smoothstep(0.15, 0.45, |p| / boxH)                      flat centre, live rim
+    dir      = cornerNormal(p, b, r, normalize(p+eps))                 rim-aware outward normal
+    uv       = mapped + dir*offset*centre (+ OOB blend)                refracted sample
+    frost    = 16 random taps in a frost*4-px radius (else a 5-tap cross)
+    aberr    = R sampled at uv-chroma, B at uv+chroma, chroma = offset*aberration
+    tint     = mix(rgb, rgb*tint.rgb, tint.a);  alpha *= inShape
+
+Fluid interaction ports `deformPoint` + the deformed-SDF gradient blend verbatim (pointer centre,
+smoothstep reach, viscous delta smoothing at 0.65). liquidGL's two time-animated specular lights
+(`lp1/lp2`, bumps 0.10/0.08) are composited as animated radial overlays. Defaults are the engine's:
+`refraction 0.01`, `bevelDepth 0.08`, `bevelWidth 0.15`, `magnify 1`.
+
+The nikdelvin construction (`liquid-glass-main/src/utils/liquidGlass.ts`) ships as the
+`SVG_DISPLACEMENT` map style: navy base, screen-blended linear gradients (insets `0.15*radius`),
+gray rounded rect inset by `depth` (screen blend neutralizes the centre), box-blur approximation
+of the SVG blur chain, `scale = strength` (defaults depth 10 / strength 100).
 
 ## Public API contract (all agents build exactly this)
 package `io.m3fx.controls.glass`:
