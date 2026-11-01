@@ -86,7 +86,8 @@ import io.m3fx.controls.data.M3StatCard;
 import io.m3fx.controls.data.M3Stepper;
 import io.m3fx.controls.data.M3Timeline;
 import io.m3fx.controls.data.M3Timeline.Status;
-import io.m3fx.controls.effect.M3GlassPane;
+import io.m3fx.controls.glass.GlassEffectParams;
+import io.m3fx.controls.glass.M3GlassPane;
 import io.m3fx.controls.effect.M3GlowShadow;
 import io.m3fx.controls.effect.M3Hologram;
 import io.m3fx.controls.effect.M3ParticleCanvas;
@@ -126,6 +127,7 @@ import javafx.scene.control.ToggleGroup;
 import javafx.scene.image.WritableImage;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -1269,7 +1271,7 @@ public class MainApp extends Application {
         M3Button glassAction = M3Button.filled("Glass Action Button");
         glassContent.getChildren().addAll(glassTitle, glassDesc, glassAction);
 
-        M3GlassPane glassPane = new M3GlassPane(glassContent);
+        io.m3fx.controls.effect.M3GlassPane glassPane = new io.m3fx.controls.effect.M3GlassPane(glassContent);
         glassPane.setPrefSize(420, 180);
 
         // Neon Glow Elevation
@@ -1340,44 +1342,136 @@ public class MainApp extends Application {
     // 13b. Liquid Glass (Apple iOS 26)
     // ==========================================
     private VBox liquidGlassPage() {
-        Label desc = new Label("Apple iOS 26 Liquid Glass layer: standalone regular/clear panes, "
-                + "a GlassEffectContainer whose glass shapes blend when spacing shrinks, ID-driven "
-                + "morphing (glassEffectID + namespace pattern) with the FLUID spring, glass buttons "
-                + "and a glass card, plus GlassAdaptivity legibility suggestions.");
+        Label desc = new Label("Apple iOS 26 Liquid Glass, ported per-pixel from the liquidGL "
+                + "(WebGPU/WebGL) and nikdelvin (SVG displacement) engines: real rim refraction "
+                + "with a flat centre, frost taps, chromatic aberration, magnification, tint, "
+                + "fluid pointer interaction, container merging and FLUID-spring morphing. "
+                + "Every knob below is live.");
         desc.setWrapText(true);
         desc.setStyle("-fx-font-size: 14px; -fx-text-fill: -md-sys-color-on-surface-variant;");
 
-        // ---- 1. Standalone regular + clear panes over a colorful backdrop ---------------------
-        StackPane paneBackdrop = colorfulBackdrop(620, 180);
-        io.m3fx.controls.glass.M3GlassPane regularPane = io.m3fx.controls.glass.M3GlassPane.regular();
-        regularPane.setPrefSize(190, 110);
-        VBox regularContent = new VBox(8, M3Icon.symbol("favorite"), new Label("Regular"));
-        regularContent.setAlignment(Pos.CENTER);
-        regularPane.setContent(regularContent);
+        // ---- 1. Live-tunable hero lens: every engine uniform wired to a slider ---------------
+        StackPane heroBackdrop = colorfulBackdrop(660, 240);
+        Label heroText = new Label("LIQUID GLASS / rim refraction with a flat centre");
+        heroText.setStyle("-fx-font-size: 26px; -fx-font-weight: bold; "
+                + "-fx-text-fill: -md-sys-color-on-surface; -fx-opacity: 0.85;");
+        StackPane.setAlignment(heroText, Pos.CENTER);
+        heroBackdrop.getChildren().add(heroText);
 
-        io.m3fx.controls.glass.M3GlassPane clearPane = io.m3fx.controls.glass.M3GlassPane.clear();
-        clearPane.setPrefSize(190, 110);
-        VBox clearContent = new VBox(8, M3Icon.symbol("bolt"), new Label("Clear"));
-        clearContent.setAlignment(Pos.CENTER);
-        clearPane.setContent(clearContent);
+        M3GlassPane heroPane = M3GlassPane.regular();
+        heroPane.setPrefSize(300, 160);
+        heroPane.setInteractive(true);
+        VBox heroContent = new VBox(6, M3Icon.symbol("star"), new Label("Drag the sliders"));
+        heroContent.setAlignment(Pos.CENTER);
+        heroPane.setContent(heroContent);
+        StackPane.setAlignment(heroPane, Pos.CENTER);
+        heroBackdrop.getChildren().add(heroPane);
 
-        StackPane.setAlignment(regularPane, Pos.CENTER_LEFT);
-        StackPane.setMargin(regularPane, new Insets(0, 0, 0, 36));
-        StackPane.setAlignment(clearPane, Pos.CENTER_RIGHT);
-        StackPane.setMargin(clearPane, new Insets(0, 36, 0, 0));
-        paneBackdrop.getChildren().addAll(regularPane, clearPane);
+        M3Slider refractionSlider = new M3Slider(0, 0.05, 0.01);
+        M3Slider bevelDepthSlider = new M3Slider(0, 0.25, 0.08);
+        M3Slider bevelWidthSlider = new M3Slider(0.02, 0.5, 0.15);
+        M3Slider frostSlider = new M3Slider(0, 4, 0);
+        M3Slider aberrationSlider = new M3Slider(0, 6, 0);
+        M3Slider magnifySlider = new M3Slider(1, 2, 1);
+        refractionSlider.valueProperty().bindBidirectional(heroPane.refractionProperty());
+        bevelDepthSlider.valueProperty().bindBidirectional(heroPane.bevelDepthProperty());
+        bevelWidthSlider.valueProperty().bindBidirectional(heroPane.bevelWidthProperty());
+        frostSlider.valueProperty().bindBidirectional(heroPane.frostProperty());
+        aberrationSlider.valueProperty().bindBidirectional(heroPane.aberrationProperty());
+        magnifySlider.valueProperty().bindBidirectional(heroPane.magnifyProperty());
 
-        // ---- 2. GlassEffectContainer: merging icons ------------------------------------------
+        javafx.scene.control.ComboBox<GlassEffectParams.MapStyle> styleBox =
+                new javafx.scene.control.ComboBox<>(
+                        javafx.collections.FXCollections.observableArrayList(
+                                GlassEffectParams.MapStyle.values()));
+        styleBox.getSelectionModel().selectFirst();
+        styleBox.setOnAction(e -> heroPane.setMapStyle(styleBox.getValue()));
+        M3Switch fluidSwitch = new M3Switch(false);
+        fluidSwitch.selectedProperty().addListener((obs, o, on) -> {
+            heroPane.setFluidInteraction(on);
+            if (on) {
+                heroPane.setInteractive(true);
+            }
+        });
+        Label fluidCaption = new Label("Fluid interaction (pointer deforms the glass):");
+        fluidCaption.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-on-surface-variant;");
+
+        GridPane heroControls = new GridPane();
+        heroControls.setHgap(12);
+        heroControls.setVgap(8);
+        heroControls.setPadding(new Insets(8));
+        String[][] heroKnobs = {
+                {"Refraction", "0 -> 0.05 UV (liquidGL default 0.01)"},
+                {"Bevel depth", "0 -> 0.25 UV (the edge^10 rim kick)"},
+                {"Bevel width", "0.02 -> 0.5 of the smaller side"},
+                {"Frost", "0 -> 4 (16-tap blur radius = frost * 4 px)"},
+                {"Aberration", "0 -> 6 px (R/B channel split)"},
+                {"Magnify", "1 -> 2 backdrop zoom"},
+        };
+        M3Slider[] heroSliderList = {refractionSlider, bevelDepthSlider, bevelWidthSlider,
+                frostSlider, aberrationSlider, magnifySlider};
+        for (int i = 0; i < heroKnobs.length; i++) {
+            Label name = new Label(heroKnobs[i][0]);
+            name.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-on-surface;");
+            name.setMinWidth(110);
+            heroSliderList[i].setPrefWidth(260);
+            Label hint = new Label(heroKnobs[i][1]);
+            hint.setStyle("-fx-font-size: 11px; -fx-text-fill: -md-sys-color-on-surface-variant;");
+            heroControls.add(name, 0, i);
+            heroControls.add(heroSliderList[i], 1, i);
+            heroControls.add(hint, 2, i);
+        }
+        HBox heroStyleRow = new HBox(12, new Label("Map style:"), styleBox,
+                fluidCaption, fluidSwitch);
+        heroStyleRow.setAlignment(Pos.CENTER_LEFT);
+        heroControls.add(heroStyleRow, 0, heroKnobs.length, 3, 1);
+        VBox heroBox = new VBox(10, heroBackdrop, heroControls);
+
+        // ---- 2. Frost & specular (liquidGL "Frost & Specular" demo) --------------------------
+        StackPane frostBackdrop = colorfulBackdrop(620, 170);
+        M3GlassPane frostPane = M3GlassPane.regular();
+        frostPane.setPrefSize(280, 120);
+        frostPane.setFrost(1.5);
+        frostPane.setContent(new Label("Frost: 1.5"));
+        StackPane.setAlignment(frostPane, Pos.CENTER_LEFT);
+        StackPane.setMargin(frostPane, new Insets(0, 0, 0, 40));
+        M3GlassPane specularPane = M3GlassPane.regular();
+        specularPane.setPrefSize(280, 120);
+        specularPane.setSpecular(1.0);
+        specularPane.setContent(new Label("Specular lights: ON"));
+        StackPane.setAlignment(specularPane, Pos.CENTER_RIGHT);
+        StackPane.setMargin(specularPane, new Insets(0, 40, 0, 0));
+        frostBackdrop.getChildren().addAll(frostPane, specularPane);
+        VBox frostBox = new VBox(10, frostBackdrop);
+
+        // ---- 3. Tinted glass (liquidGL "Tinted Glass" demo) ---------------------------------
+        StackPane tintBackdrop = colorfulBackdrop(620, 150);
+        M3GlassPane darkTint = M3GlassPane.regular();
+        darkTint.setPrefSize(240, 100);
+        darkTint.setTint(Color.rgb(8, 10, 20, 0.35));
+        darkTint.setContent(new Label("Dark glass tint"));
+        StackPane.setAlignment(darkTint, Pos.CENTER_LEFT);
+        StackPane.setMargin(darkTint, new Insets(0, 0, 0, 40));
+        M3GlassPane coloredTint = M3GlassPane.regular();
+        coloredTint.setPrefSize(240, 100);
+        coloredTint.setTint(Color.rgb(70, 50, 180, 0.35));
+        coloredTint.setContent(new Label("Colored glass tint"));
+        StackPane.setAlignment(coloredTint, Pos.CENTER_RIGHT);
+        StackPane.setMargin(coloredTint, new Insets(0, 40, 0, 0));
+        tintBackdrop.getChildren().addAll(darkTint, coloredTint);
+        VBox tintBox = new VBox(10, tintBackdrop);
+
+        // ---- 4. GlassEffectContainer: merging icons ------------------------------------------
         StackPane mergeBackdrop = colorfulBackdrop(620, 150);
         M3GlassEffectContainer mergeContainer = new M3GlassEffectContainer();
         mergeContainer.setSpacing(M3GlassEffectContainer.DEFAULT_SPACING);
         M3Slider gapSlider = new M3Slider(0, 220, 130);
         gapSlider.setPrefWidth(320);
 
-        io.m3fx.controls.glass.M3GlassPane icon1 = io.m3fx.controls.glass.M3GlassPane.regular();
-        io.m3fx.controls.glass.M3GlassPane icon2 = io.m3fx.controls.glass.M3GlassPane.regular();
-        io.m3fx.controls.glass.M3GlassPane icon3 = io.m3fx.controls.glass.M3GlassPane.clear();
-        io.m3fx.controls.glass.M3GlassPane[] icons = {icon1, icon2, icon3};
+        M3GlassPane icon1 = M3GlassPane.regular();
+        M3GlassPane icon2 = M3GlassPane.regular();
+        M3GlassPane icon3 = M3GlassPane.clear();
+        M3GlassPane[] icons = {icon1, icon2, icon3};
         String[] iconNames = {"favorite", "bolt", "star"};
         for (int i = 0; i < icons.length; i++) {
             icons[i].setPrefSize(84, 84);
@@ -1385,8 +1479,6 @@ public class MainApp extends Application {
             icons[i].setLayoutY(33);
             icons[i].setContent(M3Icon.symbol(iconNames[i]));
         }
-        // Horizontal distance between consecutive icon bounds == slider value; below the
-        // container's 40px spacing they merge into one shared glass surface.
         icon2.layoutXProperty().bind(icon1.layoutXProperty()
                 .add(icon1.widthProperty()).add(gapSlider.valueProperty()));
         icon3.layoutXProperty().bind(icon2.layoutXProperty()
@@ -1404,7 +1496,6 @@ public class MainApp extends Application {
                         .mapToInt(List::size).sum() + ")");
         gapSlider.valueProperty().addListener((obs, oldV, newV) ->
                 Platform.runLater(updateMergeReadout));
-        // First refresh once the icons have real layout bounds (the initial readout runs pre-layout).
         boolean[] firstLayout = {true};
         icon1.widthProperty().addListener((obs, oldW, newW) -> {
             if (firstLayout[0] && newW.doubleValue() > 0) {
@@ -1414,16 +1505,16 @@ public class MainApp extends Application {
         });
         VBox mergeBox = new VBox(10, mergeBackdrop, gapCaption, gapSlider, mergeReadout);
 
-        // ---- 3. Morphing pair (glassEffectID + namespace pattern) ----------------------------
+        // ---- 5. Morphing pair (glassEffectID + namespace pattern) ----------------------------
         StackPane morphBackdrop = colorfulBackdrop(620, 160);
         M3GlassEffectContainer morphContainer = new M3GlassEffectContainer();
-        io.m3fx.controls.glass.M3GlassPane collapsed = io.m3fx.controls.glass.M3GlassPane.regular();
+        M3GlassPane collapsed = M3GlassPane.regular();
         collapsed.setPrefSize(64, 64);
         collapsed.setCornerRadius(32);
         collapsed.setLayoutX(40);
         collapsed.setLayoutY(48);
         collapsed.setContent(M3Icon.symbol("search"));
-        io.m3fx.controls.glass.M3GlassPane expanded = io.m3fx.controls.glass.M3GlassPane.regular();
+        M3GlassPane expanded = M3GlassPane.regular();
         expanded.setPrefSize(300, 64);
         expanded.setCornerRadius(32);
         expanded.setLayoutX(40);
@@ -1463,7 +1554,7 @@ public class MainApp extends Application {
                 + "-fx-background-color: -md-sys-color-surface-container; -fx-background-radius: 32px;");
         M3Button slotButton = M3Button.outlined("Morph into toolbar slot");
         slotButton.setOnAction(e -> {
-            io.m3fx.controls.glass.M3GlassPane current = morphContainer.getChildren().contains(expanded)
+            M3GlassPane current = morphContainer.getChildren().contains(expanded)
                     ? expanded : collapsed;
             if (current.getScene() != null && toolbarSlot.getScene() != null) {
                 Bounds slotBounds = toolbarSlot.localToScene(toolbarSlot.getBoundsInLocal());
@@ -1483,31 +1574,32 @@ public class MainApp extends Application {
         slotRow.setAlignment(Pos.CENTER_LEFT);
         VBox morphBox = new VBox(10, morphBackdrop, morphControls, slotRow);
 
-        // ---- 4. Glass buttons ----------------------------------------------------------------
-        // Styled with the same style classes the ButtonVariant.GLASS / GLASS_PROMINENT wiring uses
-        // ("glass-button" / "glass-button-prominent"); glass.css supplies the glass skin.
-        M3Button glassButton = M3Button.text("Continue");
-        glassButton.getStyleClass().add("glass-button");
-        M3Button glassProminentButton = M3Button.text("Get Started");
-        glassProminentButton.getStyleClass().add("glass-button-prominent");
+        // ---- 6. Glass buttons (ButtonVariant.GLASS / GLASS_PROMINENT) ------------------------
+        M3Button glassButton = M3Button.glass("Continue");
+        M3Button glassProminentButton = M3Button.glassProminent("Get Started");
         HBox glassButtonsRow = new HBox(16, glassButton, glassProminentButton);
         glassButtonsRow.setAlignment(Pos.CENTER_LEFT);
         glassButtonsRow.setPadding(new Insets(8));
 
-        // ---- 5. Glass card -------------------------------------------------------------------
+        // ---- 7. Glass card + toolbar (CardVariant.GLASS / ToolbarStyle.GLASS) ----------------
         StackPane cardBackdrop = colorfulBackdrop(560, 170);
         VBox glassCardContent = new VBox(8,
                 new Label("Liquid Glass Card"),
-                new Label("CardVariant.GLASS wires the \"glass-card\" style class; here it is added "
-                        + "directly so the demo runs before the enum lands."),
+                new Label("CardVariant.GLASS over a colorful backdrop."),
                 M3Button.tonal("Explore"));
         glassCardContent.setPadding(new Insets(16));
-        M3Card glassCard = M3Card.of(CardVariant.ELEVATED, glassCardContent);
-        glassCard.getStyleClass().add("glass-card");
+        M3Card glassCard = M3Card.glass(glassCardContent);
         glassCard.setPrefSize(420, 130);
-        cardBackdrop.getChildren().add(glassCard);
+        StackPane.setAlignment(glassCard, Pos.CENTER_LEFT);
+        StackPane.setMargin(glassCard, new Insets(0, 0, 0, 30));
+        M3Toolbar glassToolbar = M3Toolbar.glass();
+        glassToolbar.getItems().addAll(
+                M3Icon.symbol("favorite"), M3Icon.symbol("bolt"), M3Icon.symbol("star"));
+        StackPane.setAlignment(glassToolbar, Pos.CENTER_RIGHT);
+        StackPane.setMargin(glassToolbar, new Insets(0, 30, 0, 0));
+        cardBackdrop.getChildren().addAll(glassCard, glassToolbar);
 
-        // ---- 6. Adaptivity readout (GlassAdaptivity) -----------------------------------------
+        // ---- 8. Adaptivity readout (GlassAdaptivity) -----------------------------------------
         Label variantOut = new Label("Suggested variant: —");
         Label scrimOut = new Label("Scrim strength: —");
         Label textOut = new Label("Readable text: —");
@@ -1516,7 +1608,7 @@ public class MainApp extends Application {
         }
         M3Button analyzeButton = M3Button.tonal("Analyze backdrop luminance");
         analyzeButton.setOnAction(e -> {
-            WritableImage snapshot = paneBackdrop.snapshot(null, null);
+            WritableImage snapshot = heroBackdrop.snapshot(null, null);
             double luminance = GlassAdaptivity.averageLuminance(snapshot);
             variantOut.setText("Suggested variant: "
                     + GlassAdaptivity.suggestVariant(luminance)
@@ -1531,12 +1623,14 @@ public class MainApp extends Application {
         updateMergeReadout.run();
 
         return new VBox(20,
-                section("Liquid Glass — Apple iOS 26 Materials", desc),
-                section("Standalone Panes: Regular vs Clear (M3GlassPane)", paneBackdrop),
-                section("Effect Container: Glass Shapes Blend Under 40px Spacing (M3GlassEffectContainer)", mergeBox),
+                section("Liquid Glass — Apple iOS 26 material (liquidGL + nikdelvin port)", desc),
+                section("Live Engine: tune refraction, bevel, frost, aberration, magnify, map style", heroBox),
+                section("Frost & Specular Lights (liquidGL frost + time-animated lights)", frostBox),
+                section("Tinted Glass (liquidGL tint)", tintBox),
+                section("Effect Container: Glass Shapes Blend Under 40px Spacing", mergeBox),
                 section("Morphing Pair & Toolbar Morph (GlassMorph + FLUID spring)", morphBox),
-                section("Glass Buttons (glass-button / glass-button-prominent)", glassButtonsRow),
-                section("Glass Card (glass-card)", cardBackdrop),
+                section("Glass Buttons (M3Button.glass / glassProminent)", glassButtonsRow),
+                section("Glass Card & Toolbar (CardVariant.GLASS / ToolbarStyle.GLASS)", cardBackdrop),
                 section("Legibility Adaptation (GlassAdaptivity)", adaptivityBox)
         );
     }
