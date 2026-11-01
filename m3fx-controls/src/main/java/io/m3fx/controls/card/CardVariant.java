@@ -11,5 +11,7 @@ public enum CardVariant {
     /** Filled card (surface container highest, no border). */
     FILLED,
     /** Outlined card (surface, outline-variant border). */
-    OUTLINED
+    OUTLINED,
+    /** Liquid glass card (optical translucency, specular rim; styles in glass.css). */
+    GLASS
 }

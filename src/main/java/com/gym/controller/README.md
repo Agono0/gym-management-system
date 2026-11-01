@@ -563,7 +563,10 @@ explicit.
     **Also excepted (DECISIONS.md 71):** `LaunchGateController` — the code-built splash + login
     gate overlay owned by the shell (no FXML, no fx:ids, shown only when `GymApp.SHOW_LAUNCH_GATES`
     is set by `main()`). It imports the same internals for the splash→login→shell morph
-    choreography and sign-out flow.
+    choreography and sign-out flow. Both controllers also own the app's liquid-glass surfaces
+    (DECISIONS.md 74): the splash's CLEAR glass brand panel over a particle backdrop, the REGULAR
+    interactive login card, and the shell's command-palette card (docked app bar / rail stay
+    non-glass — they never float over content).
 
 ## 5. The files in this folder
 
@@ -1579,6 +1582,13 @@ not passing a period — the design stores the days and shifts the end date on u
 (5) Using `double` for the price display. (6) Freezing twice without checking the status, so
 `frozenDays` accumulates and the end date jumps on the second unfreeze.
 
+**Liquid glass (DECISIONS.md 74).** `initialize()` re-parents the floating `membershipDetailSheet`
+into a REGULAR interactive `M3GlassPane` (RECT 28) that takes over the sheet's position and mirrors
+its visibility, so the row-click reveal and close handler are unchanged and the sheet's own opaque
+fill is cleared (glass never sits on an opaque background). Tier cards, funnel chart and ledger
+table stay non-glass — glass is floating chrome only, never page content. The wrap is guarded and
+falls back to the plain sheet on any failure.
+
 ---
 
 ### `WorkoutController.java` — program builder and versioning (owner: Yousef)
@@ -2259,6 +2269,13 @@ an in-place edit: money is corrected by void + new payment, or by the ADMIN `adj
 (5) Deleting a payment row (there is no such method, for good reason). (6) Formatting the amount with
 `String.format("%.2f", amount.doubleValue())`, which both loses the exact type and can round the
 receipt. (7) Forgetting that `findByReceipt` returns `null` when nothing matches.
+
+**Liquid glass (DECISIONS.md 74).** `initialize()` re-parents the floating `receiptBottomSheet`
+into a REGULAR interactive `M3GlassPane` (RECT 28) that takes over the sheet's position and mirrors
+its visibility, so the show/close handlers, snackbars and the void dialog are byte-identical while
+the drawer reads as Apple floating chrome. The balance card, KPI cards and register table stay
+non-glass — glass is floating chrome only, never page content. The wrap is guarded and falls back
+to the plain sheet on any failure.
 
 ---
 

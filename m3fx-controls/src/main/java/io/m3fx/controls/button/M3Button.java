@@ -27,8 +27,8 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 
 /**
- * M3 button with five variants (filled, tonal, outlined, elevated, text), optional icon and toggle
- * support.
+ * M3 button with five variants (filled, tonal, outlined, elevated, text) plus the liquid glass
+ * pair (glass, glass-prominent; styles in glass.css), optional icon and toggle support.
  *
  * <p>See <a href="https://m3.material.io/components/buttons/overview">M3 buttons spec</a>. A real
  * {@code Control} + {@code Skin}: container height 40dp, full-corner shape, label-large type, a
@@ -126,6 +126,26 @@ public class M3Button extends PressableControl {
     }
 
     /**
+     * Creates a liquid glass button (translucent surface, specular rim; styles in glass.css).
+     *
+     * @param text label text
+     * @return the button
+     */
+    public static M3Button glass(String text) {
+        return new M3Button(text, ButtonVariant.GLASS);
+    }
+
+    /**
+     * Creates a prominent liquid glass button (vibrant primary-container tint).
+     *
+     * @param text label text
+     * @return the button
+     */
+    public static M3Button glassProminent(String text) {
+        return new M3Button(text, ButtonVariant.GLASS_PROMINENT);
+    }
+
+    /**
      * Sets the leading icon graphic.
      *
      * @param icon the icon node (use {@code M3Icon})
@@ -203,9 +223,22 @@ public class M3Button extends PressableControl {
     private void updateStyleClass(ButtonVariant oldV, ButtonVariant newV) {
         if (oldV != null) {
             getStyleClass().remove("m3-button-" + oldV.name().toLowerCase());
+            if (oldV == ButtonVariant.GLASS) {
+                getStyleClass().remove("glass-button");
+            } else if (oldV == ButtonVariant.GLASS_PROMINENT) {
+                getStyleClass().remove("glass-button-prominent");
+            }
         }
-        if (newV != null && !getStyleClass().contains("m3-button-" + newV.name().toLowerCase())) {
-            getStyleClass().add("m3-button-" + newV.name().toLowerCase());
+        if (newV != null) {
+            if (!getStyleClass().contains("m3-button-" + newV.name().toLowerCase())) {
+                getStyleClass().add("m3-button-" + newV.name().toLowerCase());
+            }
+            if (newV == ButtonVariant.GLASS && !getStyleClass().contains("glass-button")) {
+                getStyleClass().add("glass-button");
+            } else if (newV == ButtonVariant.GLASS_PROMINENT
+                    && !getStyleClass().contains("glass-button-prominent")) {
+                getStyleClass().add("glass-button-prominent");
+            }
         }
     }
 
@@ -351,6 +384,8 @@ public class M3Button extends PressableControl {
                         case TONAL -> ColorRole.ON_SECONDARY_CONTAINER;
                         case OUTLINED, TEXT -> ColorRole.PRIMARY;
                         case ELEVATED -> ColorRole.PRIMARY;
+                        case GLASS -> ColorRole.ON_SURFACE;
+                        case GLASS_PROMINENT -> ColorRole.ON_PRIMARY;
                     };
             return ThemeColors.resolve(control, role);
         }

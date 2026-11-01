@@ -22,6 +22,7 @@ module io.m3fx.controls {
     exports io.m3fx.controls.effect;
     exports io.m3fx.controls.fab;
     exports io.m3fx.controls.floorplan;
+    exports io.m3fx.controls.glass;
     exports io.m3fx.controls.icon;
     exports io.m3fx.controls.iconbutton;
     exports io.m3fx.controls.layout;

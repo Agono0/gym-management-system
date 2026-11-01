@@ -7,12 +7,18 @@ import io.m3fx.controls.chart.M3FunnelChart;
 import io.m3fx.controls.chart.M3FunnelStage;
 import io.m3fx.controls.chip.M3Chip;
 import io.m3fx.controls.data.M3DataTable;
+import io.m3fx.controls.glass.GlassEffectParams;
+import io.m3fx.controls.glass.GlassShape;
+import io.m3fx.controls.glass.M3GlassPane;
 import io.m3fx.controls.sheet.M3SideSheet;
 import io.m3fx.controls.textfield.M3TextField;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
+import javafx.scene.layout.Pane;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import java.util.List;
 
 /**
@@ -20,6 +26,13 @@ import java.util.List;
  * Declarative UI contract stubs matching Section 7 without backend, domain or service dependencies.
  */
 public class MembershipController {
+
+    /**
+     * Corner radius of the floating inspector sheet's liquid glass surface — the same 28px the
+     * bottom-sheet stylesheet uses, so both floating sheets read as one glass language (Apple
+     * chrome is consistently rounded; the 20px sheet padding keeps content clear of the corners).
+     */
+    private static final double SHEET_GLASS_RADIUS = 28;
 
     @FXML private M3Carousel tierCarousel;
     @FXML private M3FunnelChart conversionFunnelChart;
@@ -47,7 +60,65 @@ public class MembershipController {
     public void initialize() {
         populateMembershipLedger();
         populateFunnelChart();
+        applyDetailSheetGlass();
         setupFilterListeners();
+    }
+
+    /**
+     * Moves the floating agreement-inspector side sheet onto a real liquid glass surface
+     * (Apple iOS 26): a REGULAR interactive {@link M3GlassPane} takes the sheet's exact place in
+     * the screen root and the sheet becomes its content, so the inspector reads as Apple floating
+     * chrome over the ledger. The sheet's opaque surface fill is cleared (Apple: no opaque
+     * backgrounds behind glass) and the glass mirrors the sheet's visibility, which keeps the
+     * row-click reveal and the close handler working unchanged. The tier cards, funnel chart and
+     * ledger table deliberately stay non-glass — glass is reserved for floating chrome, never
+     * page content.
+     */
+    private void applyDetailSheetGlass() {
+        wrapSheetInGlass(membershipDetailSheet, "Membership sheet glass skipped: ");
+    }
+
+    /**
+     * Re-parents an FXML-declared sheet into a REGULAR interactive liquid glass pane that takes
+     * over the sheet's position, constraints and visibility. Defensive by construction: any
+     * failure leaves the plain sheet in place, because glass chrome must never break a screen.
+     *
+     * @param sheet the sheet node shown/hidden by the FXML action handlers
+     * @param errorPrefix stderr prefix identifying the caller in the log
+     */
+    private static void wrapSheetInGlass(Region sheet, String errorPrefix) {
+        try {
+            if (sheet == null || !(sheet.getParent() instanceof Pane parent)) {
+                return;
+            }
+            int index = parent.getChildren().indexOf(sheet);
+            if (index < 0) {
+                return;
+            }
+            M3GlassPane glass = M3GlassPane.of(new GlassEffectParams()
+                    .in(GlassShape.RECT, SHEET_GLASS_RADIUS)
+                    .interactive());
+            // Replace-then-reparent: the glass takes the sheet's slot first (so no child index
+            // shifts underneath us), then the sheet moves into the glass's content box.
+            parent.getChildren().set(index, glass);
+            glass.setContent(sheet);
+            // The sheet's own paint moves onto the glass (inline style outranks the
+            // .m3-bottom-sheet / .m3-side-sheet stylesheet fill).
+            sheet.setStyle("-fx-background-color: transparent;");
+            // The FXML flow toggles the sheet node directly; the glass chrome mirrors it so the
+            // existing show/hide handlers keep working unchanged.
+            glass.visibleProperty().bind(sheet.visibleProperty());
+            // Preserve the FXML placement constraints (they live on the child node).
+            if (StackPane.getAlignment(sheet) != null) {
+                StackPane.setAlignment(glass, StackPane.getAlignment(sheet));
+            }
+            if (StackPane.getMargin(sheet) != null) {
+                StackPane.setMargin(glass, StackPane.getMargin(sheet));
+            }
+            glass.setMaxSize(sheet.getMaxWidth(), sheet.getMaxHeight());
+        } catch (Throwable t) {
+            System.err.println(errorPrefix + t);
+        }
     }
 
     /** Fills the subscription ledger with demo rows so the screen is not blank. */

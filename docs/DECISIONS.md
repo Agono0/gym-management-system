@@ -466,3 +466,38 @@
     (8) `bolt`/`remove` added to the icon catalog (two names found hitting the placeholder). Deferred with
     reasons: remaining chart `Roboto` literals where no fixed TypeRole exists (computed sizes), liquid-glass
     feature completion (DECISIONS #72, stash preserved), drawer width and other documented deviations.
+
+74. **Liquid Glass integration — app surfaces + honesty ledger (Nov 2026).** The
+    `io.m3fx.controls.glass` package landed (spec: `docs/SPEC_NOTES/liquid-glass.md`), and the gym
+    app adopted it on exactly four surfaces — all **floating chrome**, per Apple's guidance that
+    glass is reserved for interactive elements, toolbars and floating cards, never spread over
+    every view, never sits on an opaque background, and must keep its text readable.
+    (1) `LaunchGateController`: the login card is now a real `M3GlassPane` (REGULAR, interactive,
+    RECT 28) instead of the legacy `effect`-package frosted pane, and the splash gains an ambient
+    `M3ParticleCanvas` backdrop with a **CLEAR** non-interactive glass panel behind the brand
+    (clear is Apple's variant for content-rich backdrops). The panel is deliberately a *sibling*
+    surface, not the brand's parent, so the splash→gate brand handoff keeps its verified fallbacks.
+    (2) `AppShellController`: the command-palette card is re-parented into a REGULAR interactive
+    glass pane (RECT 16 = its stylesheet radius) and its opaque fill/border cleared; the palette's
+    own enter/exit keeps animating the card and the glass binds the card's opacity, so surface and
+    content materialize and dissolve together. The docked top app bar and nav rail are deliberately
+    NOT glassified — BorderPane chrome never overlaps page content, so glass would have nothing to
+    refract and would only cost a backdrop capture; the FXML's `glass-app-bar` style class stays
+    for the library's future content-under-bar variants. (3)/(4) `PaymentController` /
+    `MembershipController`: the receipt bottom sheet and the agreement side sheet are re-parented
+    into REGULAR interactive glass panes (RECT 28) that take over the sheet's position, alignment
+    and visibility (`visibleProperty` bound to the sheet's), so every existing `setVisible` toggle,
+    snackbar and dialog flow is byte-identical; page cards (KPIs, tier cards, tables) stay
+    non-glass — glass is never page content. All three wrap helpers are guarded + try/catch with a
+    plain-surface fallback, because glass chrome must never break a working screen. **Choreography
+    decision:** `GlassMorph.morphToBounds` was deliberately NOT swapped in at the sign-in morph —
+    the existing `MotionUtil.morphFromBounds` animates the *shell* out of the card's footprint
+    (the glass card disappears; no living glass node remains to morph), whereas `morphToBounds`
+    animates a glass node onto new bounds; swapping would replace a verified showpiece with an
+    unverified one for no visual gain. **Library simplifications vs Apple** (ledger in
+    `COVERAGE.md`): the container's union outline is a rounded convex hull, not a metaball/SDF
+    blend; the backdrop is a cached snapshot, not a live blur (`invalidateBackdrop()` for animated
+    backdrops — the splash particle field sits *behind* a CLEAR panel precisely so this stays
+    honest); chromatic aberration is deferred; adaptation is single-signal (average luminance).
+    Tests lock the math and the documented thresholds: `GlassRefractionTest`,
+    `GlassEffectParamsTest`, `GlassAdaptivityTest`.

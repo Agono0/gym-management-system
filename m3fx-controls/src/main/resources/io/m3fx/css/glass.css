@@ -1,0 +1,125 @@
+/* glass.css — Liquid Glass (Apple iOS 26) themable styles for m3fx.
+ *
+ * Every color references an M3Theme looked-up color (-md-sys-color-*); translucency comes from
+ * the theme's pre-mixed alpha tokens (-md-sys-color-<role>-aNN) and from the alpha the
+ * GlassPaneSkin applies. No literal colors: switching the M3Theme restyles the glass too.
+ *
+ * Classes:
+ *   .glass-pane              M3GlassPane (io.m3fx.controls.glass) — skin paints all layers;
+ *                            CSS only supplies geometry and a transparent base.
+ *   .glass-button            M3Button GLASS variant (translucent surface + rim + shadow)
+ *   .glass-button-prominent  M3Button GLASS_PROMINENT (primary-container tint, stronger shadow)
+ *   .glass-card              M3Card GLASS variant
+ *   .glass-panel             M3Toolbar GLASS style
+ *
+ * Note: the CSS-only components are "faux glass" (alpha translucency over whatever is behind
+ * them, plus rim + shadow); only M3GlassPane runs the full capture/blur/refraction pipeline.
+ * Loaded by M3Stylesheets (GLASS_CSS) after m3fx.css, so these rules win on equal specificity.
+ */
+
+/* ============ M3GlassPane (real glass) ============ */
+.glass-pane {
+  -fx-background-color: transparent;
+}
+.glass-root {
+  -fx-background-color: transparent;
+  -fx-alignment: center;
+}
+.glass-layers {
+  -fx-background-color: transparent;
+}
+.glass-tint {
+  -fx-background-color: transparent;
+}
+.glass-specular {
+  -fx-background-color: transparent;
+}
+.glass-edge {
+  -fx-background-color: transparent;
+}
+.glass-content {
+  -fx-padding: 16px;
+  -fx-alignment: center;
+}
+
+/* ============ glass button ============ */
+.glass-button {
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a25, 10, 0, 0, 1);
+}
+.glass-button .m3-button-bg {
+  -fx-background-color: -md-sys-color-surface-container-high-a25;
+  -fx-background-radius: 20px;
+  -fx-border-color: -md-sys-color-outline-variant-a38;
+  -fx-border-radius: 20px;
+  -fx-border-width: 1px;
+}
+.glass-button .m3-button-label {
+  -fx-text-fill: -md-sys-color-on-surface;
+}
+.glass-button:hover .m3-button-bg {
+  -fx-background-color: -md-sys-color-surface-container-high-a38;
+}
+.glass-button:pressed .m3-button-bg,
+.glass-button:key-armed .m3-button-bg {
+  -fx-background-color: -md-sys-color-surface-container-highest-a25;
+}
+.glass-button:pressed {
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a38, 12, 0, 0, 2);
+}
+
+/* ============ prominent glass button ============ */
+.glass-button-prominent {
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a38, 12, 0, 0, 2);
+}
+.glass-button-prominent .m3-button-bg {
+  /* low-alpha primary-container tint over the translucent surface: prominence without opacity */
+  -fx-background-color: -md-sys-color-primary-container-a25, -md-sys-color-surface-container-high-a25;
+  -fx-background-radius: 20px, 20px;
+  -fx-border-color: -md-sys-color-outline-variant-a38;
+  -fx-border-radius: 20px;
+  -fx-border-width: 1px;
+}
+.glass-button-prominent .m3-button-label {
+  -fx-text-fill: -md-sys-color-on-primary;
+}
+.glass-button-prominent:hover .m3-button-bg {
+  -fx-background-color: -md-sys-color-primary-container-a38, -md-sys-color-surface-container-high-a38;
+}
+.glass-button-prominent:pressed .m3-button-bg,
+.glass-button-prominent:key-armed .m3-button-bg {
+  -fx-background-color: -md-sys-color-primary-a20, -md-sys-color-primary-container-a25;
+}
+.glass-button-prominent:pressed {
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a38, 14, 0, 0, 3);
+}
+
+/* ============ glass card ============ */
+.glass-card {
+  -fx-background-color: -md-sys-color-surface-container-low-a25;
+  -fx-background-radius: 12px;
+  -fx-border-color: -md-sys-color-outline-variant-a38;
+  -fx-border-radius: 12px;
+  -fx-border-width: 1px;
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a25, 10, 0, 0, 1);
+}
+.glass-card:clickable:hover {
+  -fx-background-color: -md-sys-color-on-surface-a08, -md-sys-color-surface-container-low-a25;
+  -fx-background-insets: 0, 0;
+  -fx-background-radius: 12, 12;
+}
+.glass-card:clickable:pressed {
+  -fx-background-color: -md-sys-color-on-surface-a10, -md-sys-color-surface-container-low-a25;
+  -fx-background-insets: 0, 0;
+  -fx-background-radius: 12, 12;
+}
+
+/* ============ glass panel (toolbar) ============ */
+.glass-panel {
+  -fx-background-color: -md-sys-color-surface-container-high-a25;
+  -fx-background-radius: 24px;
+  -fx-border-color: -md-sys-color-outline-variant-a38;
+  -fx-border-radius: 24px;
+  -fx-border-width: 1px;
+  /* Liquid Glass shadow defaults: 0.30 alpha (shadow-a25 token) / 10 radius / +1 offsetY. */
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a25, 10, 0, 0, 1);
+}

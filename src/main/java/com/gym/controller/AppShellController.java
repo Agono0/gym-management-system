@@ -5,6 +5,9 @@ import io.m3fx.controls.button.M3SplitButton;
 import io.m3fx.controls.chip.M3Chip;
 import io.m3fx.controls.command.M3CommandPalette;
 import io.m3fx.controls.effect.M3PulseBeacon;
+import io.m3fx.controls.glass.GlassEffectParams;
+import io.m3fx.controls.glass.GlassShape;
+import io.m3fx.controls.glass.M3GlassPane;
 import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.iconbutton.IconButtonVariant;
 import io.m3fx.controls.iconbutton.M3IconButton;
@@ -51,6 +54,13 @@ public class AppShellController {
      * {@code GymAppFullInteractiveAuditTest} reads). Plain constant, never mutable state.
      */
     public static final String SHELL_CONTROLLER_KEY = "appShellController";
+
+    /**
+     * Corner radius of the command palette's glass surface, matching the
+     * {@code .m3-command-palette-card} stylesheet radius (16px) so the floating card keeps its
+     * established geometry when its opaque surface moves onto liquid glass.
+     */
+    private static final double COMMAND_PALETTE_GLASS_RADIUS = 16;
 
     /** Mirrors the theme currently applied to the scene; GymApp starts with the dark scheme. */
     private boolean darkMode = true;
@@ -557,6 +567,70 @@ public class AppShellController {
         commandPalette.registerAction("Screens", "16. Membership Plans (membership.fxml)", "Tier Cards & Conversion Funnel", "favorite", () -> loadScreen("membership.fxml"));
         commandPalette.registerAction("Screens", "17. Cashless POS & Billing (payment.fxml)", "POS Terminal & Thermal Receipts", "money", () -> loadScreen("payment.fxml"));
         commandPalette.registerAction("Screens", "18. Staff RBAC Security (staff.fxml)", "Staff Permissions & Security Audit", "settings", () -> loadScreen("staff.fxml"));
+        // Deferred one pulse so the lookup runs with the shell fully attached (same pattern as
+        // the rail scroll-pane lookup above); a missed lookup simply keeps the plain card.
+        javafx.application.Platform.runLater(this::applyCommandPaletteGlass);
+    }
+
+    /**
+     * Moves the command palette's floating card onto a real liquid glass surface (Apple iOS 26):
+     * the card node is re-parented into a REGULAR interactive {@link M3GlassPane} (RECT, 16px
+     * corners) that takes the card's exact place in the palette, and the card's opaque
+     * surface-container fill plus outline border are cleared — Apple's rule that glass never
+     * sits on an opaque background. The palette's own show/close choreography, keyboard handling
+     * and search wiring all keep animating the same card node, so nothing behavioral changes.
+     *
+     * <p>Deliberately NOT glassified: the docked top app bar and navigation rail. Apple reserves
+     * glass for chrome that floats OVER content; the shell's BorderPane-docked bar and rail never
+     * overlap page content, so glass there would have nothing to refract and would only add a
+     * backdrop capture cost. Glass stays on the one truly floating chrome surface this shell owns.
+     *
+     * <p>Defensive by construction: every step is guarded and any failure leaves the palette
+     * untouched with its normal opaque card — glass chrome must never break a working control.
+     */
+    private void applyCommandPaletteGlass() {
+        try {
+            if (commandPalette == null) {
+                return;
+            }
+            javafx.scene.Node card = commandPalette.lookup(".m3-command-palette-card");
+            // The palette card is an M3Card (a Region); glass needs its max-size constraints,
+            // which live on Region, not Node.
+            if (!(card instanceof javafx.scene.layout.Region cardRegion
+                    && card.getParent() instanceof javafx.scene.layout.Pane paletteRoot)) {
+                System.err.println("Command palette glass: card node not found — plain card kept.");
+                return;
+            }
+            int index = paletteRoot.getChildren().indexOf(card);
+            if (index < 0) {
+                return;
+            }
+            M3GlassPane glass = M3GlassPane.of(new GlassEffectParams()
+                    .in(GlassShape.RECT, COMMAND_PALETTE_GLASS_RADIUS)
+                    .interactive());
+            // Replace-then-reparent: the glass takes the card's slot first (so no child index
+            // shifts underneath us), then the card moves into the glass's content box.
+            paletteRoot.getChildren().set(index, glass);
+            glass.setContent(card);
+            // The card's own paint moves onto the glass (inline style outranks the m3fx.css
+            // rule that fills .m3-command-palette-card). Only color properties are cleared —
+            // the palette's spacing/padding stay authoritative.
+            card.setStyle("-fx-background-color: transparent; -fx-border-color: transparent;");
+            // The palette enters/exits by animating the card (fade + rise, MotionUtil.enter/exit);
+            // mirror the card's opacity onto the glass so the surface materializes and dissolves
+            // together with its content. Transforms stay on the card, untouched.
+            glass.opacityProperty().bind(card.opacityProperty());
+            // Preserve the original placement constraints (they live on the child node).
+            if (StackPane.getAlignment(card) != null) {
+                StackPane.setAlignment(glass, StackPane.getAlignment(card));
+            }
+            if (StackPane.getMargin(card) != null) {
+                StackPane.setMargin(glass, StackPane.getMargin(card));
+            }
+            glass.setMaxSize(cardRegion.getMaxWidth(), cardRegion.getMaxHeight());
+        } catch (Throwable t) {
+            System.err.println("Command palette glass skipped: " + t);
+        }
     }
 
     @FXML

@@ -31,6 +31,9 @@ public final class M3Stylesheets {
     /** Classpath location of the bundled component stylesheet. */
     public static final String M3FX_CSS = "/io/m3fx/css/m3fx.css";
 
+    /** Classpath location of the bundled liquid glass stylesheet. */
+    public static final String GLASS_CSS = "/io/m3fx/css/glass.css";
+
     private static volatile M3Theme latestTheme = M3Theme.baseline(true);
 
     /**
@@ -83,6 +86,10 @@ public final class M3Stylesheets {
             if (css != null) {
                 addTracked(scene, css.toExternalForm());
             }
+            var glassCss = M3Stylesheets.class.getResource(GLASS_CSS);
+            if (glassCss != null) {
+                addTracked(scene, glassCss.toExternalForm());
+            }
         }
     }
 
@@ -119,6 +126,10 @@ public final class M3Stylesheets {
         var css = M3Stylesheets.class.getResource(M3FX_CSS);
         if (css != null) {
             addTrackedIfAbsent(scene, css.toExternalForm());
+        }
+        var glassCss = M3Stylesheets.class.getResource(GLASS_CSS);
+        if (glassCss != null) {
+            addTrackedIfAbsent(scene, glassCss.toExternalForm());
         }
     }
 

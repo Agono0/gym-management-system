@@ -1,7 +1,10 @@
 package com.gym.controller;
 
 import io.m3fx.controls.button.M3Button;
-import io.m3fx.controls.effect.M3GlassPane;
+import io.m3fx.controls.effect.M3ParticleCanvas;
+import io.m3fx.controls.glass.GlassEffectParams;
+import io.m3fx.controls.glass.GlassShape;
+import io.m3fx.controls.glass.M3GlassPane;
 import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.iconbutton.M3IconButton;
 import io.m3fx.controls.internal.MotionUtil;
@@ -54,6 +57,13 @@ import javafx.util.Duration;
  * {@link SpringAnimation}. Everything runs on the FX thread; overlays are created, shown and
  * removed only there; a failed motion helper can never strand the user behind the gate (every
  * choreography step has a plain fade fallback).
+ *
+ * <p>Surfaces use the real liquid glass (Apple iOS 26 material, {@code io.m3fx.controls.glass}):
+ * the splash brand panel is a CLEAR glass pane floating over an ambient {@link M3ParticleCanvas}
+ * backdrop, and the login card is a REGULAR interactive glass pane (RECT, 28px corners). Glass is
+ * reserved for these two floating chrome surfaces — the choreography around them
+ * (splashOut dissolve, brand handoff, shell morph via {@code MotionUtil.morphFromBounds}) is
+ * untouched, so a glass failure can no more strand the gate than a motion failure could.
  */
 public class LaunchGateController {
 
@@ -61,6 +71,10 @@ public class LaunchGateController {
     private static final double BRAND_MARK_SIZE = 96;
     private static final double BRAND_GLYPH_SCALE = 44.0 / M3Icon.DEFAULT_SIZE;
     private static final double CARD_WIDTH = 400;
+    /** Login card glass corner radius (RECT shape); matches the previous glass card. */
+    private static final double GATE_CARD_RADIUS = 28;
+    /** CLEAR splash glass panel side — the brand mark plus headline breathing room. */
+    private static final double SPLASH_GLASS_PANEL_SIZE = 280;
     private static final double SPLASH_SCRIM_OPACITY = 0.97;
     private static final double SIGNOUT_SCRIM_OPACITY = 0.88;
     private static final int MIN_PASSWORD_LENGTH = 4;
@@ -94,6 +108,7 @@ public class LaunchGateController {
     private StackPane splashLayer;      // splash content (brand + title + progress)
     private VBox splashText;            // the part of the splash that dissolves via splashOut
     private StackPane brandHolder;      // keeps the brand mark centered during the splash
+    private M3GlassPane splashGlassPanel; // CLEAR glass surface behind the splash brand
     private StackPane gateLayer;        // login gate content
     private StackPane brandMark;        // THE brand mark node — shared by splash and login card
     private StackPane brandSlot;        // slot inside the login card the brand settles into
@@ -264,7 +279,24 @@ public class LaunchGateController {
 
         splashText.getChildren().addAll(title, tagline, splashProgress, version);
 
-        splashLayer.getChildren().addAll(brandHolder, splashText);
+        // Ambient particle field: gives the CLEAR glass panel living content to refract (Apple:
+        // clear glass is for content-rich backdrops). Purely decorative — mouse-transparent and
+        // non-interactive — and it hides with the splash layer, so the brand handoff choreography
+        // never sees it.
+        M3ParticleCanvas particles = new M3ParticleCanvas();
+        particles.setInteractive(false);
+        particles.setMouseTransparent(true);
+        particles.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+
+        // CLEAR liquid glass behind the brand mark. Deliberately a sibling surface, not the
+        // brand's parent: the brand reparents into the login card at the splash→gate handoff,
+        // and keeping it out of the glass means that handoff (and its fallbacks) stay intact.
+        splashGlassPanel = M3GlassPane.clear();
+        splashGlassPanel.setPrefSize(SPLASH_GLASS_PANEL_SIZE, SPLASH_GLASS_PANEL_SIZE);
+        splashGlassPanel.setMaxSize(SPLASH_GLASS_PANEL_SIZE, SPLASH_GLASS_PANEL_SIZE);
+        splashGlassPanel.setMouseTransparent(true);
+
+        splashLayer.getChildren().addAll(particles, splashGlassPanel, brandHolder, splashText);
     }
 
     /** Login gate: one focal glass card, generous whitespace, nothing else. */
@@ -334,8 +366,16 @@ public class LaunchGateController {
         VBox.setMargin(signInButton, new Insets(14, 0, 0, 0));
         VBox.setMargin(demoHint, new Insets(12, 0, 0, 0));
 
-        loginCard = new M3GlassPane(card);
-        loginCard.setCornerRadius(28);
+        // REGULAR interactive liquid glass (Apple: glass is for interactive elements): RECT with
+        // 28px corners, refraction/specular/saturation at the spec defaults, tint handled by the
+        // skin. The pane's cornerRadius/glassOpacity mirror the params so the legacy surface
+        // tuning (0.85 translucent fill over the scrim) is preserved by whichever layer reads it.
+        GlassEffectParams cardGlass = new GlassEffectParams()
+                .in(GlassShape.RECT, GATE_CARD_RADIUS)
+                .interactive();
+        loginCard = M3GlassPane.of(cardGlass);
+        loginCard.setContent(card);
+        loginCard.setCornerRadius(GATE_CARD_RADIUS);
         loginCard.setGlassOpacity(0.85);
         loginCard.setPrefWidth(CARD_WIDTH);
         loginCard.setMaxWidth(CARD_WIDTH);

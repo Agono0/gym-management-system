@@ -66,6 +66,51 @@
 - [x] Interactive Gym Facility Floorplan (M3GymFloorMap: 2D/2.5D blueprint, zone status, equipment occupancy pins, and 1-click 3D inspector linking)
 - [x] Global Spotlight Command Palette (M3CommandPalette: Ctrl+K / Cmd+K floating glassmorphic spotlight, fuzzy search, categorized action runner)
 
+## Liquid Glass (Apple iOS 26)
+
+The `io.m3fx.controls.glass` package per `docs/SPEC_NOTES/liquid-glass.md` (closes the
+`DECISIONS.md` 72 follow-up):
+
+- [x] `M3GlassPane` (Control + `GlassPaneSkin`): cached backdrop snapshot → Gaussian blur
+      (16px regular / 4px clear) → `DisplacementMap` refraction → saturation lift (+0.18 / +0.10)
+      → optional 0.25-alpha tint → specular rim (0.35, 110°) + 1px edge stroke → drop shadow →
+      unblurred content on top; factories `regular()` / `clear()` / `of(params)`; full property
+      pipeline (`glassEffect`, `variant`, `tint`, `shape`, `blurRadius`, `cornerRadius`,
+      `glassOpacity`, `refraction`, `specular`, `specularAngle`, `saturation`,
+      `maxDisplacement`, `interactive`, `shadow`); `invalidateBackdrop()` for animated backdrops
+- [x] `GlassEffectParams` — immutable fluent bundle (`variant` / `tint` / `interactive` /
+      `in(shape, radius)`), spec defaults (regular, untinted, non-interactive, capsule, r16)
+- [x] `GlassRefraction` — pure math: convex/concave/lip height profiles, Snell n=1.5 ray
+      simulation (127 rays per bezel, mirror-symmetric, normalized), `FloatMap` encoding
+      (offset 0.5, x→R / y→G, `value = 0.5 + offsetPx / maxDisplacement`)
+- [x] `GlassMorph` — FLUID-spring (`MotionTokens.fluidSpring()`, 0.82/6.0) pane-to-pane morph and
+      `morphToBounds(Node, Bounds)`; transform-only, cancel-safe
+- [x] `M3GlassEffectContainer` — spacing merge (default 40), shared union-outline bridge,
+      `registerGlass` / `morphTo` (the `glassEffectID` + `@Namespace` pattern)
+- [x] `GlassAdaptivity` — luminance → variant/scrim/foreground suggestions (documented
+      thresholds: 0.5 midpoint, 0.25 clear band, 0.35 scrim reach, 0.55 max scrim)
+- [x] Tests (FX-latch pattern): `GlassRefractionTest` (profile endpoints + monotonicity, FloatMap
+      dimensions + neutral 0.5 offsets, mirror-symmetric bezel displacement,
+      refraction-linear / maxDisplacement-as-external-scale encoding, radius clamping),
+      `GlassEffectParamsTest` (defaults, fluent immutability, null fallbacks),
+      `GlassAdaptivityTest` (documented threshold → suggestion table, scrim taper, luminance
+      measurement, foreground polarity)
+- [x] Gym app integration — floating chrome only (why: `DECISIONS.md` 74): splash CLEAR glass
+      panel over a particle backdrop, REGULAR interactive login card, command-palette card,
+      payment receipt bottom sheet, membership detail side sheet
+
+Simplified vs Apple (honest scope):
+
+- [ ] Merged outline is the rounded **convex hull** with an area-weighted radius — not a true
+      metaball / signed-distance-field blend; no concave "neck" curves where two blobs join.
+- [ ] Backdrop is a **cached snapshot** (invalidated on scene/parent/layout/size/theme change),
+      not a live per-frame blur; content animating behind glass needs `invalidateBackdrop()`.
+- [ ] Chromatic aberration at the rim — **deferred** (spec pipeline item; no JavaFX-native
+      per-channel displacement without stacking three DisplacementMaps).
+- [ ] Adaptation is single-signal (average luminance); Apple also weighs backdrop variance.
+- [ ] `GLASS` / `GLASS_PROMINENT` button + card variant styling and `ToolbarStyle.GLASS` via
+      `glass.css` — variant wiring lands separately from the core package.
+
 ## Gym Management System (the `com.gym` app)
 
 The graded deliverable, built on m3fx. Current state: **an interactive M3 demo** — `MainApp` hosts
@@ -167,7 +212,9 @@ fixes verified against material-web tokens, material-color-utilities and m3.mate
 - [ ] `.headline-small/medium/large` style classes are referenced by app FXMLs but not defined in
       `m3fx.css` (only `.title-*`/`.body-*`/`.label-*` exist) — those nodes fall back to default
       label styling.
-- [ ] Liquid-glass feature deferred (`DECISIONS.md` 72): the `GLASS`/`GLASS_PROMINENT` button and
-      card variants and `ToolbarStyle.GLASS` ship unstyled — `glass.css` and the
-      `io.m3fx.controls.glass` package were never in the recovered stash; finishing them is the
-      recorded follow-up.
+- [ ] `module-info.java` does not yet export `io.m3fx.controls.glass` (the package compiled after
+      the export wave of `DECISIONS.md` 73; classpath consumers like the gym app are unaffected,
+      modular consumers need the export line added).
+- [ ] Liquid-glass core shipped (see the Liquid Glass section above); the `GLASS`/`GLASS_PROMINENT`
+      button + card variant styling and `ToolbarStyle.GLASS` (`glass.css`) remain the open tail of
+      the `DECISIONS.md` 72 follow-up.

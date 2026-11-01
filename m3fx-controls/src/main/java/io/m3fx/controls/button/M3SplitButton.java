@@ -203,6 +203,9 @@ public class M3SplitButton extends HBox {
             case OUTLINED -> IconButtonVariant.OUTLINED;
             case ELEVATED -> IconButtonVariant.FILLED;
             case TEXT -> IconButtonVariant.STANDARD;
+            // Liquid glass chevrons: plain standard icon button, prominent takes tonal emphasis.
+            case GLASS -> IconButtonVariant.STANDARD;
+            case GLASS_PROMINENT -> IconButtonVariant.TONAL;
         };
     }
 

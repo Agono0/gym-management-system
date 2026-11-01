@@ -14,7 +14,7 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.shape.Rectangle;
 
 /**
- * M3 card: elevated, filled and outlined variants with clickable support.
+ * M3 card: elevated, filled, outlined and liquid glass variants with clickable support.
  *
  * <p>See <a href="https://m3.material.io/components/cards/overview">M3 cards</a>. Medium shape
  * (12dp), label/body type for content. Clickable cards fire an action on click, Space and Enter.
@@ -71,6 +71,25 @@ public class M3Card extends Control {
         M3Card card = new M3Card(variant);
         card.setContent(content);
         return card;
+    }
+
+    /**
+     * Creates a liquid glass card.
+     *
+     * @return the glass card
+     */
+    public static M3Card glass() {
+        return new M3Card(CardVariant.GLASS);
+    }
+
+    /**
+     * Creates a liquid glass card wrapping content.
+     *
+     * @param content the card content
+     * @return the glass card
+     */
+    public static M3Card glass(Node content) {
+        return of(CardVariant.GLASS, content);
     }
 
     /** Returns the variant property. */
@@ -144,9 +163,17 @@ public class M3Card extends Control {
     private void updateStyleClass(CardVariant oldV, CardVariant newV) {
         if (oldV != null) {
             getStyleClass().remove("m3-card-" + oldV.name().toLowerCase());
+            if (oldV == CardVariant.GLASS) {
+                getStyleClass().remove("glass-card");
+            }
         }
-        if (newV != null && !getStyleClass().contains("m3-card-" + newV.name().toLowerCase())) {
-            getStyleClass().add("m3-card-" + newV.name().toLowerCase());
+        if (newV != null) {
+            if (!getStyleClass().contains("m3-card-" + newV.name().toLowerCase())) {
+                getStyleClass().add("m3-card-" + newV.name().toLowerCase());
+            }
+            if (newV == CardVariant.GLASS && !getStyleClass().contains("glass-card")) {
+                getStyleClass().add("glass-card");
+            }
         }
     }
 

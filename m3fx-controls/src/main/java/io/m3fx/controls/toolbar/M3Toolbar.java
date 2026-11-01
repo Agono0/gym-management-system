@@ -39,10 +39,12 @@ public class M3Toolbar extends Pane {
         DOCKED
     }
 
-    /** Color emphasis style: standard (subtle surface) or vibrant (accented container). */
+    /** Color emphasis style: standard (subtle surface), vibrant (accented container), or glass
+     * (translucent liquid glass; styles in glass.css). */
     public enum ToolbarStyle {
         STANDARD,
-        VIBRANT
+        VIBRANT,
+        GLASS
     }
 
     private final ObjectProperty<ToolbarVariant> variant =
@@ -58,6 +60,15 @@ public class M3Toolbar extends Pane {
     /** Creates an empty horizontal floating toolbar. */
     public M3Toolbar() {
         this(ToolbarVariant.FLOATING, ToolbarStyle.STANDARD, Orientation.HORIZONTAL);
+    }
+
+    /**
+     * Creates a floating liquid glass toolbar with horizontal orientation.
+     *
+     * @return the glass toolbar
+     */
+    public static M3Toolbar glass() {
+        return new M3Toolbar(ToolbarVariant.FLOATING, ToolbarStyle.GLASS, Orientation.HORIZONTAL);
     }
 
     /**
@@ -189,6 +200,14 @@ public class M3Toolbar extends Pane {
         getStyleClass().add("m3-toolbar-" + getVariant().name().toLowerCase());
         getStyleClass().add("m3-toolbar-" + getToolbarStyle().name().toLowerCase());
         getStyleClass().add("m3-toolbar-" + getOrientation().name().toLowerCase());
+
+        if (getToolbarStyle() == ToolbarStyle.GLASS) {
+            if (!getStyleClass().contains("glass-panel")) {
+                getStyleClass().add("glass-panel");
+            }
+        } else {
+            getStyleClass().remove("glass-panel");
+        }
 
         if (getVariant() == ToolbarVariant.FLOATING) {
             // Spec: floating toolbar container elevation level 3

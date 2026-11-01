@@ -93,6 +93,9 @@ import io.m3fx.controls.effect.M3ParticleCanvas;
 import io.m3fx.controls.effect.M3PulseBeacon;
 import io.m3fx.controls.effect.M3PulseBeacon.BeaconStatus;
 import io.m3fx.controls.effect.M3Scanline;
+import io.m3fx.controls.glass.GlassAdaptivity;
+import io.m3fx.controls.glass.GlassMorph;
+import io.m3fx.controls.glass.M3GlassEffectContainer;
 import io.m3fx.controls.scene3d.M3AnatomyViewer3D;
 import io.m3fx.controls.scene3d.M3AnatomyViewer3D.MuscleGroup;
 import io.m3fx.controls.scene3d.M3GyroRing3D;
@@ -106,7 +109,9 @@ import io.m3fx.core.theme.ThemeVariant;
 import io.m3fx.core.token.ElevationLevel;
 import io.m3fx.core.token.ShapeTokens;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
@@ -118,6 +123,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Tab;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.image.WritableImage;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
@@ -185,6 +191,7 @@ public class MainApp extends Application {
                 "Cyber Analytics & Charts",
                 "3D Hologram & Viewports",
                 "Futuristic Visual Effects",
+                "Liquid Glass",
                 "Enterprise Data & Telemetry",
                 "Live Workout HUD",
                 "Gym Floorplan Map",
@@ -204,6 +211,7 @@ public class MainApp extends Application {
                 M3NavDestination.of("Cyber Analytics", "stats"),
                 M3NavDestination.of("3D Holograms", "settings"),
                 M3NavDestination.of("Visual Effects", "light"),
+                M3NavDestination.of("Liquid Glass", "light"),
                 M3NavDestination.of("Telemetry Data", "calendar"),
                 M3NavDestination.of("Live Workout", "fitness"),
                 M3NavDestination.of("Floorplan", "home"),
@@ -391,6 +399,7 @@ public class MainApp extends Application {
             case "Cyber Analytics & Charts" -> chartsPage();
             case "3D Hologram & Viewports" -> scene3DPage();
             case "Futuristic Visual Effects" -> effectsPage();
+            case "Liquid Glass" -> liquidGlassPage();
             case "Enterprise Data & Telemetry" -> telemetryPage();
             case "Live Workout HUD" -> workoutHudPage();
             case "Gym Floorplan Map" -> floorplanPage();
@@ -1325,6 +1334,226 @@ public class MainApp extends Application {
                 section("Cybernetic Hologram Frame (M3Hologram)", hologram),
                 section("Live Operational Telemetry Beacons (M3PulseBeacon)", beaconRow)
         );
+    }
+
+    // ==========================================
+    // 13b. Liquid Glass (Apple iOS 26)
+    // ==========================================
+    private VBox liquidGlassPage() {
+        Label desc = new Label("Apple iOS 26 Liquid Glass layer: standalone regular/clear panes, "
+                + "a GlassEffectContainer whose glass shapes blend when spacing shrinks, ID-driven "
+                + "morphing (glassEffectID + namespace pattern) with the FLUID spring, glass buttons "
+                + "and a glass card, plus GlassAdaptivity legibility suggestions.");
+        desc.setWrapText(true);
+        desc.setStyle("-fx-font-size: 14px; -fx-text-fill: -md-sys-color-on-surface-variant;");
+
+        // ---- 1. Standalone regular + clear panes over a colorful backdrop ---------------------
+        StackPane paneBackdrop = colorfulBackdrop(620, 180);
+        io.m3fx.controls.glass.M3GlassPane regularPane = io.m3fx.controls.glass.M3GlassPane.regular();
+        regularPane.setPrefSize(190, 110);
+        VBox regularContent = new VBox(8, M3Icon.symbol("favorite"), new Label("Regular"));
+        regularContent.setAlignment(Pos.CENTER);
+        regularPane.setContent(regularContent);
+
+        io.m3fx.controls.glass.M3GlassPane clearPane = io.m3fx.controls.glass.M3GlassPane.clear();
+        clearPane.setPrefSize(190, 110);
+        VBox clearContent = new VBox(8, M3Icon.symbol("bolt"), new Label("Clear"));
+        clearContent.setAlignment(Pos.CENTER);
+        clearPane.setContent(clearContent);
+
+        StackPane.setAlignment(regularPane, Pos.CENTER_LEFT);
+        StackPane.setMargin(regularPane, new Insets(0, 0, 0, 36));
+        StackPane.setAlignment(clearPane, Pos.CENTER_RIGHT);
+        StackPane.setMargin(clearPane, new Insets(0, 36, 0, 0));
+        paneBackdrop.getChildren().addAll(regularPane, clearPane);
+
+        // ---- 2. GlassEffectContainer: merging icons ------------------------------------------
+        StackPane mergeBackdrop = colorfulBackdrop(620, 150);
+        M3GlassEffectContainer mergeContainer = new M3GlassEffectContainer();
+        mergeContainer.setSpacing(M3GlassEffectContainer.DEFAULT_SPACING);
+        M3Slider gapSlider = new M3Slider(0, 220, 130);
+        gapSlider.setPrefWidth(320);
+
+        io.m3fx.controls.glass.M3GlassPane icon1 = io.m3fx.controls.glass.M3GlassPane.regular();
+        io.m3fx.controls.glass.M3GlassPane icon2 = io.m3fx.controls.glass.M3GlassPane.regular();
+        io.m3fx.controls.glass.M3GlassPane icon3 = io.m3fx.controls.glass.M3GlassPane.clear();
+        io.m3fx.controls.glass.M3GlassPane[] icons = {icon1, icon2, icon3};
+        String[] iconNames = {"favorite", "bolt", "star"};
+        for (int i = 0; i < icons.length; i++) {
+            icons[i].setPrefSize(84, 84);
+            icons[i].setLayoutX(24);
+            icons[i].setLayoutY(33);
+            icons[i].setContent(M3Icon.symbol(iconNames[i]));
+        }
+        // Horizontal distance between consecutive icon bounds == slider value; below the
+        // container's 40px spacing they merge into one shared glass surface.
+        icon2.layoutXProperty().bind(icon1.layoutXProperty()
+                .add(icon1.widthProperty()).add(gapSlider.valueProperty()));
+        icon3.layoutXProperty().bind(icon2.layoutXProperty()
+                .add(icon2.widthProperty()).add(gapSlider.valueProperty()));
+        mergeContainer.getChildren().addAll(icon1, icon2, icon3);
+        mergeBackdrop.getChildren().add(mergeContainer);
+
+        Label gapCaption = new Label("Gap between glass icons (container spacing is 40 px):");
+        gapCaption.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-on-surface-variant;");
+        Label mergeReadout = new Label("Merged groups: —");
+        mergeReadout.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-primary;");
+        Runnable updateMergeReadout = () -> mergeReadout.setText(
+                "Merged groups: " + mergeContainer.getMergedGroups().size()
+                + "  (members: " + mergeContainer.getMergedGroups().stream()
+                        .mapToInt(List::size).sum() + ")");
+        gapSlider.valueProperty().addListener((obs, oldV, newV) ->
+                Platform.runLater(updateMergeReadout));
+        // First refresh once the icons have real layout bounds (the initial readout runs pre-layout).
+        boolean[] firstLayout = {true};
+        icon1.widthProperty().addListener((obs, oldW, newW) -> {
+            if (firstLayout[0] && newW.doubleValue() > 0) {
+                firstLayout[0] = false;
+                Platform.runLater(updateMergeReadout);
+            }
+        });
+        VBox mergeBox = new VBox(10, mergeBackdrop, gapCaption, gapSlider, mergeReadout);
+
+        // ---- 3. Morphing pair (glassEffectID + namespace pattern) ----------------------------
+        StackPane morphBackdrop = colorfulBackdrop(620, 160);
+        M3GlassEffectContainer morphContainer = new M3GlassEffectContainer();
+        io.m3fx.controls.glass.M3GlassPane collapsed = io.m3fx.controls.glass.M3GlassPane.regular();
+        collapsed.setPrefSize(64, 64);
+        collapsed.setCornerRadius(32);
+        collapsed.setLayoutX(40);
+        collapsed.setLayoutY(48);
+        collapsed.setContent(M3Icon.symbol("search"));
+        io.m3fx.controls.glass.M3GlassPane expanded = io.m3fx.controls.glass.M3GlassPane.regular();
+        expanded.setPrefSize(300, 64);
+        expanded.setCornerRadius(32);
+        expanded.setLayoutX(40);
+        expanded.setLayoutY(48);
+        HBox expandedContent = new HBox(10, M3Icon.symbol("search"), new Label("Search workouts"));
+        expandedContent.setAlignment(Pos.CENTER_LEFT);
+        expandedContent.setPadding(new Insets(0, 0, 0, 20));
+        expanded.setContent(expandedContent);
+        morphContainer.registerGlass(collapsed, "collapsed");
+        morphContainer.registerGlass(expanded, "expanded");
+        morphContainer.getChildren().add(collapsed);
+        morphBackdrop.getChildren().add(morphContainer);
+
+        M3Switch morphToggle = new M3Switch(false);
+        Label morphCaption = new Label("Expand search field:");
+        morphCaption.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-on-surface-variant;");
+        morphToggle.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
+            if (isSelected) {
+                morphContainer.morphTo("collapsed", "expanded");
+                morphContainer.getChildren().remove(collapsed);
+                if (!morphContainer.getChildren().contains(expanded)) {
+                    morphContainer.getChildren().add(expanded);
+                }
+            } else {
+                morphContainer.morphTo("expanded", "collapsed");
+                morphContainer.getChildren().remove(expanded);
+                if (!morphContainer.getChildren().contains(collapsed)) {
+                    morphContainer.getChildren().add(collapsed);
+                }
+            }
+        });
+
+        Region toolbarSlot = new Region();
+        toolbarSlot.setPrefSize(300, 64);
+        toolbarSlot.setStyle("-fx-border-color: -md-sys-color-outline-variant; "
+                + "-fx-border-style: segments(6, 4) line-cap round; -fx-border-radius: 32px; "
+                + "-fx-background-color: -md-sys-color-surface-container; -fx-background-radius: 32px;");
+        M3Button slotButton = M3Button.outlined("Morph into toolbar slot");
+        slotButton.setOnAction(e -> {
+            io.m3fx.controls.glass.M3GlassPane current = morphContainer.getChildren().contains(expanded)
+                    ? expanded : collapsed;
+            if (current.getScene() != null && toolbarSlot.getScene() != null) {
+                Bounds slotBounds = toolbarSlot.localToScene(toolbarSlot.getBoundsInLocal());
+                if (slotBounds != null) {
+                    GlassMorph.morphToBounds(current, slotBounds);
+                }
+            }
+        });
+        M3Button resetMorphButton = M3Button.text("Reset morph");
+        resetMorphButton.setOnAction(e -> {
+            GlassMorph.resetMorph(collapsed);
+            GlassMorph.resetMorph(expanded);
+        });
+        HBox morphControls = new HBox(16, morphCaption, morphToggle, slotButton, resetMorphButton);
+        morphControls.setAlignment(Pos.CENTER_LEFT);
+        HBox slotRow = new HBox(16, new Label("Toolbar slot:"), toolbarSlot);
+        slotRow.setAlignment(Pos.CENTER_LEFT);
+        VBox morphBox = new VBox(10, morphBackdrop, morphControls, slotRow);
+
+        // ---- 4. Glass buttons ----------------------------------------------------------------
+        // Styled with the same style classes the ButtonVariant.GLASS / GLASS_PROMINENT wiring uses
+        // ("glass-button" / "glass-button-prominent"); glass.css supplies the glass skin.
+        M3Button glassButton = M3Button.text("Continue");
+        glassButton.getStyleClass().add("glass-button");
+        M3Button glassProminentButton = M3Button.text("Get Started");
+        glassProminentButton.getStyleClass().add("glass-button-prominent");
+        HBox glassButtonsRow = new HBox(16, glassButton, glassProminentButton);
+        glassButtonsRow.setAlignment(Pos.CENTER_LEFT);
+        glassButtonsRow.setPadding(new Insets(8));
+
+        // ---- 5. Glass card -------------------------------------------------------------------
+        StackPane cardBackdrop = colorfulBackdrop(560, 170);
+        VBox glassCardContent = new VBox(8,
+                new Label("Liquid Glass Card"),
+                new Label("CardVariant.GLASS wires the \"glass-card\" style class; here it is added "
+                        + "directly so the demo runs before the enum lands."),
+                M3Button.tonal("Explore"));
+        glassCardContent.setPadding(new Insets(16));
+        M3Card glassCard = M3Card.of(CardVariant.ELEVATED, glassCardContent);
+        glassCard.getStyleClass().add("glass-card");
+        glassCard.setPrefSize(420, 130);
+        cardBackdrop.getChildren().add(glassCard);
+
+        // ---- 6. Adaptivity readout (GlassAdaptivity) -----------------------------------------
+        Label variantOut = new Label("Suggested variant: —");
+        Label scrimOut = new Label("Scrim strength: —");
+        Label textOut = new Label("Readable text: —");
+        for (Label out : new Label[] {variantOut, scrimOut, textOut}) {
+            out.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-on-surface;");
+        }
+        M3Button analyzeButton = M3Button.tonal("Analyze backdrop luminance");
+        analyzeButton.setOnAction(e -> {
+            WritableImage snapshot = paneBackdrop.snapshot(null, null);
+            double luminance = GlassAdaptivity.averageLuminance(snapshot);
+            variantOut.setText("Suggested variant: "
+                    + GlassAdaptivity.suggestVariant(luminance)
+                    + String.format("  (backdrop luminance %.2f)", luminance));
+            scrimOut.setText(String.format("Scrim strength: %.2f",
+                    GlassAdaptivity.scrimStrength(luminance)));
+            textOut.setText("Readable text: "
+                    + GlassAdaptivity.readableTextOnGlass(theme.dark()));
+        });
+        VBox adaptivityBox = new VBox(8, analyzeButton, variantOut, scrimOut, textOut);
+
+        updateMergeReadout.run();
+
+        return new VBox(20,
+                section("Liquid Glass — Apple iOS 26 Materials", desc),
+                section("Standalone Panes: Regular vs Clear (M3GlassPane)", paneBackdrop),
+                section("Effect Container: Glass Shapes Blend Under 40px Spacing (M3GlassEffectContainer)", mergeBox),
+                section("Morphing Pair & Toolbar Morph (GlassMorph + FLUID spring)", morphBox),
+                section("Glass Buttons (glass-button / glass-button-prominent)", glassButtonsRow),
+                section("Glass Card (glass-card)", cardBackdrop),
+                section("Legibility Adaptation (GlassAdaptivity)", adaptivityBox)
+        );
+    }
+
+    /** Colorful demo backdrop for the liquid glass page: layered gradients + color blobs. */
+    private static StackPane colorfulBackdrop(double width, double height) {
+        StackPane backdrop = new StackPane();
+        backdrop.setPrefSize(width, height);
+        backdrop.setMaxSize(width, height);
+        backdrop.setStyle("-fx-background-color: "
+                + "radial-gradient(center 18% 25%, radius 45%, derive(#ff8a80, 0%) 0%, transparent 70%), "
+                + "radial-gradient(center 82% 20%, radius 50%, derive(#40c4ff, 0%) 0%, transparent 70%), "
+                + "radial-gradient(center 30% 90%, radius 55%, derive(#ffd740, 0%) 0%, transparent 70%), "
+                + "radial-gradient(center 90% 85%, radius 55%, derive(#b388ff, 0%) 0%, transparent 70%), "
+                + "linear-gradient(to bottom right, #26c6da, #5c6bc0);");
+        backdrop.setStyle(backdrop.getStyle() + "-fx-background-radius: 14px;");
+        return backdrop;
     }
 
     // ==========================================

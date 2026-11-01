@@ -6,6 +6,9 @@ import io.m3fx.controls.chip.M3Chip;
 import io.m3fx.controls.data.M3DataTable;
 import io.m3fx.controls.data.M3StatCard;
 import io.m3fx.controls.dialog.M3Dialog;
+import io.m3fx.controls.glass.GlassEffectParams;
+import io.m3fx.controls.glass.GlassShape;
+import io.m3fx.controls.glass.M3GlassPane;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.sheet.M3BottomSheet;
 import io.m3fx.controls.textfield.M3TextField;
@@ -17,6 +20,8 @@ import javafx.scene.control.Label;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.Region;
 
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -38,6 +43,12 @@ public class PaymentController {
     private static final double MEMBERSHIP_DUE = 499.00;
     private static final double SUBSCRIPTION_DUE = 240.00;
     private static final double SESSION_DUE = 45.00;
+
+    /**
+     * Corner radius of the floating receipt sheet's liquid glass surface — the same 28px the
+     * {@code .m3-bottom-sheet} stylesheet uses, so the glass keeps the sheet's geometry.
+     */
+    private static final double SHEET_GLASS_RADIUS = 28;
 
     @FXML private TextField txtSearchReceipt;
     @FXML private M3TextField txtCustomerLookup;
@@ -85,10 +96,68 @@ public class PaymentController {
     public void initialize() {
         keepPaymentMethodsExclusive();
         populateRecentTransactions();
+        applyReceiptSheetGlass();
         installFeedbackLayer(paymentDataTable);
         if (paymentDataTable != null) {
             // Row activation marks the payment as the Void button's target (hand cursor affordance).
             paymentDataTable.setOnRowAction(this::selectPaymentRow);
+        }
+    }
+
+    /**
+     * Moves the floating digital-receipt drawer onto a real liquid glass surface (Apple iOS 26):
+     * a REGULAR interactive {@link M3GlassPane} takes the sheet's exact place in the screen root
+     * and the sheet becomes its content, so the drawer reads as Apple floating chrome over the
+     * register. The sheet's opaque surface fill is cleared (Apple: no opaque backgrounds behind
+     * glass) and the glass mirrors the sheet's visibility, which keeps every existing
+     * {@code receiptBottomSheet.setVisible(...)} toggle, the snackbar and the dialog flows
+     * byte-identical. Page cards (balance card, KPI cards, register table) deliberately stay
+     * non-glass — glass is reserved for floating chrome, never page content.
+     */
+    private void applyReceiptSheetGlass() {
+        wrapSheetInGlass(receiptBottomSheet, "Receipt sheet glass skipped: ");
+    }
+
+    /**
+     * Re-parents an FXML-declared sheet into a REGULAR interactive liquid glass pane that takes
+     * over the sheet's position, constraints and visibility. Defensive by construction: any
+     * failure leaves the plain sheet in place, because glass chrome must never break a screen.
+     *
+     * @param sheet the sheet node shown/hidden by the FXML action handlers
+     * @param errorPrefix stderr prefix identifying the caller in the log
+     */
+    private static void wrapSheetInGlass(Region sheet, String errorPrefix) {
+        try {
+            if (sheet == null || !(sheet.getParent() instanceof Pane parent)) {
+                return;
+            }
+            int index = parent.getChildren().indexOf(sheet);
+            if (index < 0) {
+                return;
+            }
+            M3GlassPane glass = M3GlassPane.of(new GlassEffectParams()
+                    .in(GlassShape.RECT, SHEET_GLASS_RADIUS)
+                    .interactive());
+            // Replace-then-reparent: the glass takes the sheet's slot first (so no child index
+            // shifts underneath us), then the sheet moves into the glass's content box.
+            parent.getChildren().set(index, glass);
+            glass.setContent(sheet);
+            // The sheet's own paint moves onto the glass (inline style outranks the
+            // .m3-bottom-sheet / .m3-side-sheet stylesheet fill).
+            sheet.setStyle("-fx-background-color: transparent;");
+            // The FXML flow toggles the sheet node directly; the glass chrome mirrors it so the
+            // existing show/hide handlers keep working unchanged.
+            glass.visibleProperty().bind(sheet.visibleProperty());
+            // Preserve the FXML placement constraints (they live on the child node).
+            if (StackPane.getAlignment(sheet) != null) {
+                StackPane.setAlignment(glass, StackPane.getAlignment(sheet));
+            }
+            if (StackPane.getMargin(sheet) != null) {
+                StackPane.setMargin(glass, StackPane.getMargin(sheet));
+            }
+            glass.setMaxSize(sheet.getMaxWidth(), sheet.getMaxHeight());
+        } catch (Throwable t) {
+            System.err.println(errorPrefix + t);
         }
     }
 

@@ -15,5 +15,9 @@ public enum ButtonVariant {
     /** Elevated button (medium emphasis, shadow). */
     ELEVATED,
     /** Text button (lowest emphasis). */
-    TEXT
+    TEXT,
+    /** Liquid glass button (optical translucency, specular rim border). Styles in glass.css. */
+    GLASS,
+    /** Prominent liquid glass button (vibrant primary-container tint, stronger specular shadow). */
+    GLASS_PROMINENT
 }
