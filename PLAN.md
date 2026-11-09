@@ -12,18 +12,24 @@ androidx.compose.material3 source. Verify the current state of the spec before e
 
 ## Current phase (Nov 2026)
 
-- **Phases 0–4 are done.** m3fx-core (color engine, tokens, themes) and m3fx-controls are built out:
-  all T1 + T2 components exist, and the T3 "stretch" list from Phase 5 was also implemented
-  (split button, toolbar, carousel, shape morphing, spring motion, adaptive scaffold — see
-  `docs/COVERAGE.md` for the full checklist). `./gradlew test` is green across all three modules.
-- **The gym app is an interactive M3 demo, not a production system.** 19 FXML screens + app shell
-  (`GymApp` → `app-shell.fxml` → `AppShellController`) run on demo data held in the controllers,
-  with demo auth (any email + a 4+ character password). There is **no backend**: `model/`, `dao/`,
-  `service/`, `util/` and the SQLite layer in `docs/UML.md` are *planned, not built* — the SQLite
-  JDBC dependency was removed from `build.gradle` when this became explicit.
-- **Next steps:** either polish the demo (visual/motion pass, screenshots) or start the backend per
-  `docs/UML.md` §3–§4 (schema + DAOs first), keeping the controllers' service calls behind the
-  seams the folder READMEs already document. Phase 6 (release/publish) applies to the m3fx library.
+- **m3fx library (Phases 0–4 done):** `m3fx-core` (color engine, tokens, themes) and `m3fx-controls`
+  are built out: all T1 + T2 components exist, plus the T3 stretch features (split button, toolbar,
+  carousel, shape morphing, spring motion, adaptive scaffold — see [`docs/COVERAGE.md`](docs/COVERAGE.md)).
+  `./gradlew test` runs the JUnit 5 suites in `m3fx-core` and `m3fx-controls` cleanly.
+- **Gym app UI spine:** All 19 screens + `AppShellController` were converted from FXML to pure Java
+  views implementing [`ScreenController`](src/main/java/com/gym/controller/ScreenController.java) and
+  dispatched via [`Screen`](src/main/java/com/gym/controller/Screen.java) (`javafx.fxml` was removed
+  from `build.gradle`). Screens still hold demo data and demo sign-in (`SHOW_LAUNCH_GATES`). Legacy
+  `.fxml` files stay on disk as reference artifacts only.
+- **Gym app Milestone 2 backend (shipped, beginner scope per `docs/DECISIONS.md` 77):** Implemented
+  COMP 301 (Lectures 1–6) backend packages: `com.gym.model` (13 `Serializable` entities + 11 enums),
+  `com.gym.dao` (13 concrete SQLite DAOs on `sqlite-jdbc:3.45.1.0`), `com.gym.util`
+  (`DatabaseConnection` with embedded 13-table DDL + `SerializationUtil` binary I/O), and
+  `com.gym.exception` (`GymException` → `ValidationException` / `DatabaseException`). The separate
+  11-service layer, DAO interfaces, and app-level `src/test/` files were intentionally removed.
+- **Next steps:** Milestone 3 wires the UI controllers in `com.gym.controller` directly to the
+  concrete DAOs and `DatabaseConnection.initializeDatabase()`. Phase 6 (release/publish) applies to
+  the `m3fx` library.
 
 ## Scope tiers
 

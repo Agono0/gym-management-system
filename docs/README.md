@@ -12,16 +12,16 @@ it usable:
 | Question | Document |
 |---|---|
 | What are we building, with what, and who owns it? | [`../README.md`](../README.md) |
-| What exactly does each class look like (fields, methods, types)? | [`UML.md`](UML.md) §1 (domain), §3 (DAOs), §4 (services), §5 (controllers), §6 (utilities) |
-| What are the rules the whole team must implement identically? | [`UML.md`](UML.md) → "Business rules" (19 rules) |
-| Why is it built this way? | [`DECISIONS.md`](DECISIONS.md) (72 numbered decisions, append-only) |
+| What exactly does each class look like (fields, methods, types)? | [`UML.md`](UML.md) §1 (domain), §3 (DAOs), §4 (retired service note), §5 (controllers), §6 (utilities & exceptions) |
+| What are the rules the whole team must implement identically? | [`UML.md`](UML.md) → "Business rules" (19 rules, targeting Milestone 3 wiring) |
+| Why is it built this way? | [`DECISIONS.md`](DECISIONS.md) (77 numbered decisions, append-only) |
 | How do I learn this project / prepare the defence? | [`LEARNING_GUIDE.md`](LEARNING_GUIDE.md) |
 | How do I write or extend these docs without breaking them? | [`DOCS_STANDARD.md`](DOCS_STANDARD.md) |
 | How do I build, run and debug it? | [`BUILD_AND_RUN.md`](BUILD_AND_RUN.md) |
 | What is actually finished? | [`COVERAGE.md`](COVERAGE.md) |
 | Who does what, and what is the status? | [`UML_TEAM.md`](UML_TEAM.md) |
-| How do I write *this layer*? | the folder README: [`model`](../src/main/java/com/gym/model/README.md) · [`dao`](../src/main/java/com/gym/dao/README.md) · [`service`](../src/main/java/com/gym/service/README.md) · [`controller`](../src/main/java/com/gym/controller/README.md) · [`util`](../src/main/java/com/gym/util/README.md) · [`resources`](../src/main/resources/README.md) — the last links one sub-doc per asset kind: [`fxml/`](../src/main/resources/fxml/README.md) · [`db/`](../src/main/resources/db/README.md) · [`theme/`](../src/main/resources/theme/README.md) · [`images/`](../src/main/resources/images/README.md) |
-| What is the entry point, and what happens at startup and shutdown? | [`../src/main/java/com/gym/README.md`](../src/main/java/com/gym/README.md) (`MainApp` gallery, `GymApp` shell launcher, `AppShellController`, `LaunchGateController`) |
+| How do I write *this layer*? | the folder README: [`model`](../src/main/java/com/gym/model/README.md) · [`dao`](../src/main/java/com/gym/dao/README.md) · [`service`](../src/main/java/com/gym/service/README.md) (retired) · [`controller`](../src/main/java/com/gym/controller/README.md) · [`util`](../src/main/java/com/gym/util/README.md) (+ `com.gym.exception`) · [`resources`](../src/main/resources/README.md) — sub-docs: [`fxml/`](../src/main/resources/fxml/README.md) · [`db/`](../src/main/resources/db/README.md) · [`theme/`](../src/main/resources/theme/README.md) · [`images/`](../src/main/resources/images/README.md) |
+| What is the entry point, and what happens at startup and shutdown? | [`../src/main/java/com/gym/README.md`](../src/main/java/com/gym/README.md) (`MainApp` gallery, `GymApp` launcher, `Screen`/`ScreenController`, `AppShellController`, `LaunchGateController`) |
 | How do the m3fx library modules work? (not the gym app) | [`../PLAN.md`](../PLAN.md), [`../AGENTS.md`](../AGENTS.md), [`COVERAGE.md`](COVERAGE.md), [`SPEC_NOTES/`](SPEC_NOTES) |
 
 ## 2. Authority when two documents disagree
@@ -61,7 +61,7 @@ that mention it. The full policy, including how to write a folder README, is in
 | `UML_TEAM.md` | Abdelrhman | Ownership + status overlay only (no diagrams) |
 | `DECISIONS.md` | All (append-only) | Why each non-obvious choice was made |
 | `COVERAGE.md` | Abdelrhman | Honest built-vs-planned checklist (library + app) |
-| `LEARNING_GUIDE.md` | Abdelrhman | Study path, OOP concept index, glossary, 40 defence questions |
+| `LEARNING_GUIDE.md` | Abdelrhman | Study path, COMP 301 Lectures 1–6 concepts, glossary, 20 defence questions |
 | `DOCS_STANDARD.md` | Abdelrhman | The template and rules the folder READMEs follow |
 | `BUILD_AND_RUN.md` | Abdelrhman | Gradle files explained, commands, troubleshooting |
 | `SPEC_NOTES/` | m3fx work | m3fx component spec extracts — **not** gym-app documentation |

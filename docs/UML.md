@@ -1,24 +1,22 @@
 # UML — Gym Management System (JavaFX)
 
-> **Status: design specification for the backend; partly shipped for the UI.** The `m3fx` library,
-> the `MainApp` component gallery, the `GymApp` shell launcher and **all 20 controllers with their
-> 19 FXML screens + `app-shell.fxml`** are shipped (running on demo data held in the controllers —
-> see §5 and the runtime-spine section there). Everything behind the controllers — the `model/`,
-> `dao/`, `service/`, `util/` layers, the 19 business rules and the SQLite persistence — is
-> **planned, not built**, and every edge drawn to a `*Service`, `SessionContext` or a `*Dao`
-> describes target wiring, not shipped code. `docs/COVERAGE.md` tracks exactly what exists.
+> **Status: Milestone 2 backend and UI runtime spine shipped; Milestone 3 DAO-to-UI wiring pending.**
+> Shipped in code today:
+> - **Domain model (`com.gym.model`)**: all **13 domain entities and 11 enums** (§1 and §1b), plain POJOs implementing `java.io.Serializable` (`serialVersionUID = 1L`) per COMP 301 Lecture 6.
+> - **Data access (`com.gym.dao`)**: **13 concrete SQLite DAOs** (`CustomerDao`, `TrainerDao`, …) using plain JDBC `PreparedStatement` + `try-with-resources`.
+> - **Utilities & exceptions (`com.gym.util`, `com.gym.exception`)**: `DatabaseConnection` (SQLite connection + 13-table `CREATE TABLE IF NOT EXISTS` DDL), `SerializationUtil` (binary object I/O), and checked exceptions `GymException -> ValidationException, DatabaseException`.
+> - **Retired layers (`DECISIONS.md` 77)**: the 11-service tier (`com.gym.service`), abstract DAO interfaces, and redundant planned helpers were removed to keep the codebase aligned with COMP 301 Lectures 1–6.
+> - **UI (`com.gym`, `com.gym.controller`)**: `MainApp` (m3fx gallery), `GymApp` (shell launcher), `Screen` + `ScreenController`, and 20 Java-built controllers running on demo data until Milestone 3 connects them to the DAOs.
 >
-> **Two domain diagrams, then five per-layer zoom-ins** (architecture, data access, services,
-> controllers, utilities). Each class is drawn in full exactly once; a later diagram repeats a
-> class only where it participates in that diagram's wiring. `docs/UML_TEAM.md` holds ownership, not a second copy of the diagrams.
+> `docs/COVERAGE.md` tracks what exists. `docs/UML_TEAM.md` holds team ownership.
+>
+> **Two domain diagrams, then five per-layer zoom-ins** (architecture, data access, retired services note,
+> controllers, utilities/exceptions). Each class is drawn in full exactly once; a later diagram repeats a
+> class only where it participates in that diagram's wiring.
 >
 > **Structural diagrams carry no prose.** Mermaid lays `note for` blocks and unconnected classes out
 > *beside* the graph rather than inside it, so descriptions widen a diagram instead of annotating it.
-> Every descriptive note was therefore moved out of the drawings into §1b, which is the only diagram
-> that still carries them. Effect on §1: **13193 × 3200 → 6303 × 3000 units**, and on §6,
-> 12203 × 596 → 706 × 348. The 11 enumerations are grouped at the tail of §1 as unconnected
-> boxes; §1b describes each one. The rules those notes stated are unchanged and
-> still stated in the "Business rules" table; nothing was dropped, only relocated.
+> Descriptive notes for §1 live in §1b (`classDiagram` notes).
 >
 > Notation:
 > `-` private · `+` public · `#` protected · `~` package ·
@@ -26,60 +24,24 @@
 > `..>` dependency · `<|..` realization (drawn from the implementer side) ·
 > `--|>` generalization (drawn from the subclass side).
 >
-> Symbols declared but deliberately unused, so their absence is not read as an omission:
-> `#` and `~` (no inheritance among project classes — the two external generalizations are drawn
-> in §7 — and no same-package-only collaborator exists), `o--` and `*--`
-> (no part in this model is lifetime-bound to its whole — see the note on `Equipment` in §1 and
-> the reasoning under "Notes on scope"), and role names (Mermaid cannot place one at a single
-> association end; the one role this model needs is stated in the `Payment` note).
->
 > Diagram-wide conventions:
 > - **Arrow direction:** the class that *holds the foreign key* is written on the **left**, and the
 >   arrowhead lands on the referenced class on the right. `A --> B` draws the arrowhead at **B**.
->   So `Customer "0..*" --> "0..1" Trainer` means `Customer.trainerId` references `Trainer` —
->   correct, because `Customer` is the class holding the FK and it sits on the left.
+>   So `Customer "0..*" --> "0..1" Trainer` means `Customer.trainerId` references `Trainer`.
 > - **Label voice:** every association name is passive, read as "*{left}* *{label}* *{right}*".
->   `Membership --> Customer : is held by` reads "Membership is held by Customer". This voice is
->   applied to all 18 domain associations so direction and wording agree everywhere.
-> - **Role names:** Mermaid cannot place a role name at one association end — the `"..."` slots
->   either side of the operator are *multiplicities only*, and putting a role there parses as a
->   multiplicity and breaks the diagram. Roles this model needs (`payer`) are stated in the
->   class notes instead.
-> - **Boxed `Integer`/`Long`/`Boolean` marks a nullable column; primitives mark NOT NULL.**
+>   `Membership --> Customer : is held by` reads "Membership is held by Customer".
+> - **Boxed `Integer`/`Double`/`Boolean` marks a nullable field/column; primitives mark NOT NULL.**
 > - **Money is `BigDecimal`** — never `double`.
 > - **Dates are ISO-8601 strings**: `yyyy-MM-dd` for dates, `HH:mm` for times,
->   `yyyy-MM-dd HH:mm` for date-times. ISO-8601 sorts lexicographically in the same order as
->   chronologically, which is what lets `findByDay`, `findExpiring` and `revenueBetween` compare
->   strings directly. `DateUtils` owns every parse and format.
-> - Entity getters and setters are omitted to keep the diagram small — every data member marked
->   «get/set» has a public getter and setter. **`«get/set»` is a project shorthand, not a UML
->   stereotype**: it expands to "this private field has a public `getX()` and `setX()`", so the 113
->   marked fields stand for 226 elided accessors. Enum `values()`/`valueOf(...)` are implicit in
->   Java and are not shown.
-> - `m3fx` is an external library dependency, not project code.
+>   `yyyy-MM-dd HH:mm` for date-times. ISO-8601 sorts lexicographically in chronological order.
+> - Entity getters and setters are omitted in §1 to keep the diagram readable — every private field
+>   marked `«get/set»` has a public getter and setter. Enum `values()`/`valueOf(...)` are implicit in Java.
+> - `m3fx` is an external library dependency (`io.m3fx.*`), not project domain code.
 >
-> **Rendering note — what Mermaid can and cannot draw.** These diagrams are Mermaid, verified
-> vertical with `direction TB` under both Mermaid 11 layouts (ELK and dagre), which render the same
-> way because TB is also the default. Verified adornment support:
->
-> | UML adornment | Mermaid syntax | Renders? |
-> |---|---|---|
-> | Visibility `+ - # ~` | prefix on the member | yes |
-> | Stereotype (e.g. `«interface»`, `«enumeration»`, `«utility»`, `«description»`) | `<<interface>>` | yes, as «interface» |
-> | Realization (dashed line + hollow triangle) | `<\|..` | yes |
-> | Dependency (dashed line + open arrow) | `..>` | yes |
-> | Generalization (solid line + hollow triangle) | `<\|--` | yes |
-> | Aggregation / composition diamond | `o--` / `*--` | yes |
-> | Multiplicity and association name | `"1" --> "0..*" : label` | yes |
-> | Static member (underlined) | `$` suffix | **no — stripped at render** |
-> | Abstract member (italic) | `*` suffix | **no — stripped at render** |
->
-> The last two are Mermaid limitations, not omissions in this model. The `$` is kept in the source
-> because it is the standard Mermaid marker and is visible in the raw text, and every stateless
-> helper is additionally stereotyped `«utility»` so its static nature shows on the rendered
-> diagram. Nothing in this model is abstract — every operation has a concrete implementation — so
-> the stripped `*` costs nothing. The model's two generalizations to Java platform types are drawn
-> in §7.
+> **Rendering note — what Mermaid can and cannot draw.** Diagrams use Mermaid `direction TB`.
+> Static members use `$` (`+getConnection()$`) in source; Mermaid `classDiagram` strips `$` at render time,
+> so utility helpers are stereotyped `«utility»` to stay unambiguous. External platform classes (`Application`,
+> `Exception`, `Serializable`) and our checked exception subclasses appear in §7.
 
 ## 1. Main diagram (domain model)
 
@@ -568,540 +530,183 @@ classDiagram
 
 ```mermaid
 flowchart TD
-    APP[GymApp / MainApp<br/>entry points, shell, theme] --> CTRL[Controllers<br/>19 FXML screens + app shell — shipped, demo data]
-    CTRL -. planned .-> SRV[Services<br/>validation + business rules — planned]
-    SRV -. planned .-> DAO[DAOs<br/>SQLite persistence — planned]
-    DAO -. planned .-> DB[(SQLite<br/>gym.db — planned)]
+    APP[GymApp / MainApp<br/>entry points, shell, theme] --> CTRL[Controllers<br/>Screen / ScreenController + LaunchGateController<br/>19 Java-built screens — demo data today]
+    CTRL -. Milestone 3 wiring .-> DAO[Concrete DAOs<br/>13 JDBC DAOs in com.gym.dao — shipped Milestone 2]
+    DAO --> DB[(SQLite<br/>gym.db — auto-created via DatabaseConnection)]
+    UTIL[util + exception<br/>DatabaseConnection, SerializationUtil,<br/>GymException, ValidationException, DatabaseException — shipped] -. supports .-> DAO
+    UTIL -. supports .-> CTRL
     M3FX[External: m3fx library<br/>M3 theme + components] -. styles .-> APP
     M3FX -. styles .-> CTRL
-    UTIL[util — planned<br/>DbConnection, DaoException, Validators, DateUtils,<br/>FxUtils, ChartUtils, SessionContext, PasswordUtils] -. supports .-> SRV
-    UTIL -. supports .-> CTRL
-    UTIL -. supports .-> DAO
 ```
 
-Layer rules (the standard the planned backend must meet; the shipped controller layer already follows
-the controller-side half):
-- Controllers never contain SQL and never touch a DAO directly — always through a service.
-- Services and DAOs never import JavaFX. `FxUtils` is the only JavaFX-aware utility and only
-  controllers depend on it.
-- `DaoException` is thrown by every `*DaoImpl`, caught in the controller, and shown with
-  `FxUtils.error(getMessage())`. Services never format a message for display.
+Layer rules (following COMP 301 beginner architecture, `DECISIONS.md` 77):
+- Controllers contain no raw SQL — persistence goes through the 13 concrete DAOs in `com.gym.dao` (connected in Milestone 3).
+- `com.gym.model`, `com.gym.dao`, `com.gym.util`, and `com.gym.exception` never import JavaFX (`Swing`-portable).
+- Checked exception contract: `ValidationException` reports bad input before SQL runs; `DatabaseException` wraps `SQLException` or `IOException`/`ClassNotFoundException` from `SerializationUtil`.
 
-**Shipped startup and session flow (Oct 2026).** What actually runs:
+**Shipped runtime spine (`GymApp` / `MainApp`):**
 
-1. `GymApp.start(Stage)` builds `M3Theme.fromSeed(SEED_PURPLE, TONAL_SPOT, dark)`, registers it with
-   `M3Stylesheets.setLatestTheme` (so FXML inflation resolves colors), loads `/fxml/app-shell.fxml`
-   into a maximized 1280×800 scene, and starts a freeze watchdog (diagnostics thread; dumps FX +
-   QuantumRenderer stacks to stderr if the FX thread stays >60% busy for 4 s — `DECISIONS.md` 70).
-2. For a real run (`main()` sets `SHOW_LAUNCH_GATES=true`), `AppShellController.beginLaunchGates()`
-   hands off to `LaunchGateController`: code-built splash → glass login card (shared-element morph)
-   → shell. **Demo auth: any email + a password of 4+ characters signs in**; invalid input shakes
-   the card (`DECISIONS.md` 71). Tests call `start(Stage)` directly with the flag `false` and get
-   the plain shell.
-3. `AppShellController.loadScreen(fxmlName)` / `openScreenViaRail(...)` swap the 19 screens inside
-   `contentArea`; sign-out reverses into the gate.
-
-**Planned startup and session flow** (the boundary path below describes the target, shown because
-`MainApp` and `SessionContext` are the two classes that sit outside the four layers — none of steps
-1–4 exists yet):
-
-1. `MainApp.start(Stage)` applies the theme (`M3Stylesheets.applyTo`), builds the nav shell and
-   overlay layer, and opens `LoginController`.
-2. `LoginController.onLogin()` calls `AdminService.authenticate(username, password)`, which returns
-   `null` for an unknown username, a wrong password, or `Administrator.active == false`.
-3. On success `LoginController` stores the returned `Administrator` in `SessionContext` and opens
-   `DashboardController`; `SessionContext.requireRole(StaffRole.ADMIN)` then gates `StaffController`.
-4. `DashboardController.onLogout()` calls `SessionContext.clear()` and returns to `LoginController`.
-   `MainApp` clears it again on exit as a safety net.
+1. `GymApp.start(Stage)` builds `M3Theme.fromSeed(SEED_PURPLE, TONAL_SPOT, dark)`, registers it with `M3Stylesheets.setLatestTheme(theme)`, constructs `new AppShellController()` (which builds the shell UI in Java — no FXML loaded), applies stylesheets to the maximized `1280×800` scene, and starts the daemon freeze watchdog (`DECISIONS.md` 70).
+2. For normal runs (`main()` sets `SHOW_LAUNCH_GATES = true`), `AppShellController.beginLaunchGates()` hands off to `LaunchGateController`: splash → glass login card → shell morph. Demo auth accepts any email + 4+ character password until Milestone 3 connects `AdministratorDao`.
+3. `AppShellController.loadScreen(Screen)` / `openScreenViaRail(String, Screen, Consumer)` swaps the 19 Java-built screens via `Screen.create()` and mounts `ScreenController.getRoot()` inside `contentArea`.
 
 ## 3. Data access layer
 
-> **Planned, not built.** No DAO, `DbConnection` or `DaoException` class exists in the repository
-> yet; there is no SQLite dependency in `build.gradle` and no `schema.sql`. This section is the
-> agreed design (see `src/main/java/com/gym/dao/README.md`).
+> **Shipped (Milestone 2) as 13 Concrete DAOs.** To keep the backend readable at COMP 301 beginner level
+> (`DECISIONS.md` 77), each entity in §1 has one concrete DAO class in `com.gym.dao` using standard JDBC
+> `PreparedStatement` + `try-with-resources` against SQLite `gym.db` via `DatabaseConnection`.
 
 ```mermaid
 classDiagram
     direction TB
-    class DbConnection {
-        <<interface>>
-        +getConnection() Connection
-        +initializeSchema() void
-    }
-    class SqliteDbConnection {
-        +getConnection() Connection
-        +initializeSchema() void
+    class DatabaseConnection {
+        <<utility>>
+        +setDbUrl(String) void$
+        +resetDbUrl() void$
+        +getDbUrl() String$
+        +getConnection() Connection$
+        +initializeDatabase() void$
     }
     class CustomerDao {
-        <<interface>>
-        +save(Customer) int
-        +findById(int) Customer
-        +search(String) List~Customer~
-        +findAll() List~Customer~
+        +insert(Customer) Customer
         +update(Customer) void
         +delete(int) void
-        +findByStatus(CustomerStatus) List~Customer~
-        +findByTrainer(int) List~Customer~
-    }
-    class CustomerDaoImpl {
-        +save(Customer) int
         +findById(int) Customer
-        +search(String) List~Customer~
         +findAll() List~Customer~
-        +update(Customer) void
-        +delete(int) void
-        +findByStatus(CustomerStatus) List~Customer~
-        +findByTrainer(int) List~Customer~
     }
     class TrainerDao {
-        <<interface>>
-        +save(Trainer) int
-        +findById(int) Trainer
-        +findAll() List~Trainer~
+        +insert(Trainer) Trainer
         +update(Trainer) void
         +delete(int) void
-    }
-    class TrainerDaoImpl {
-        +save(Trainer) int
         +findById(int) Trainer
         +findAll() List~Trainer~
-        +update(Trainer) void
-        +delete(int) void
     }
     class MembershipDao {
-        <<interface>>
-        +save(Membership) int
-        +findExpiring(int) List~Membership~
-        +findById(int) Membership
-        +findAll() List~Membership~
+        +insert(Membership) Membership
         +update(Membership) void
         +delete(int) void
-        +findByCustomer(int) List~Membership~
-        +findByStatus(MembershipStatus) List~Membership~
-    }
-    class MembershipDaoImpl {
-        +save(Membership) int
-        +findExpiring(int) List~Membership~
         +findById(int) Membership
+        +findByCustomerId(int) List~Membership~
         +findAll() List~Membership~
-        +update(Membership) void
-        +delete(int) void
-        +findByCustomer(int) List~Membership~
-        +findByStatus(MembershipStatus) List~Membership~
     }
     class WorkoutProgramDao {
-        <<interface>>
-        +save(WorkoutProgram) int
-        +findById(int) WorkoutProgram
-        +findAll() List~WorkoutProgram~
+        +insert(WorkoutProgram) WorkoutProgram
         +update(WorkoutProgram) void
         +delete(int) void
-        +findByCustomer(int) List~WorkoutProgram~
-        +findLatestVersion(int) int
-    }
-    class WorkoutProgramDaoImpl {
-        +save(WorkoutProgram) int
         +findById(int) WorkoutProgram
+        +findByCustomerId(int) List~WorkoutProgram~
         +findAll() List~WorkoutProgram~
-        +update(WorkoutProgram) void
-        +delete(int) void
-        +findByCustomer(int) List~WorkoutProgram~
-        +findLatestVersion(int) int
     }
     class SessionDao {
-        <<interface>>
-        +save(Session) int
-        +findByDay(String) List~Session~
-        +findById(int) Session
-        +findAll() List~Session~
+        +insert(Session) Session
         +update(Session) void
         +delete(int) void
-        +findByStatus(SessionStatus) List~Session~
-        +findByCustomer(int) List~Session~
-        +findByCustomerAndDay(int, String) List~Session~
-        +findByTrainerAndDay(int, String) List~Session~
-        +countByAvailability(int availabilityId, SessionStatus status) int
-    }
-    class SessionDaoImpl {
-        +save(Session) int
-        +findByDay(String) List~Session~
         +findById(int) Session
+        +findByTrainerId(int) List~Session~
         +findAll() List~Session~
-        +update(Session) void
-        +delete(int) void
-        +findByStatus(SessionStatus) List~Session~
-        +findByCustomer(int) List~Session~
-        +findByCustomerAndDay(int, String) List~Session~
-        +findByTrainerAndDay(int, String) List~Session~
-        +countByAvailability(int availabilityId, SessionStatus status) int
     }
     class EquipmentDao {
-        <<interface>>
-        +save(Equipment) int
-        +findById(int) Equipment
-        +findAll() List~Equipment~
+        +insert(Equipment) Equipment
         +update(Equipment) void
         +delete(int) void
-        +findByStatus(EquipmentStatus) List~Equipment~
-        +findByCondition(EquipmentCondition) List~Equipment~
-    }
-    class EquipmentDaoImpl {
-        +save(Equipment) int
         +findById(int) Equipment
         +findAll() List~Equipment~
-        +update(Equipment) void
-        +delete(int) void
-        +findByStatus(EquipmentStatus) List~Equipment~
-        +findByCondition(EquipmentCondition) List~Equipment~
     }
     class AttendanceDao {
-        <<interface>>
-        +save(Attendance) int
-        +findByDay(String) List~Attendance~
-        +findById(int) Attendance
-        +findAll() List~Attendance~
+        +insert(Attendance) Attendance
         +update(Attendance) void
         +delete(int) void
-        +findByCustomer(int) List~Attendance~
-        +findByCustomerAndDay(int, String) List~Attendance~
-    }
-    class AttendanceDaoImpl {
-        +save(Attendance) int
-        +findByDay(String) List~Attendance~
         +findById(int) Attendance
+        +findByCustomerId(int) List~Attendance~
         +findAll() List~Attendance~
-        +update(Attendance) void
-        +delete(int) void
-        +findByCustomer(int) List~Attendance~
-        +findByCustomerAndDay(int, String) List~Attendance~
     }
     class PaymentDao {
-        <<interface>>
-        +save(Payment) int
-        +findById(int) Payment
-        +findAll() List~Payment~
+        +insert(Payment) Payment
         +update(Payment) void
         +delete(int) void
-        +findByCustomer(int customerId) List~Payment~
-        +findByReceipt(String receiptNo) Payment
-        +findByMethod(PaymentMethod method) List~Payment~
-        +revenueBetween(String from, String to) BigDecimal
-    }
-    class PaymentDaoImpl {
-        +save(Payment) int
         +findById(int) Payment
+        +findByReceiptNo(String) Payment
+        +findByCustomerId(int) List~Payment~
         +findAll() List~Payment~
-        +update(Payment) void
-        +delete(int) void
-        +findByCustomer(int customerId) List~Payment~
-        +findByReceipt(String receiptNo) Payment
-        +findByMethod(PaymentMethod method) List~Payment~
-        +revenueBetween(String from, String to) BigDecimal
     }
-    class ProgressDao {
-        <<interface>>
-        +save(ProgressRecord) int
-        +findById(int) ProgressRecord
-        +findAll() List~ProgressRecord~
+    class ProgressRecordDao {
+        +insert(ProgressRecord) ProgressRecord
         +update(ProgressRecord) void
         +delete(int) void
-        +findByCustomer(int) List~ProgressRecord~
-    }
-    class ProgressDaoImpl {
-        +save(ProgressRecord) int
         +findById(int) ProgressRecord
+        +findByCustomerId(int) List~ProgressRecord~
         +findAll() List~ProgressRecord~
-        +update(ProgressRecord) void
-        +delete(int) void
-        +findByCustomer(int) List~ProgressRecord~
     }
     class MedicalProfileDao {
-        <<interface>>
-        +save(MedicalProfile) int
-        +findByCustomer(int) MedicalProfile
-        +findById(int) MedicalProfile
-        +findAll() List~MedicalProfile~
+        +insert(MedicalProfile) MedicalProfile
         +update(MedicalProfile) void
         +delete(int) void
-    }
-    class MedicalProfileDaoImpl {
-        +save(MedicalProfile) int
-        +findByCustomer(int) MedicalProfile
         +findById(int) MedicalProfile
+        +findByCustomerId(int) MedicalProfile
         +findAll() List~MedicalProfile~
-        +update(MedicalProfile) void
-        +delete(int) void
     }
-    class AdminDao {
-        <<interface>>
-        +save(Administrator) int
-        +findByUsername(String) Administrator
-        +findById(int) Administrator
-        +findAll() List~Administrator~
+    class AdministratorDao {
+        +insert(Administrator) Administrator
         +update(Administrator) void
         +delete(int) void
-        +findByRole(StaffRole) List~Administrator~
-    }
-    class AdminDaoImpl {
-        +save(Administrator) int
-        +findByUsername(String) Administrator
         +findById(int) Administrator
+        +findByUsername(String) Administrator
         +findAll() List~Administrator~
-        +update(Administrator) void
-        +delete(int) void
-        +findByRole(StaffRole) List~Administrator~
     }
     class TrainerSubscriptionDao {
-        <<interface>>
-        +save(TrainerSubscription) int
-        +findActive(int, int, String) TrainerSubscription
-        +findById(int) TrainerSubscription
-        +findAll() List~TrainerSubscription~
+        +insert(TrainerSubscription) TrainerSubscription
         +update(TrainerSubscription) void
         +delete(int) void
-        +findByCustomer(int) List~TrainerSubscription~
-        +findByTrainer(int) List~TrainerSubscription~
-    }
-    class TrainerSubscriptionDaoImpl {
-        +save(TrainerSubscription) int
-        +findActive(int, int, String) TrainerSubscription
         +findById(int) TrainerSubscription
+        +findByCustomerId(int) List~TrainerSubscription~
         +findAll() List~TrainerSubscription~
-        +update(TrainerSubscription) void
-        +delete(int) void
-        +findByCustomer(int) List~TrainerSubscription~
-        +findByTrainer(int) List~TrainerSubscription~
     }
     class TrainerAvailabilityDao {
-        <<interface>>
-        +save(TrainerAvailability) int
-        +findOpenSlots(int, String) List~TrainerAvailability~
-        +findById(int) TrainerAvailability
-        +findAll() List~TrainerAvailability~
+        +insert(TrainerAvailability) TrainerAvailability
         +update(TrainerAvailability) void
         +delete(int) void
-        +findByTrainerAndDate(int, String) List~TrainerAvailability~
-    }
-    class TrainerAvailabilityDaoImpl {
-        +save(TrainerAvailability) int
-        +findOpenSlots(int, String) List~TrainerAvailability~
         +findById(int) TrainerAvailability
+        +findByTrainerId(int) List~TrainerAvailability~
         +findAll() List~TrainerAvailability~
-        +update(TrainerAvailability) void
-        +delete(int) void
-        +findByTrainerAndDate(int, String) List~TrainerAvailability~
     }
-    SqliteDbConnection <|.. DbConnection : implements
-    CustomerDao <|.. CustomerDaoImpl : implements
-    TrainerDao <|.. TrainerDaoImpl : implements
-    MembershipDao <|.. MembershipDaoImpl : implements
-    WorkoutProgramDao <|.. WorkoutProgramDaoImpl : implements
-    SessionDao <|.. SessionDaoImpl : implements
-    EquipmentDao <|.. EquipmentDaoImpl : implements
-    AttendanceDao <|.. AttendanceDaoImpl : implements
-    PaymentDao <|.. PaymentDaoImpl : implements
-    ProgressDao <|.. ProgressDaoImpl : implements
-    MedicalProfileDao <|.. MedicalProfileDaoImpl : implements
-    AdminDao <|.. AdminDaoImpl : implements
-    TrainerSubscriptionDao <|.. TrainerSubscriptionDaoImpl : implements
-    TrainerAvailabilityDao <|.. TrainerAvailabilityDaoImpl : implements
-    CustomerDaoImpl ..> DbConnection : uses
-    TrainerDaoImpl ..> DbConnection : uses
-    MembershipDaoImpl ..> DbConnection : uses
-    WorkoutProgramDaoImpl ..> DbConnection : uses
-    SessionDaoImpl ..> DbConnection : uses
-    EquipmentDaoImpl ..> DbConnection : uses
-    AttendanceDaoImpl ..> DbConnection : uses
-    PaymentDaoImpl ..> DbConnection : uses
-    ProgressDaoImpl ..> DbConnection : uses
-    MedicalProfileDaoImpl ..> DbConnection : uses
-    AdminDaoImpl ..> DbConnection : uses
-    TrainerSubscriptionDaoImpl ..> DbConnection : uses
-    TrainerAvailabilityDaoImpl ..> DbConnection : uses
+    CustomerDao ..> DatabaseConnection : uses
+    TrainerDao ..> DatabaseConnection : uses
+    MembershipDao ..> DatabaseConnection : uses
+    WorkoutProgramDao ..> DatabaseConnection : uses
+    SessionDao ..> DatabaseConnection : uses
+    EquipmentDao ..> DatabaseConnection : uses
+    AttendanceDao ..> DatabaseConnection : uses
+    PaymentDao ..> DatabaseConnection : uses
+    ProgressRecordDao ..> DatabaseConnection : uses
+    MedicalProfileDao ..> DatabaseConnection : uses
+    AdministratorDao ..> DatabaseConnection : uses
+    TrainerSubscriptionDao ..> DatabaseConnection : uses
+    TrainerAvailabilityDao ..> DatabaseConnection : uses
 ```
 
-## 4. Service layer (validation + business rules, no JavaFX, no SQL)
+## 4. Service layer — Retired (Decision 77)
 
-> **Planned, not built.** No service class exists in the repository yet; the shipped controllers
-> hold demo data. This section is the agreed design (see `src/main/java/com/gym/service/README.md`).
+> **Retired in Milestone 2 (`DECISIONS.md` 77).** The previously planned 11-service abstraction tier
+> (`CustomerService`, `TrainerService`, `MembershipService`, `WorkoutService`, `SchedulingService`,
+> `EquipmentService`, `AttendanceService`, `PaymentService`, `ProgressService`, `MedicalProfileService`,
+> `AdminService`) was removed to avoid multi-tier boilerplate for a beginner team.
+>
+> - **Where validation went:** basic required-field checks live inside each concrete DAO's private
+>   `validate(...)` helper, throwing `ValidationException`.
+> - **Where UI workflows live:** Milestone 3 connects UI controllers in `com.gym.controller` directly to
+>   the 13 DAOs and `SerializationUtil`.
+> - **Package status:** `src/main/java/com/gym/service/` contains no Java source files (only its `README.md` explaining this consolidation).
 
-```mermaid
-classDiagram
-    direction TB
-    class CustomerService {
-        +validate(Customer customer) List~String~
-        +search(String term) List~Customer~
-        +findAll() List~Customer~
-        +findById(int customerId) Customer
-        +save(Customer customer) int
-        +update(Customer customer) void
-        +changeStatus(int customerId, CustomerStatus status) void
-        +findByTrainer(int trainerId) List~Customer~
-    }
-    class TrainerService {
-        +assignCustomer(int customerId, int trainerId) void
-        +setRate(int trainerId, BigDecimal hourlyRate) void
-        +publishSlot(int trainerId, String date, String startTime, String endTime, int maxCustomers) TrainerAvailability
-        +closeSlot(int availabilityId) void
-        +setDailyCap(int trainerId, String date, int maxCustomersPerSlot) void
-        +setSlotCap(int availabilityId, int maxCustomers) void
-        +findOpenSlots(int trainerId, String date) List~TrainerAvailability~
-        +findAll() List~Trainer~
-        +findById(int trainerId) Trainer
-        +save(Trainer trainer) int
-        +update(Trainer trainer) void
-    }
-    class MembershipService {
-        +sell(int customerId, PlanType plan) Membership
-        +renew(int membershipId) void
-        +freeze(int membershipId) void
-        +unfreeze(int membershipId) void
-        +cancel(int membershipId) void
-        +freezeForSuspended(int customerId) int
-        +expireOverdue() int
-        +expiryReminders(int withinDays) List~Membership~
-        +findAll() List~Membership~
-        +findByCustomer(int customerId) List~Membership~
-    }
-    class WorkoutService {
-        +buildProgram(int customerId, int trainerId, String name, String exercises) WorkoutProgram
-        +reassign(int programId, int customerId) void
-        +newVersion(int programId) WorkoutProgram
-        +update(WorkoutProgram program) void
-        +delete(int programId) void
-        +findByCustomer(int customerId) List~WorkoutProgram~
-    }
-    class SchedulingService {
-        +bookOpenSlot(int customerId, int availabilityId, String date, String startTime) Session
-        +requestOutsideSlots(int customerId, int trainerId, String date, String startTime) Session
-        +adminReserve(int customerId, int trainerId, String date, String startTime) Session
-        +bookedCount(int availabilityId) int
-        +isSlotFull(int availabilityId) boolean
-        +detectConflicts(int customerId, int trainerId, String date, String startTime) List~Session~
-        +canTransition(SessionStatus from, SessionStatus to) boolean
-        +confirmSession(int sessionId) void
-        +cancelSession(int sessionId, String reason) void
-        +completeSession(int sessionId, String sessionNotes) void
-        +markNoShow(int sessionId) void
-        +getAvailableSlots(int trainerId, String date) List~TrainerAvailability~
-        +getCustomerSessions(int customerId) List~Session~
-        +getTrainerSessions(int trainerId) List~Session~
-        +subscribe(int customerId, int trainerId, String startDate, String endDate) TrainerSubscription
-        +activeSubscription(int customerId, int trainerId) TrainerSubscription
-        +subscriptionPrice(int trainerId) BigDecimal
-        +renewSubscription(int subscriptionId, String newEndDate) void
-        +cancelSubscription(int subscriptionId) void
-        +coveredBySubscription(Session session) boolean
-        +expireOverdueSubscriptions() int
-    }
-    class EquipmentService {
-        +save(Equipment equipment) int
-        +update(Equipment equipment) void
-        +changeStatus(int equipmentId, EquipmentStatus status) void
-        +changeCondition(int equipmentId, EquipmentCondition condition) void
-        +logMaintenance(int equipmentId, String date) void
-        +delete(int equipmentId) void
-        +findAll() List~Equipment~
-        +findByStatus(EquipmentStatus status) List~Equipment~
-        +findByCondition(EquipmentCondition condition) List~Equipment~
-    }
-    class AttendanceService {
-        +checkIn(int customerId, String date, String time) Attendance
-        +checkOut(int customerId, String date, String time) void
-        +dailyReport(String date) List~Attendance~
-        +correctRecord(int attendanceId, String checkIn, String checkOut) void
-        +findByCustomer(int customerId) List~Attendance~
-    }
-    class PaymentService {
-        +record(Payment payment) int
-        +validLink(Payment payment) boolean
-        +voidPayment(int paymentId, String reason) void
-        +voidRecord(String entityName, int id) void
-        +balance(int customerId) BigDecimal
-        +revenueBetween(String from, String to) BigDecimal
-        +findByCustomer(int customerId) List~Payment~
-        +findByReceipt(String receiptNo) Payment
-        +findByMethod(PaymentMethod method) List~Payment~
-    }
-    class ProgressService {
-        +save(ProgressRecord record) int
-        +update(ProgressRecord record) void
-        +delete(int recordId) void
-        +findByCustomer(int customerId) List~ProgressRecord~
-        +series(int customerId, ProgressMetric metric) List~Double~
-        +targetWeight(int customerId) Double
-    }
-    class MedicalProfileService {
-        +save(MedicalProfile profile) int
-        +update(MedicalProfile profile) void
-        +getByCustomer(int customerId) MedicalProfile
-        +getForTrainer(int customerId, int trainerId) MedicalProfile
-        +delete(int profileId) void
-    }
-    class AdminService {
-        +authenticate(String username, String password) Administrator
-        +resetPassword(int adminId, String newPassword) void
-        +saveStaff(Administrator admin) int
-        +updateStaff(Administrator admin) void
-        +deleteStaff(int adminId) void
-        +findAllStaff() List~Administrator~
-        +findByRole(StaffRole role) List~Administrator~
-        +reassignTrainer(int customerId, int trainerId) void
-        +adjustPayment(int paymentId, BigDecimal newAmount, String reason) void
-        +deleteCustomer(int customerId) void
-        +deleteTrainer(int trainerId) void
-    }
-    CustomerService ..> CustomerDao : persists via
-    CustomerService ..> Validators : validates with
-    CustomerService ..> MembershipService : freezes memberships when suspended
-    TrainerService ..> TrainerDao : persists via
-    TrainerService ..> TrainerAvailabilityDao : persists slots via
-    TrainerService ..> MedicalProfileService : medical view via
-    TrainerService ..> Validators : validates slot windows with
-    TrainerService ..> DateUtils : dates with
-    MembershipService ..> MembershipDao : persists via
-    MembershipService ..> CustomerDao : reads owner from
-    MembershipService ..> DateUtils : dates with
-    WorkoutService ..> WorkoutProgramDao : persists via
-    WorkoutService ..> CustomerDao : validates assignment with
-    WorkoutService ..> TrainerDao : validates creator with
-    SchedulingService ..> SessionDao : persists via
-    SchedulingService ..> TrainerAvailabilityDao : checks slots from
-    SchedulingService ..> TrainerSubscriptionDao : reads subs from
-    SchedulingService ..> CustomerDao : reads customers from
-    SchedulingService ..> TrainerDao : reads trainers from
-    SchedulingService ..> DateUtils : dates with
-    EquipmentService ..> EquipmentDao : persists via
-    AttendanceService ..> AttendanceDao : persists via
-    AttendanceService ..> CustomerDao : validates status with
-    AttendanceService ..> MembershipDao : validates eligibility with
-    PaymentService ..> PaymentDao : persists via
-    PaymentService ..> CustomerDao : reads payer from
-    PaymentService ..> MembershipDao : prices against
-    PaymentService ..> SessionDao : prices against
-    ProgressService ..> ProgressDao : persists via
-    ProgressService ..> ChartUtils : charts with
-    MedicalProfileService ..> MedicalProfileDao : persists via
-    MedicalProfileService ..> CustomerDao : checks ownership with
-    AdminService ..> AdminDao : persists via
-    AdminService ..> PasswordUtils : hashes with
-    AdminService ..> GuardService : reference check with
-    AdminService ..> PaymentService : voids and adjusts through
-    AdminService ..> CustomerDao : overrides with
-    AdminService ..> TrainerDao : overrides with
-```
+## 5. Controllers (Java-built UI screens + shell)
 
-## 5. Controllers (each backed by a matching FXML file)
+**Shipped today:** 20 controller classes plus the `Screen` enum registry and `ScreenController`
+interface in `com.gym.controller` — 18 app screens + `AppShellController` + `LaunchGateController`.
+Per commit `fb3486d`, every screen builds its node tree directly in Java in its constructor
+(`buildView()` -> `getRoot()`); no `FXMLLoader` runs at runtime (legacy `.fxml` files remain in
+`src/main/resources/fxml/` for reference only). Controllers run on **in-memory demo data** today;
+Milestone 3 will wire them to the concrete DAOs in `com.gym.dao` and `SerializationUtil`.
 
-**Shipped today:** 20 controller classes in `com.gym.controller` — 19 FXML-backed (the 18 app
-screens + `AppShellController` for `app-shell.fxml`) plus the code-built `LaunchGateController`.
-They run on **demo data held in each controller**; there are no services, no `SessionContext`, no
-`FxUtils` yet. The two extra screens beyond the original 16 (`GymFloorMapController`,
-`LiveWorkoutController`) and the shell are documented screen-by-screen in
-`src/main/java/com/gym/controller/README.md`; their `fx:id` contracts are pinned by
-`ControllerBindingContractTest`.
-
-### 5a. The shipped runtime spine (real signatures, Oct 2026)
+### 5a. The shipped runtime spine (real signatures)
 
 ```mermaid
 classDiagram
@@ -1114,14 +719,27 @@ classDiagram
         +main(String[] args) void
         -startFreezeWatchdog()$ void
     }
+    class ScreenController {
+        <<interface>>
+        +getRoot() Parent
+    }
+    class Screen {
+        <<enumeration>>
+        LOGIN
+        APP_SHELL
+        DASHBOARD
+        +key() String
+        +create() ScreenController
+        +byKey(String key) Screen$
+    }
     class AppShellController {
         +SHELL_CONTROLLER_KEY$ String
-        +initialize() void
+        +getRoot() Parent
         +beginLaunchGates() void
         +getMorphTarget() Region
         +settleCurrentPage() void
-        +loadScreen(String fxmlName) void
-        +openScreenViaRail(String railButtonId, String detailFxml, Consumer setup) void
+        +loadScreen(Screen screen) void
+        +openScreenViaRail(String railButtonId, Screen screen, Consumer setup) void
         +enableSmoothScrolling(ScrollPane sp)$ void
         +onToggleRail() void
         +onOpenCommandPalette() void
@@ -1138,71 +756,67 @@ classDiagram
         <<external>>
     }
     class ScreenControllers {
-        <<shipped 18 screen controllers>>
+        <<shipped 18 ScreenController implementations>>
     }
     GymApp --|> Application : extends
-    GymApp ..> AppShellController : loads via app-shell.fxml
+    GymApp ..> AppShellController : constructs in start()
+    AppShellController <|.. ScreenController : implements
     AppShellController ..> LaunchGateController : beginLaunchGates()
-    AppShellController ..> ScreenControllers : loadScreen(fxmlName)
+    AppShellController ..> Screen : loads screens via
+    Screen ..> ScreenControllers : instantiates
+    ScreenControllers <|.. ScreenController : implements
 ```
 
-Notes on the real signatures: `GymApp.stop()` calls only `Platform.exit()` — never `System.exit`
-(the gallery can co-host a `GymApp` stage in the same JVM; `DECISIONS.md` documents this). The
-freeze watchdog (`startFreezeWatchdog`) is a private static daemon thread, diagnostics only. `main()`
-sets `SHOW_LAUNCH_GATES = true` so `gradlew runGym` gets the splash → login → shell choreography;
-tests call `start(Stage)` directly with the flag `false` (`DECISIONS.md` 71). `openScreenViaRail`'s
-third parameter is `Consumer<Object>` (Mermaid shows the erasure). `LaunchGateController` builds the
-splash and glass login card entirely in code — no FXML, no `fx:id`s, so the FXML test contracts stay
-byte-identical — and **demo auth (any email + 4+ char password) lives here and in
-`LoginController`**.
+Notes on the shipped spine: `GymApp.stop()` calls `Platform.exit()` — never `System.exit` (so
+`MainApp` can co-host a `GymApp` window inside the same JVM). `SHOW_LAUNCH_GATES` defaults to
+`false` and is flipped to `true` in `GymApp.main(String[])`. `LaunchGateController` and
+`LoginController` currently use demo authentication (any email + 4+ char password) until Milestone 3
+connects `AdministratorDao`.
 
-**Planned design, not shipped code.** In the diagram below, every `..>` edge that names a
-`*Service`, `SessionContext` or `FxUtils` is **planned wiring** — those classes do not exist yet,
-and the shipped controllers hold demo data instead of calling them. The method lists below are the
-agreed target; where a shipped controller already realises a method it is named identically (e.g.
-`CustomerListController` shipped `onOpenSelectedProfile()` / `onDeleteSelectedCustomer()` —
-selection is read by the controller, so the planned `int customerId` parameters became no-argument
-methods).
+### 5b. Screen controllers and planned Milestone 3 DAO wiring
+
+In the diagram below, controllers already exist and run with demo data. Dashed `..>` edges to concrete
+DAOs show the planned Milestone 3 wiring (replacing the retired service tier from `DECISIONS.md` 77).
 
 ```mermaid
 classDiagram
     direction TB
     class LoginController {
-        +initialize() void
+        +getRoot() Parent
         +onLogin() void
         +onForgotPassword() void
     }
     class DashboardController {
-        +initialize() void
+        +getRoot() Parent
         +refreshData() void
         +onLogout() void
     }
     class CustomerListController {
-        +initialize() void
+        +getRoot() Parent
         +onSearch() void
         +onAdd() void
         +onOpenSelectedProfile() void
         +onDeleteSelectedCustomer() void
     }
     class CustomerProfileController {
-        +initialize() void
+        +getRoot() Parent
         +showCustomer(int customerId) void
         +onSave() void
     }
     class TrainerListController {
-        +initialize() void
+        +getRoot() Parent
         +onAdd() void
         +onOpenProfile(int trainerId) void
         +onDelete(int trainerId) void
     }
     class TrainerProfileController {
-        +initialize() void
+        +getRoot() Parent
         +showTrainer(TrainerSnapshot trainer) void
         +onSave() void
         +showMedicalProfile(int customerId) void
     }
     class MembershipController {
-        +initialize() void
+        +getRoot() Parent
         +onSell() void
         +onRenew() void
         +onFreeze() void
@@ -1210,14 +824,14 @@ classDiagram
         +onCancel() void
     }
     class WorkoutController {
-        +initialize() void
+        +getRoot() Parent
         +onBuild() void
         +onReassign() void
         +onNewVersion() void
         +onDelete() void
     }
     class ScheduleController {
-        +initialize() void
+        +getRoot() Parent
         +onBook() void
         +onRequest() void
         +onConfirm(int sessionId) void
@@ -1228,17 +842,15 @@ classDiagram
         +onSubscribe() void
         +onRenewSubscription() void
         +onCancelSubscription() void
-        +showAvailableTrainers() void
-        +showTrainerSlots(int trainerId) void
     }
     class AvailabilityController {
-        +initialize() void
+        +getRoot() Parent
         +setCalendar(int trainerId, String date) void
         +setSlots(int trainerId, String date, String startTime) void
         +setSlotCap(int availabilityId, int maxCustomers) void
     }
     class EquipmentController {
-        +initialize() void
+        +getRoot() Parent
         +onAdd() void
         +onStatusChange(int equipmentId, EquipmentStatus status) void
         +onConditionChange(int equipmentId, EquipmentCondition condition) void
@@ -1246,32 +858,32 @@ classDiagram
         +onDelete(int equipmentId) void
     }
     class AttendanceController {
-        +initialize() void
+        +getRoot() Parent
         +onCheckIn(int customerId) void
         +onCheckOut(int customerId) void
         +showDailyReport(String date) void
         +onCorrectRecord(int attendanceId) void
     }
     class PaymentController {
-        +initialize() void
+        +getRoot() Parent
         +onRecord() void
         +onVoid(int paymentId) void
         +showReceipt(String receiptNo) void
     }
     class ProgressController {
-        +initialize() void
+        +getRoot() Parent
         +showProgress(int customerId) void
         +onSaveRecord() void
         +onDeleteRecord(int recordId) void
     }
     class MedicalProfileController {
-        +initialize() void
+        +getRoot() Parent
         +showProfile(int customerId) void
         +onSave() void
         +onDelete() void
     }
     class StaffController {
-        +initialize() void
+        +getRoot() Parent
         +onAddStaff() void
         +onEditStaff(int adminId) void
         +onDeleteStaff(int adminId) void
@@ -1279,114 +891,86 @@ classDiagram
         +onReassign() void
         +onAdjustPayment(int paymentId) void
     }
-    MainApp ..> LoginController : opens
-    MainApp ..> DashboardController : opens after login
-    LoginController ..> AdminService : authenticates via
-    LoginController ..> SessionContext : stores user
-    LoginController ..> DashboardController : opens on success
-    DashboardController ..> SessionContext : clears on logout
-    DashboardController ..> CustomerService : reads from
-    DashboardController ..> PaymentService : reads from
-    DashboardController ..> SchedulingService : reads from
-    DashboardController ..> EquipmentService : reads from
-    CustomerListController ..> CustomerService : uses
-    CustomerListController ..> CustomerProfileController : opens
-    CustomerProfileController ..> CustomerService : saves via
-    CustomerProfileController ..> MembershipService : reads plans from
-    CustomerProfileController ..> MedicalProfileService : reads profile from
-    TrainerListController ..> TrainerService : uses
-    TrainerListController ..> TrainerProfileController : opens
-    TrainerProfileController ..> TrainerService : saves via
-    TrainerProfileController ..> CustomerService : reads roster from
-    TrainerProfileController ..> MedicalProfileService : reads medical section from
-    MembershipController ..> MembershipService : uses
-    WorkoutController ..> WorkoutService : uses
-    ScheduleController ..> SchedulingService : uses
-    ScheduleController ..> SessionContext : requires ADMIN for reserve
-    AvailabilityController ..> TrainerService : uses
-    EquipmentController ..> EquipmentService : uses
-    AttendanceController ..> AttendanceService : uses
-    PaymentController ..> PaymentService : uses
-    ProgressController ..> ProgressService : uses
-    MedicalProfileController ..> MedicalProfileService : uses
-    StaffController ..> AdminService : uses
-    StaffController ..> SessionContext : requires ADMIN role
-    MainApp ..> SessionContext : clears on exit
-    MainApp ..> FxUtils : installs overlay layer via
+    LoginController ..> AdministratorDao : Milestone 3 auth
+    DashboardController ..> CustomerDao : Milestone 3 metrics
+    DashboardController ..> PaymentDao : Milestone 3 revenue
+    DashboardController ..> SessionDao : Milestone 3 sessions
+    DashboardController ..> EquipmentDao : Milestone 3 inventory
+    CustomerListController ..> CustomerDao : Milestone 3 CRUD
+    CustomerProfileController ..> CustomerDao : Milestone 3 CRUD
+    CustomerProfileController ..> MembershipDao : Milestone 3 plans
+    CustomerProfileController ..> MedicalProfileDao : Milestone 3 profile
+    TrainerListController ..> TrainerDao : Milestone 3 CRUD
+    TrainerProfileController ..> TrainerDao : Milestone 3 CRUD
+    TrainerProfileController ..> CustomerDao : Milestone 3 roster
+    TrainerProfileController ..> MedicalProfileDao : Milestone 3 medical view
+    MembershipController ..> MembershipDao : Milestone 3 CRUD
+    WorkoutController ..> WorkoutProgramDao : Milestone 3 CRUD
+    ScheduleController ..> SessionDao : Milestone 3 CRUD
+    ScheduleController ..> TrainerAvailabilityDao : Milestone 3 slots
+    ScheduleController ..> TrainerSubscriptionDao : Milestone 3 subscriptions
+    AvailabilityController ..> TrainerAvailabilityDao : Milestone 3 CRUD
+    EquipmentController ..> EquipmentDao : Milestone 3 CRUD
+    AttendanceController ..> AttendanceDao : Milestone 3 CRUD
+    PaymentController ..> PaymentDao : Milestone 3 CRUD
+    ProgressController ..> ProgressRecordDao : Milestone 3 CRUD
+    MedicalProfileController ..> MedicalProfileDao : Milestone 3 CRUD
+    StaffController ..> AdministratorDao : Milestone 3 CRUD
 ```
 
-## 6. Utilities
+## 6. Utilities and exceptions
 
-> **Planned, not built.** None of the classes below exists in the repository yet (see
-> `src/main/java/com/gym/util/README.md`).
+> **Shipped (Milestone 2):** Core persistence, binary serialization, and checked exceptions live in
+> `com.gym.util` and `com.gym.exception`, built with COMP 301 Lectures 1–6 patterns (`DECISIONS.md` 77).
+> Earlier speculative helpers (`Validators`, `DateUtils`, `PasswordUtils`, `ChartUtils`,
+> `GuardService`, `SessionContext`, `FxUtils`) were retired from the Milestone 2 scope.
 
 ```mermaid
 classDiagram
     direction TB
-    class DbConnection {
-        <<interface>>
-        +getConnection() Connection
-        +initializeSchema() void
-    }
-    class SqliteDbConnection {
-        +getConnection() Connection
-        +initializeSchema() void
-    }
-    class DaoException {
-        +DaoException(String message, Throwable cause)
-    }
-    class GuardService {
+    class DatabaseConnection {
         <<utility>>
-        +countReferences(String table, int id) int$
+        +setDbUrl(String newUrl) void$
+        +resetDbUrl() void$
+        +getDbUrl() String$
+        +getConnection() Connection$
+        +initializeDatabase() void$
     }
-    class Validators {
+    class SerializationUtil {
         <<utility>>
-        +validPhone(String) boolean$
-        +validEmail(String) boolean$
-        +validDate(String) boolean$
-        +validNumber(String) boolean$
-        +validTimeRange(String from, String to) boolean$
+        +saveToFile(Object object, String filePath) void$
+        +loadFromFile(String filePath) Object$
     }
-    class DateUtils {
-        <<utility>>
-        +addMonths(String date, int months) String$
-        +formatDate(String date) String$
-        +isBeforeNow(String date, String time) boolean$
-        +hoursUntil(String date, String time) long$
+    class GymException {
+        -long serialVersionUID$
+        +GymException()
+        +GymException(String message)
+        +GymException(String message, Throwable cause)
     }
-    class PasswordUtils {
-        <<utility>>
-        +hash(String plain) String$
-        +verify(String plain, String hash) boolean$
+    class ValidationException {
+        -long serialVersionUID$
+        +ValidationException()
+        +ValidationException(String message)
+        +ValidationException(String message, Throwable cause)
     }
-    class ChartUtils {
-        <<utility>>
-        +weightSeries(List~ProgressRecord~ records) List~Double~$
+    class DatabaseException {
+        -long serialVersionUID$
+        +DatabaseException()
+        +DatabaseException(String message)
+        +DatabaseException(String message, Throwable cause)
     }
-    class SessionContext {
-        -Administrator current
-        +setAdministrator(Administrator admin) void
-        +getAdministrator() Administrator
-        +requireRole(StaffRole role) void
-        +clear() void
-    }
-    class FxUtils {
-        <<utility>>
-        +info(String message) void$
-        +confirm(String message) boolean$
-        +error(String message) void$
-        +switchScene(String fxml) void$
-        +snackbar(String message) void$
-    }
-    GuardService ..> DbConnection : counts references via
+    ValidationException --|> GymException : extends
+    DatabaseException --|> GymException : extends
+    DatabaseConnection ..> DatabaseException : throws
+    SerializationUtil ..> DatabaseException : throws
 ```
 
 ---
 
-## 7. Generalization to external types
+## 7. Generalization to external types and interfaces
 
-The only two generalizations in the model both target Java platform types, so they are collected
-here: `«external»` marks a superclass that is not project code.
+Java platform superclasses (`Application`, `Exception`) and marker interfaces (`Serializable`) are
+shown here with our shipped hierarchy (`«external»` marks JDK or JavaFX platform types).
 
 ```mermaid
 classDiagram
@@ -1395,55 +979,76 @@ classDiagram
         +start(Stage) void
         +main(String[]) void
     }
-    class DaoException {
-        +DaoException(String message, Throwable cause)
+    class GymApp {
+        +start(Stage) void
+        +main(String[]) void
+    }
+    class GymException {
+        +GymException(String message, Throwable cause)
+    }
+    class ValidationException {
+        +ValidationException(String message)
+    }
+    class DatabaseException {
+        +DatabaseException(String message, Throwable cause)
+    }
+    class DomainEntities {
+        <<13 entities in com.gym.model>>
     }
     class Application {
         <<external>>
     }
-    class RuntimeException {
+    class Exception {
+        <<external>>
+    }
+    class Serializable {
         <<external>>
     }
     MainApp --|> Application : extends
-    DaoException --|> RuntimeException : extends
+    GymApp --|> Application : extends
+    GymException --|> Exception : extends
+    ValidationException --|> GymException : extends
+    DatabaseException --|> GymException : extends
+    DomainEntities <|.. Serializable : implements
 ```
 
-**No project class extends another project class**, and that is a decision rather than an omission.
-The three candidate hierarchies were each examined and rejected:
+Design notes on flatness vs inheritance (`DECISIONS.md` 36, 77):
 
 | Candidate | Verdict | Why |
 |---|---|---|
-| 13 `*DaoImpl` → `AbstractJdbcDao<T>` | stay flat | They vary in SQL and entity type, not structure. `DbConnection` already supplies the shared seam, and the 13 explicit `..> DbConnection` edges keep the wiring checkable. |
-| 11 services → `BaseService` | stay flat | `validate` exists on exactly one service, so the base would be empty. |
-| 20 controllers → `BaseController` | stay flat | `initialize()` is the JavaFX `Initializable` convention, differs in every controller, and must remain a public no-arg method for `FXMLLoader`. |
+| 13 concrete DAOs → `AbstractJdbcDao<T>` | stay flat | Each DAO varies in table columns, SQL, and validation rules; flat concrete classes keep JDBC code explicit for COMP 301 students without hidden generic reflection. |
+| 11 services → `BaseService` | retired | Entire service tier retired in `DECISIONS.md` 77 to avoid beginner boilerplate. |
+| 20 controllers → `ScreenController` | interface only | Screens implement `ScreenController` (`getRoot()`) instead of extending a base class; UI layout stays self-contained per screen. |
+| `GymException` hierarchy | 2-level checked hierarchy | Follows Lecture 6 slides 27–29 (`extends Exception`), letting callers handle validation bugs (`ValidationException`) separately from storage I/O failures (`DatabaseException`). |
 
 ---
 
 ## Class descriptions
 
-### Entities
+### Entities (`com.gym.model`)
 
-> **Planned, not built.** These classes do not exist in the repository yet.
+> **Shipped (Milestone 2).** All 13 classes exist, implement `java.io.Serializable` (`serialVersionUID = 1L`),
+> and match §1 field names, types, and constructors.
 
 | Class | Description |
 |---|---|
-| `Customer` | Gym member; fields: id, fullName, phone, email, address, dateOfBirth, gender, emergencyName, emergencyPhone, status (enum), joinDate, trainerId (nullable, assigned trainer); links to membership, trainer, program |
-| `Trainer` | Coach; fields: id, fullName, phone, email, specialization, experienceYears, certifications, hireDate, hourlyRate; bookable slots live in TrainerAvailability |
-| `Membership` | Plan; fields: id, customerId, plan (PlanType: monthly, quarterly, yearly), price, startDate, endDate, status (active, frozen, expired, cancelled), frozenDays |
+| `Customer` | Gym member; fields: id, fullName, phone, email, address, dateOfBirth, gender, emergencyName, emergencyPhone, status (enum), joinDate, trainerId (nullable) |
+| `Trainer` | Coach; fields: id, fullName, phone, email, specialization, experienceYears, certifications, hireDate, hourlyRate |
+| `Membership` | Plan; fields: id, customerId, plan (`PlanType`), price, startDate, endDate, status (`MembershipStatus`), frozenDays |
 | `WorkoutProgram` | Exercise list; fields: id, customerId, creatorTrainerId, name, exercises, version, createdDate |
-| `Session` | Training slot; fields: id, customerId, trainerId, date, startTime, durationMin, status, availabilityId (nullable slot), subscriptionId (nullable), price, cancelReason, sessionNotes |
-| `Equipment` | Standalone inventory item; fields: id, name, category, purchaseDate, condition (enum), status (enum), lastMaintenance. No foreign key to any other entity. |
-| `Attendance` | One check-in/out record per customer per day; fields: id, customerId, date, checkIn, checkOut |
-| `Payment` | fields: id, customerId, membershipId (nullable), subscriptionId (nullable), sessionId (nullable), amount, method, date, receiptNo, voided; exactly one of membership, trainer subscription, session |
-| `ProgressRecord` | fields: id, customerId, date, weightKg, bodyFatPct, measurements, targetWeightKg (nullable), notes |
-| `MedicalProfile` | Blood type, conditions, allergies, medications, injuries, doctor, notes; at most one per customer, created on demand |
-| `Administrator` | Login identity with role (ADMIN/MANAGER/STAFF); may mutate all entities through AdminService |
-| `TrainerSubscription` | Period engagement at a flat trainer-set rate; status uses SubscriptionStatus enum |
-| `TrainerAvailability` | One hourly slot per row: date, startTime, endTime, maxCustomers, status. A trainer may publish several per day. |
+| `Session` | Training slot; fields: id, customerId, trainerId, date, startTime, durationMin, status, availabilityId (nullable), subscriptionId (nullable), price, cancelReason, sessionNotes |
+| `Equipment` | Standalone inventory item; fields: id, name, category, purchaseDate, condition (`EquipmentCondition`), status (`EquipmentStatus`), lastMaintenance |
+| `Attendance` | Check-in/out record; fields: id, customerId, date, checkIn, checkOut |
+| `Payment` | Transaction record; fields: id, customerId, membershipId (nullable), subscriptionId (nullable), sessionId (nullable), amount, method, date, receiptNo, voided, voidReason, voidedDate, previousAmount; includes `forMembership`/`forSubscription`/`forSession` factory methods |
+| `ProgressRecord` | Body metrics record; fields: id, customerId, date, weightKg, bodyFatPct, measurements, targetWeightKg (nullable), notes |
+| `MedicalProfile` | Member health record; bloodType, conditions, allergies, medications, injuries, doctorName, doctorPhone, notes, updatedDate |
+| `Administrator` | Staff/admin account with username, passwordHash, role (`StaffRole`), phone, email, active, createdDate |
+| `TrainerSubscription` | Period trainer engagement; id, customerId, trainerId, startDate, endDate, ratePerPeriod, status (`SubscriptionStatus`) |
+| `TrainerAvailability` | Bookable coach slot; id, trainerId, date, startTime, endTime, maxCustomers, status (`AvailabilityStatus`) |
 
-### Enumerations
+### Enumerations (`com.gym.model`)
 
-> **Planned, not built.**
+> **Shipped (Milestone 2).** All 11 enums exist in `com.gym.model`.
 
 | Enum | Literals |
 |---|---|
@@ -1457,173 +1062,115 @@ The three candidate hierarchies were each examined and rejected:
 | `PaymentMethod` | CASH, CARD, TRANSFER |
 | `EquipmentStatus` | AVAILABLE, IN_MAINTENANCE, RETIRED |
 | `EquipmentCondition` | NEW, GOOD, FAIR, POOR |
+| `ProgressMetric` | WEIGHT_KG, BODY_FAT_PCT |
 
-`FULL`, `EXPIRED` and the two `CANCELLED` literals are the only ones with a non-obvious producer:
-`FULL` is derived from occupancy, `MembershipStatus.EXPIRED` and `SubscriptionStatus.EXPIRED` are
-derived from the end date, and both `CANCELLED` literals are set by an explicit cancel operation.
+### Data access (`com.gym.dao`)
 
-### Data access
-
-> **Planned, not built.** These classes do not exist in the repository yet.
-
-| Class | Description |
+> **Shipped (Milestone 2).** 13 concrete JDBC classes using `DatabaseConnection`, `DatabaseException`, and `ValidationException`.
 
 | Class | Description |
 |---|---|
-| `DbConnection` | Interface for the SQLite connection factory; DAOs depend on this, not on the implementation |
-| `SqliteDbConnection` | Implements `DbConnection`; creates `gym.db` and initializes the schema |
-| `DaoException` | Unchecked wrapper for `SQLException`; translated to friendly messages in the controller via `FxUtils` |
-| `CustomerDao` / `CustomerDaoImpl` | Persist, load and search customers; list by assigned trainer and by status |
-| `TrainerDao` / `TrainerDaoImpl` | Persist and load trainers |
-| `MembershipDao` / `MembershipDaoImpl` | Persist memberships; query expiring ones for reminders; query by status |
-| `WorkoutProgramDao` / `WorkoutProgramDaoImpl` | Persist programs; list per customer; latest version per customer |
-| `SessionDao` / `SessionDaoImpl` | Persist sessions; query by day, customer, customer+day, trainer+day, status; count occupancy of a slot |
-| `EquipmentDao` / `EquipmentDaoImpl` | Persist and list equipment; query by status and condition |
-| `AttendanceDao` / `AttendanceDaoImpl` | Persist check-ins; daily attendance lists; query by customer; one-row-per-day lookup |
-| `PaymentDao` / `PaymentDaoImpl` | Persist payments; revenue sums over date ranges (voided excluded); query by customer, receipt number, method |
-| `ProgressDao` / `ProgressDaoImpl` | Persist metric records; history per customer |
-| `MedicalProfileDao` / `MedicalProfileDaoImpl` | Persist profiles; lookup per customer |
-| `AdminDao` / `AdminDaoImpl` | Persist operators; lookup by username and by role |
-| `TrainerSubscriptionDao` / `TrainerSubscriptionDaoImpl` | Persist engagements; active lookup; query by customer and trainer |
-| `TrainerAvailabilityDao` / `TrainerAvailabilityDaoImpl` | Persist slots, caps, open days; query open slots by trainer and date |
+| `CustomerDao` | `insert`, `update`, `delete`, `findById`, `findAll` on `customers` |
+| `TrainerDao` | `insert`, `update`, `delete`, `findById`, `findAll` on `trainers` |
+| `MembershipDao` | `insert`, `update`, `delete`, `findById`, `findByCustomerId`, `findAll` on `memberships` |
+| `WorkoutProgramDao` | `insert`, `update`, `delete`, `findById`, `findByCustomerId`, `findAll` on `workout_programs` |
+| `SessionDao` | `insert`, `update`, `delete`, `findById`, `findByTrainerId`, `findAll` on `sessions` |
+| `EquipmentDao` | `insert`, `update`, `delete`, `findById`, `findAll` on `equipment` |
+| `AttendanceDao` | `insert`, `update`, `delete`, `findById`, `findByCustomerId`, `findAll` on `attendance` |
+| `PaymentDao` | `insert`, `update`, `delete`, `findById`, `findByReceiptNo`, `findByCustomerId`, `findAll` on `payments` |
+| `ProgressRecordDao` | `insert`, `update`, `delete`, `findById`, `findByCustomerId`, `findAll` on `progress_records` |
+| `MedicalProfileDao` | `insert`, `update`, `delete`, `findById`, `findByCustomerId`, `findAll` on `medical_profiles` |
+| `AdministratorDao` | `insert`, `update`, `delete`, `findById`, `findByUsername`, `findAll` on `administrators` |
+| `TrainerSubscriptionDao` | `insert`, `update`, `delete`, `findById`, `findByCustomerId`, `findAll` on `trainer_subscriptions` |
+| `TrainerAvailabilityDao` | `insert`, `update`, `delete`, `findById`, `findByTrainerId`, `findAll` on `trainer_availability` |
 
-### Services (validation + business rules, no JavaFX, no SQL)
+### Services — Retired
 
-> **Planned, not built.** These classes do not exist in the repository yet.
+> **Retired in Milestone 2 (`DECISIONS.md` 77).** No classes exist in `com.gym.service`. Basic field
+> validation lives in DAO `validate(...)` helpers; workflow orchestration belongs to Milestone 3
+> controller wiring.
 
-| Class | Description |
-|---|---|
-| `CustomerService` | Customer validation, search/filter, status rules |
-| `TrainerService` | Availability slots and caps (publish, close, cap), rates, assign, revoke medical access |
-| `MembershipService` | Sell, renew, freeze, unfreeze, cancel, overdue expiry sweep, expiry reminders |
-| `WorkoutService` | Program building rules, reassignment, per-customer versioning |
-| `SchedulingService` | Booking rules (slot open, cap, trainer and customer conflicts), request/reserve, session state transitions, cancel-with-reason, subscribe and subscription lifecycle; distinguishes subscription (trainer) from membership (gym access) |
-| `EquipmentService` | Add/edit inventory, status and condition transitions, last-maintenance date |
-| `PaymentService` | Recording, link validation, voiding, balances, receipt lookup, revenue by range |
-| `AttendanceService` | Check-in/out rules, eligibility checks, daily report data |
-| `ProgressService` | Metric access for charts |
-| `MedicalProfileService` | Medical CRUD, lookup by customer, assigned-trainer access check |
-| `AdminService` | Auth (rejects inactive accounts), password reset, staff, reassign/adjust/void overrides, admin-only hard deletes; bypasses ownership |
+### UI (`com.gym`, `com.gym.controller`)
 
-### UI (each controller backed by a matching FXML file)
-
-Shipped: all rows below exist as code. The `*Service`/`SessionContext` mentions in the descriptions
-are the planned backend each controller will call — today the controllers hold demo data.
+> **Shipped (UI + Demo Mode).** All 20 controllers, `Screen`, `ScreenController`, `GymApp`, `MainApp`,
+> and `M3Samples` are shipped as Java-built screens. Today they display demo data; Milestone 3 will connect
+> them to the Milestone 2 DAOs.
 
 | Class | Description |
 |---|---|
-| `MainApp` | Shipped. Entry point of the m3fx gallery: code-built showcase, seed picker, command palette, 19-screen FXML viewer; can launch `GymApp` |
-| `GymApp` | Shipped. Entry point of the app: loads `app-shell.fxml`, themes the scene, freeze watchdog, optional splash/login launch gates (`main()` only) |
-| `AppShellController` | Shipped. Hosts the persistent chrome: navigation rail, top app bar, `contentArea` screen swap, command palette, global snackbar |
-| `LaunchGateController` | Shipped, code-built (no FXML). Splash → glass login card → morph into the shell; demo auth (any email + 4+ char password) |
-| `LoginController` | Login screen (shipped, demo auth); will authenticate via `AdminService` and store the user in `SessionContext` |
-| `LoginController` | Login screen: authenticates admin via AdminService, stores user in SessionContext |
-| `DashboardController` | Main dashboard: active members, today's sessions, revenue snapshot, logout |
-| `CustomerListController` | Searchable/filterable customer list |
-| `CustomerProfileController` | Full profile: info, membership, trainer, program, schedule, progress |
-| `TrainerListController` | Trainer roster with availability |
-| `TrainerProfileController` | Trainer details, assigned customers, schedule |
-| `MembershipController` | Plans; sell, renew, freeze, unfreeze, cancel |
-| `WorkoutController` | Program builder and reassignment |
-| `ScheduleController` | Agenda, booking dialog, session request/reservation, subscribe-to-trainer flow |
-| `AvailabilityController` | Trainer calendar, per-slot caps, hourly slot publishing |
-| `EquipmentController` | Inventory list, add/edit, status and condition changes, maintenance date |
-| `AttendanceController` | Check-in/out screen and daily report |
-| `PaymentController` | Payment recording, voiding, receipts, balances |
-| `ProgressController` | Body-metric charts per customer |
-| `MedicalProfileController` | Medical profile view/edit per customer |
-| `StaffController` | Staff management and admin overrides (ADMIN role only) |
+| `MainApp` | Entry point of the m3fx showcase gallery and 19-screen interactive viewer (`gradlew run`) |
+| `GymApp` | Entry point of the standalone desktop shell (`gradlew runGym`): themes scene, freeze watchdog, launch gates |
+| `M3Samples` | Launcher alias forwarding to `MainApp.main` |
+| `Screen` | Enum mapping screen keys (`"dashboard"`, etc.) to `ScreenController` factories |
+| `ScreenController` | Interface returning the Java-built `Parent getRoot()` node |
+| `AppShellController` | Persistent navigation rail, top app bar, workspace host, command palette, global snackbar |
+| `LaunchGateController` | Code-built splash → liquid glass login card → shell morph; demo auth today |
+| `LoginController` | Sign-in screen; demo auth today, Milestone 3 `AdministratorDao` lookup |
+| `DashboardController` | KPI cards, facility summary, agenda snapshot |
+| `CustomerListController` | Searchable/filterable member roster |
+| `CustomerProfileController` | Member profile: details, membership, trainer, program, schedule, progress |
+| `TrainerListController` | Coach roster and workload overview |
+| `TrainerProfileController` | Coach details, assigned roster, certifications, schedule |
+| `MembershipController` | Plan tiers, renewal, freeze/unfreeze, cancellation UI |
+| `WorkoutController` | Routine builder and assignment UI |
+| `ScheduleController` | Weekly agenda, booking dialog, trainer subscription UI |
+| `AvailabilityController` | Trainer calendar and slot management UI |
+| `EquipmentController` | Inventory list, condition/status tracking, 3D viewer |
+| `AttendanceController` | Fast-lane check-in/out UI and peak-hours view |
+| `PaymentController` | POS billing, receipts, voiding UI |
+| `ProgressController` | Body-metric trend charts per member |
+| `MedicalProfileController` | Medical clearance and allergy editor |
+| `StaffController` | Staff roster and admin controls |
+| `LiveWorkoutController` | Live workout HUD telemetry cockpit |
+| `GymFloorMapController` | Facility floorplan and equipment occupancy map |
 
-### Utilities
+### Utilities & Exceptions (`com.gym.util`, `com.gym.exception`)
 
-> **Planned, not built.** These classes do not exist in the repository yet.
+> **Shipped (Milestone 2).** Five classes total, written strictly with COMP 301 Lectures 1–6 patterns.
 
-| Class | Description |
-|---|---|
-| `Validators` | Phone/email/number/date and time-range validation used by services; `«utility»`, all static, entity-free |
-| `DateUtils` | Membership periods, session slot math, date formatting; owns every parse. `«utility»`, static |
-| `PasswordUtils` | PBKDF2 password hashing and verification (Java built-in, no new deps); `«utility»`, static |
-| `ChartUtils` | Progress chart dataset formatting; no DAO access, no money. `«utility»`, static |
-| `GuardService` | Reference counter for the admin delete rule; `«utility»`, static. Reads which tables reference a row and counts them |
-| `DaoException` | Unchecked `SQLException` wrapper extending `RuntimeException`, so it chains via `super(message, cause)`; `«utility»` |
-| `SessionContext` | Holds the logged-in Administrator for role checks; `setAdministrator`/`getAdministrator`/`requireRole`/`clear`. Static mutable state, FX-thread confined |
-| `FxUtils` | Friendly dialogs, alerts, scene switching, snackbar helper; the only JavaFX-aware utility, and it takes plain strings so it never sees `DaoException` |
-
-### Enumerations (all stereotyped `«enumeration»`)
-
-| Enum | Literals | Owner of the behaviour |
+| Class | Package | Description |
 |---|---|---|
-| `CustomerStatus` | ACTIVE, INACTIVE, SUSPENDED | `CustomerService.changeStatus` |
-| `MembershipStatus` | ACTIVE, FROZEN, EXPIRED, CANCELLED | `MembershipService` |
-| `PlanType` | MONTHLY, QUARTERLY, YEARLY | `MembershipService.sell` |
-| `SessionStatus` | REQUESTED, CONFIRMED, COMPLETED, NO_SHOW, CANCELLED | `SchedulingService.canTransition` |
-| `SubscriptionStatus` | ACTIVE, EXPIRED, CANCELLED | `SchedulingService` |
-| `AvailabilityStatus` | OPEN, FULL, CLOSED | `TrainerService` |
-| `StaffRole` | ADMIN, MANAGER, STAFF | `SessionContext.requireRole` |
-| `PaymentMethod` | CASH, CARD, TRANSFER | `PaymentService.record` |
-| `EquipmentStatus` | AVAILABLE, IN_MAINTENANCE, RETIRED | `EquipmentService.changeStatus` |
-| `EquipmentCondition` | NEW, GOOD, FAIR, POOR | `EquipmentService.changeCondition` |
-| `ProgressMetric` | WEIGHT_KG, BODY_FAT_PCT | `ProgressService.series` |
+| `DatabaseConnection` | `com.gym.util` | `«utility»` managing `jdbc:sqlite:gym.db`, custom test/override URLs, and 13-table `initializeDatabase()` DDL |
+| `SerializationUtil` | `com.gym.util` | `«utility»` writing and reading `Serializable` objects/lists via `ObjectOutputStream`/`ObjectInputStream` (`Object` return with caller cast) |
+| `GymException` | `com.gym.exception` | Base checked exception extending `Exception` (`serialVersionUID = 1L`) |
+| `ValidationException` | `com.gym.exception` | Checked exception extending `GymException` for invalid/missing input data |
+| `DatabaseException` | `com.gym.exception` | Checked exception extending `GymException` wrapping SQLite JDBC and file serialization errors |
 
 ---
 
 ## Business rules
 
-Agreed decisions that the diagrams alone cannot express. Every owner implements these identically.
-(Team ownership split lives in `docs/UML_TEAM.md`.)
+Domain rules 1–19 stay intact as the product contract across milestones:
+- **Enforced in Milestone 2 (DAOs + SQLite DDL):** null/blank required fields and invalid amounts/durations throw `ValidationException`; unique constraints (`receipt_no`, `medical_profiles.customer_id`, `administrators.username`) and column types are enforced in SQLite.
+- **Deferred to Milestone 3 (Controller-to-DAO integration):** cross-entity workflow checks (session transitions, slot capacity counting, suspension cascades, role checks, balance sums). With the service tier retired (`DECISIONS.md` 77), note that service/util class names mentioned in the table below (`SchedulingService`, `AdminService`, `GuardService`, `DateUtils`, etc.) represent where those checks will execute in Milestone 3 controllers directly via DAOs.
 
 | # | Rule |
 |---|---|
 | 1 | `bookOpenSlot` = customer books a published `OPEN` slot → `CONFIRMED`. `requestOutsideSlots` = requested outside published slots → `REQUESTED`, trainer confirms. `adminReserve` = admin override that ignores slot rules. Default `durationMin` = 60. |
 | 2 | `SessionStatus.NO_SHOW` exists and matters for trainer statistics; `markNoShow` sets it. |
 | 3 | A customer may have **zero or one** medical profile; it is created on demand, not at registration. |
-| 4 | "Delete" for `Customer`/`Trainer` means set `INACTIVE` / end active records. Hard `delete(int)` is admin-only, lives on `AdminService`, and refuses while references exist — it calls `GuardService.countReferences(table, id)` first and aborts if the result is non-zero, because `schema.sql` uses no FK cascades. |
-| 5 | `checkIn` requires `CustomerStatus.ACTIVE` and a `Membership` with status `ACTIVE` and `endDate >= today`. A second check-in on the same day returns the existing row instead of inserting (`AttendanceDao.findByCustomerAndDay`). |
-| 6 | `PaymentService.balance(int)` = sum of unpaid items: memberships sold without a matching non-voided payment, plus subscription and ad-hoc session prices without payments. Voided payments never count. |
-| 7 | `freeze(int)` stores `frozenDays`; `unfreeze(int)` shifts `endDate` forward by that period and clears the counter. Only an `ACTIVE` membership may be frozen; renewing an `EXPIRED` one extends `endDate`, renewing a `CANCELLED` one is refused. |
-| 8 | A trainer may publish several hourly `TrainerAvailability` slots per day; `findByTrainerAndDate` returns a list. `maxCustomers` is the cap **per slot**. `setDailyCap` applies one value across a day's slots and re-applies after any later publish, so it wins regardless of call order; `setSlotCap` overrides a single slot afterwards. `publishSlot` rejects `startTime >= endTime` via `Validators.validTimeRange`. |
-| 9 | Dates are `yyyy-MM-dd`, `Session` times are `HH:mm`, and `DateUtils` owns parsing so `findByDay` and slot comparisons agree. Controllers never build a date or time string themselves. |
-| 10 | Cancelling a session up to 2h before start is free; later cancellations are still marked `CANCELLED` with the reason recorded. `DateUtils.hoursUntil` backs the check. |
-| 11 | A session covered by a subscription must have `price == 0`; `coveredBySubscription` is the guard and prevents double billing. `TrainerSubscription.trainerId` must equal the customer's assigned `trainerId`, and every session it covers must carry that same `trainerId`. |
-| 12 | Exactly one of `membershipId`, `subscriptionId`, `sessionId` is set on a `Payment`; `validLink` rejects anything else and `record` calls it. `Payment.customerId` must equal the linked object's customer. |
-| 13 | `AvailabilityStatus.FULL` and both `EXPIRED` literals are derived state — recomputed on read, never set by hand. Only `OPEN`/`CLOSED` and the `CANCELLED` literals are set explicitly. |
-| 14 | A `SUSPENDED` customer implies their memberships are frozen. `CustomerService.changeStatus(SUSPENDED)` calls `MembershipService.freezeForSuspended(customerId)`. |
-| 15 | `Customer.trainerId` is the assigned trainer and is authoritative for the trainer's roster and medical access. `TrainerSubscription` records only the paid engagement period. Reassigning a trainer (via `TrainerService.assignCustomer` or `AdminService.reassignTrainer`) therefore moves medical access with it. |
-| 16 | `StaffRole.ADMIN` is required for every `AdminService` operation **and every override operation**, including `SchedulingService.adminReserve`. `authenticate` rejects `active == false` and returns null; `SessionContext.requireRole` gates the UI. |
-| 17 | `bookedCount(availabilityId)` counts `CONFIRMED` sessions only (`SessionDao.countByAvailability(id, CONFIRMED)`), so cancelling or completing a session frees capacity in its slot. |
-| 18 | Only `CONFIRMED` sessions may become `COMPLETED`, `NO_SHOW` or `CANCELLED`; only `REQUESTED` may become `CONFIRMED`. `SchedulingService.canTransition` is the single authority and every transition operation calls it. |
-| 19 | `Attendance` and `Payment` records are never deleted. An error is corrected with `AttendanceService.correctRecord` or, for money, a void plus a new payment — `AdminService.adjustPayment` records `previousAmount` so a receipt can always be reconciled. |
+| 4 | "Delete" for `Customer`/`Trainer` means set `INACTIVE` / end active records. Hard `delete(int)` is admin-only and refuses while references exist. |
+| 5 | `checkIn` requires `CustomerStatus.ACTIVE` and a `Membership` with status `ACTIVE` and `endDate >= today`. A second check-in on the same day reuses/updates the existing row instead of inserting a duplicate. |
+| 6 | Outstanding balance = sum of unpaid items: memberships sold without a matching non-voided payment, plus subscription and ad-hoc session prices without payments. Voided payments never count. |
+| 7 | `freeze` stores `frozenDays`; `unfreeze` shifts `endDate` forward by that period and clears the counter. Only an `ACTIVE` membership may be frozen; renewing an `EXPIRED` one extends `endDate`, renewing a `CANCELLED` one is refused. |
+| 8 | A trainer may publish several hourly `TrainerAvailability` slots per day. `maxCustomers` is the cap **per slot**. Start time must precede end time. |
+| 9 | Dates are `yyyy-MM-dd`, `Session` times are `HH:mm`. ISO-8601 strings compare chronologically in SQLite text columns. |
+| 10 | Cancelling a session up to 2h before start is free; later cancellations are still marked `CANCELLED` with the reason recorded. |
+| 11 | A session covered by a subscription must have `price == 0` to prevent double billing. `TrainerSubscription.trainerId` must match the customer's assigned `trainerId`. |
+| 12 | Exactly one of `membershipId`, `subscriptionId`, `sessionId` should be linked on a `Payment` (`Payment.forMembership` / `forSubscription` / `forSession`). `Payment.customerId` must equal the linked object's customer. |
+| 13 | `AvailabilityStatus.FULL` and both `EXPIRED` literals represent derived state rather than manual flags. Only `OPEN`/`CLOSED` and `CANCELLED` are set explicitly. |
+| 14 | A `SUSPENDED` customer implies their memberships are frozen. |
+| 15 | `Customer.trainerId` is the assigned trainer and is authoritative for the trainer's roster and medical access. `TrainerSubscription` records the paid engagement period. Reassigning a trainer moves medical access with it. |
+| 16 | `StaffRole.ADMIN` is required for admin overrides and staff management. Inactive accounts (`active == false`) cannot log in. |
+| 17 | Slot occupancy counts `CONFIRMED` sessions only, so cancelling or completing a session frees capacity in its slot. |
+| 18 | Only `CONFIRMED` sessions may become `COMPLETED`, `NO_SHOW` or `CANCELLED`; only `REQUESTED` may become `CONFIRMED`. |
+| 19 | `Attendance` and `Payment` records are never hard-deleted in normal workflow. Billing corrections use void fields (`voided`, `voidReason`, `voidedDate`, `previousAmount`) plus a replacement payment so receipts reconcile. |
 
 ---
 
 ## Notes on scope
 
-- **`Equipment` is a standalone aggregate.** Its DAO takes no foreign key and no other entity joins to
-  it, so it is drawn in the main diagram as a declared class with no relationships — the same shape a
-  class has in any static structure diagram when nothing references it. Recording per-item maintenance
-  history would need a new `MaintenanceRecord` entity (deliberately out of scope for T1).
-- **Enumerations are leaf types.** They appear as attribute types and never own relationships, so the
-  diagram shows them declared but unconnected. Each is reachable from at least one service operation
-  (`findByStatus`, `findByCondition`, `findByMethod`, `findByRole`, `activeSubscription`, `series`).
-- **Generalization appears only against Java platform types** — see §7. No project class extends
-  another project class, and the three candidate hierarchies (DAOs, services, controllers) were each
-  examined and rejected there.
-- **The 13 `*DaoImpl` classes repeat the same five CRUD signatures on purpose.** There is no
-  `AbstractJdbcDao<T>` template base. Each impl differs only in its SQL and its entity type, the
-  `DbConnection` interface already supplies the shared seam, and an abstract base would hide the
-  13 explicit `..> DbConnection` edges that make the wiring checkable. `§3` is the **full DAO
-  surface**; a service is expected to use a subset of it.
-- **Association classes were considered and rejected.** `Payment` genuinely models a link — `amount`,
-  `method` and `date` belong to the act of paying rather than to either endpoint — but it XORs three
-  possible targets, and Mermaid has no association-class operator. Converting it would need three
-  dashed links and would read worse than the current `Payment` class plus the XOR note. `Attendance`,
-  `ProgressRecord` and `TrainerAvailability` each carry attributes intrinsic to themselves, so they
-  are plain entities, not link classes. See `DECISIONS.md` 36.
-- **The one place a real association class *would* be justified is medical-access auditing** — a
-  `Trainer` × `MedicalProfile` link with a timestamp recording who viewed whose record. It is out of
-  scope: the current design models the read as a `..>` dependency with the ownership rule enforced
-  inside `MedicalProfileService.getForTrainer`, and there is no audit-log requirement. Adding one
-  would mean a new `MedicalAccessLog` entity, its DAO and its table.
-- **`m3fx` provides the theme and components**, not the domain. `M3Stylesheets.applyTo(scene, theme)`
-  is public API; the overlay layer used by dialogs and snackbars currently lives in
-  `io.m3fx.controls.internal` and is not exported — `MainApp` will need a public entry point for it.
+- **`Equipment` is a standalone aggregate.** It takes no foreign key and no other entity joins to it.
+- **Enumerations are leaf types.** They appear as attribute types in `com.gym.model` and are stored in SQLite via `.name()` and loaded with `.valueOf(...)`.
+- **Simple beginner architecture (`DECISIONS.md` 77).** Following COMP 301 Lectures 1–6, the project keeps 13 flat POJO entities, 13 flat concrete DAOs, `DatabaseConnection`, `SerializationUtil`, and a small checked exception hierarchy — avoiding ORM frameworks, generic base DAOs, multi-tier service passthroughs, streams, or lambdas in the backend.
+- **`m3fx` provides the theme and components.** `M3Stylesheets.applyTo(scene, theme)` and `M3Overlay` are exported public APIs used by the showcase gallery and app shell.

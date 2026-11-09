@@ -1,106 +1,173 @@
-# `util` — Shared Helpers (JavaFX branch)
+# `util` & `exception` — Persistence, Serialization & Exceptions (JavaFX branch)
 
-> ## ⚠️ PLANNED, NOT BUILT
-> **This folder contains no `.java` files — only this README.** The 10 helpers below are the agreed
-> design in [`docs/UML.md`](../../../../docs/UML.md) §6 (each stereotyped `«utility»` there). The
-> shipped app has no database, no session store and no hashing yet — screens answer inline in demo
-> mode. Status: [`docs/COVERAGE.md`](../../../../docs/COVERAGE.md). Do not cite a helper as if it
-> compiles.
+> **Status: SHIPPED (Milestone 2).** Both packages are built using COMP 301 Lectures 1–6 Java:
+> - `com.gym.util.DatabaseConnection`: SQLite connection manager + idempotent 13-table `CREATE TABLE IF NOT EXISTS` DDL.
+> - `com.gym.util.SerializationUtil`: binary `ObjectOutputStream` / `ObjectInputStream` file helper (Lecture 6).
+> - `com.gym.exception`: checked exception hierarchy `GymException` → `ValidationException` / `DatabaseException`.
+>
+> Per `docs/DECISIONS.md` 77, previously planned extra helpers (`DbConnection` interface, `DateUtils`,
+> `Validators`, `PasswordUtils`, `GuardService`, `SessionContext`, `FxUtils`, `ChartUtils`) were removed
+> to match COMP 301 scope. Tracked in [`docs/COVERAGE.md`](../../../../docs/COVERAGE.md).
 
-## 1. Purpose — the problem this layer solves
+## 1. Purpose — the problem these packages solve
 
-`util` will hold the cross-cutting helpers that belong to no single layer. Each one removes a
-decision that would otherwise be made again, differently, in every class that needs it: how to open
-the database, what to throw when JDBC fails, what a valid date or phone number looks like, how to add
-a month to a membership, who is signed in, how a password is hashed, how a message reaches the user,
-how progress numbers become a chart series, and whether a row about to be hard-deleted is still
-referenced. Utilities sit **under** the four layers (`UML.md` §2 draws them as
-`UTIL -. supports .->`): services, DAOs and controllers call them; they call nobody back.
+The backend needs shared database setup, portable binary file backups, and domain exceptions that UI
+callers can catch cleanly without handling low-level `SQLException` or `IOException` details.
 
-**What breaks if this layer never exists.** Without `DbConnection` there is no seam, so each DAO
-would name `SqliteDbConnection` and a database change edits 26 files (`DECISIONS.md` 33). Without
-`DaoException` the checked `SQLException` enters every JavaFX event handler — which cannot declare
-checked exceptions. Without `DateUtils` two classes format dates differently and `findByDay` silently
-returns nothing. Without `PasswordUtils` the fastest thing to write is plaintext in `passwordHash`.
-Without `GuardService` the admin hard delete orphans rows (rule 4). The **shipped demo** already
-feels the smaller cousins of these costs: each screen owns its own date formatting and inline
-validation.
+**What breaks if these packages are missing.** Without `DatabaseConnection`, every DAO would hardcode
+`"jdbc:sqlite:gym.db"` and repeat table creation DDL 13 times (or crash with `no such table`).
+Without `SerializationUtil`, saving snapshots of serialized entities requires repeating stream opening
+and nested `try-catch` logic everywhere. Without `GymException` subclasses, checked `SQLException`,
+`IOException`, and `ClassNotFoundException` types would leak directly into controllers.
 
-**What this layer deliberately does not do.** No business rules — a validator answers "is this a
-date?", never "may this membership be frozen?" (that is `MembershipService`, rule 7). No entity
-definitions — only `Administrator`/`StaffRole` (`SessionContext`) and `ProgressRecord` (`ChartUtils`)
-appear in signatures. No general SQL — only `SqliteDbConnection` (DDL) and `GuardService` (one
-reference count) touch JDBC. No JavaFX except `FxUtils`.
+**What this layer deliberately does not do.** Zero business rules (rule checks belong in DAO
+validation or Milestone 3 workflow logic), zero JavaFX imports (`swing`-branch portable), and no
+extra framework wrappers or generic `<T>` type erasure tricks beyond Lecture 6.
 
 ## 2. What you learn here (OOP concepts)
 
-| Concept | Where it will be practised | Why the project needs it | How to apply it (one line) |
+| Concept | Where in `util/` & `exception/` | Why the project needs it | How to apply it (one line) |
 |---|---|---|---|
-| Static vs instance members | every file except `DbConnection` | A helper has no state, so an instance would be a lie; `SessionContext` is the one place where static *is* state | `static` members; stereotype the class `«utility»` (`DECISIONS.md` 37) |
-| Information hiding | `private` constructor per utility; `private static Administrator current` | A private constructor documents "never instantiated"; a private field is what makes `requireRole` a gate | Close the constructor; expose behaviour |
-| Abstraction + dependency inversion | `DbConnection` interface | DAOs need "a way to get a `Connection`", not "SQLite"; the concrete class is chosen once (`DECISIONS.md` 33) | Type fields as the interface |
-| Exception design | `DaoException` (`DECISIONS.md` 40) | One unchecked wrapper keeps checked SQL out of signatures, cause intact | `extends RuntimeException`, `super(message, cause)`, no fields |
-| Checked → unchecked translation | the DAO `catch` boundary | The UI catches one type; the log keeps the cause | Translate where the JDBC call is |
-| Encapsulated global state | `SessionContext` (`DECISIONS.md` 34) | `FXMLLoader` needs no-arg controllers, so the account cannot be injected | FX-thread confined; clear on logout **and** exit |
-| Immutable/defensive returns | `ChartUtils` series, `List.of()` | Helpers must not corrupt callers or be corrupted | Copy before sorting; empty list, never `null` |
-| Mutable secrets we own | `PasswordUtils` (`char[]`, `PBEKeySpec`) | `String` cannot be wiped | Clear in `finally`; minimal `String` copies |
-| Exception-free validation | `Validators` | A boolean answer leaves the message with the service | Primitive `boolean`; never throw for a normal invalid input |
-| Composition over inheritance | every helper `final` | No project class extends another (`UML.md` §7) | Compose; never extend a utility |
+| Static utility classes + `private` constructor | `DatabaseConnection`, `SerializationUtil` | Helpers have no per-object instance state to allocate (`new SerializationUtil()` blocked) | Make constructor `private`; make helper methods `public static` |
+| JDBC Connection + DDL (`Statement`) | `DatabaseConnection.getConnection()`, `initializeDatabase()` | Centralizes SQLite URL and ensures all 13 tables exist idempotently | Use `DriverManager.getConnection(dbUrl)` and `CREATE TABLE IF NOT EXISTS` |
+| Object Serialization (`Lecture 6`, Slides 37–45) | `SerializationUtil.saveToFile`, `loadFromFile` | Saves and reloads `Serializable` entities/lists in compact binary format | Wrap `FileOutputStream`/`FileInputStream` with `ObjectOutputStream`/`ObjectInputStream` |
+| Casting `Object` (`Lecture 6`, Slide 39) | `Object loadFromFile(String filePath)` | Keeps signature beginner-level without Java generic `<T>` methods | Callers explicitly cast: `(Customer) SerializationUtil.loadFromFile(path)` |
+| Checked Exception Inheritance (`Lecture 6`, Slides 5–16) | `GymException` → `ValidationException`, `DatabaseException` | Lets callers distinguish user input mistakes from SQL/I/O failures | Extend `Exception`, chain causes via `super(message, cause)` |
+| Separate `catch` blocks (`Lecture 6`, Slide 13) | `SerializationUtil.loadFromFile` (`IOException` then `ClassNotFoundException`) | Avoids Java 7+ multi-catch while giving clear error messages per failure cause | Catch specific exceptions sequentially before translating |
 
 ## 3. Design patterns in this layer
 
-| Pattern | Where | Why | What goes wrong if used carelessly |
+| Pattern | Where | Why this pattern | What goes wrong if used carelessly |
 |---|---|---|---|
-| Utility class (static holder) | `Validators`, `DateUtils`, `PasswordUtils`, `ChartUtils`, `GuardService` | Pure functions over parameters; state would have to be invented | It becomes a dumping ground nobody owns |
-| Facade over the UI toolkit | `FxUtils` | Twenty controllers must produce the same dialog with the same M3 look | Business logic creeps in; toolkit types leak into signatures |
-| Interface + single implementation (a seam) | `DbConnection` / `SqliteDbConnection` (`DECISIONS.md` 33) | A database swap or an in-memory test SQLite touches one file | A "temporary" second implementation appears and DAOs import it directly |
-| Strategy — available, not exercised | any `DbConnection` reference | The variation point is real with one strategy today | `if (db instanceof SqliteDbConnection)` |
-| Context object (documented global) | `SessionContext` (`DECISIONS.md` 34) | The one static that *is* state, and why | It grows into a general cache |
-| Singleton / Template Method — rejected | none | Statics need no singleton; the DAO layer stays flat (`DECISIONS.md` 36) | Locking for a lazily made singleton that tests no better |
-| Self-describing credential string | `PasswordUtils.hash` returns one string | One `passwordHash` field, so salt + iterations travel inside it | A fixed iteration count invalidates every stored hash the day it is raised |
+| **Static Utility Class** | `DatabaseConnection`, `SerializationUtil` | Central shared operations with a private constructor so callers cannot instantiate | Turning utilities into dumping grounds for business rules |
+| **Exception Hierarchy & Chaining** | `GymException` → `ValidationException`, `DatabaseException` | Hides SQLite and `java.io` checked details behind clear domain exception types (`super(msg, e)`) | Swallowing `e` (`catch (Exception e) {}`) destroys root cause diagnostics |
+| **Configurable URL hook** | `DatabaseConnection.setDbUrl` / `resetDbUrl` | Allows redirecting SQLite to a separate file URL when needed without editing DAOs | Leaving a temporary path active forgets to `resetDbUrl()` back to `gym.db` |
 
 ## 4. Rules you must follow (and the bug each rule prevents)
 
-1. **`DbConnection` is an interface, and exactly one place names the concrete class** — the bootstrap
-   (`GymApp`/the shell, once the backend lands). Prevents a database change touching 26 files.
-2. **`DaoException` is the only type that crosses the DAO boundary**, cause chained.
-3. **`DateUtils` owns every parse and format** of `yyyy-MM-dd` / `HH:mm` (rule 9) — a second formatter
-   is how `findByDay` starts silently returning nothing.
-4. **`Validators` return `boolean` and never throw**; the service that called them owns the message.
-5. **`SessionContext` is FX-thread confined, cleared on logout and on exit** (`DECISIONS.md` 34) — a
-   surviving session on a shared reception PC is a security bug.
-6. **`PasswordUtils` never stores or logs plaintext**; PBKDF2 with per-hash salt and iterations
-   (`DECISIONS.md` 38) — no new dependency.
-7. **`GuardService` is the single reference counter** behind the admin hard delete (rule 4).
-8. **No business rule, no JavaFX (except `FxUtils`), no static mutable state** beyond
-   `SessionContext`.
+1. **Private constructors on utility classes** (`private DatabaseConnection()`, `private SerializationUtil()`).
+2. **`initializeDatabase()` uses `CREATE TABLE IF NOT EXISTS` for every table** — running twice on
+   an existing `gym.db` never wipes member records.
+3. **Always guard `saveToFile` against `null` objects and missing parent directories** — avoids
+   writing corrupt null streams or failing when a backup subdirectory does not exist yet.
+4. **Keep separate `catch (IOException)` and `catch (ClassNotFoundException)` blocks** in
+   `SerializationUtil.loadFromFile` (Lecture 6 style, easy to read and debug).
+5. **Always pass the underlying exception (`cause`) when wrapping in `DatabaseException`** — keeps the
+   original stack trace intact for logs while showing a clear top-level message.
+6. **Zero JavaFX imports** in `com.gym.util` and `com.gym.exception`.
 
-## 5. How this layer connects to the others
+## 5. The files in `util/` and `exception/`
 
-| Will depend on | Will be used by |
-|---|---|
-| `java.sql`/`javax.crypto` only; no project layer above it | `dao/` (`DbConnection`, `DaoException`), `service/` (`Validators`, `DateUtils`, `GuardService`, `PasswordUtils`), `controller/` (`FxUtils`, `SessionContext`, `ChartUtils`) |
+Write order: **exceptions first** (`GymException` → `ValidationException`, `DatabaseException`), then
+**utilities** (`DatabaseConnection` → `SerializationUtil`).
 
-When the backend starts: `DbConnection` + `DaoException` first (the DAOs need them), then
-`Validators`/`DateUtils` (the services), then `PasswordUtils` + `SessionContext` + `FxUtils` (the
-login and role gates), then `ChartUtils`/`GuardService`. The demo controllers' inline validation and
-feedback code shows what each helper must cover.
+### `com.gym.exception` (3 files)
 
-## 6. Learning exercises
+| File | Inherits | `serialVersionUID` | Constructors | Purpose |
+|---|---|---|---|---|
+| `GymException.java` | `Exception` | `1L` | `()`, `(String)`, `(String, Throwable)` | Common checked base exception for backend failures |
+| `ValidationException.java` | `GymException` | `1L` | `()`, `(String)`, `(String, Throwable)` | Input/domain check failure inside DAO `validate(...)` |
+| `DatabaseException.java` | `GymException` | `1L` | `()`, `(String)`, `(String, Throwable)` | Wraps `SQLException`, `IOException`, and `ClassNotFoundException` |
 
-1. Why is `SessionContext` allowed to be static mutable state while a static `Customer` cache is not?
-   Cite the decision that documents the exception.
-2. Write the `DaoException` class (three lines) and explain why the cause must be chained.
-3. A teammate formats a date with `SimpleDateFormat("dd/MM/yyyy")` inside a controller. Which rule
-   breaks, and what does `findByDay` do afterwards?
-4. Why must `Validators.validEmail` return `boolean` instead of throwing with a nice message?
-5. Design the self-describing hash string for `PasswordUtils.hash`: which fields must it embed and
-   why must the iteration count travel with the hash?
+### `DatabaseConnection.java` — SQLite connection & 13-table schema (owner: Abdelrhman)
 
-## 7. Ownership
+**Status:** done (`191` lines). **Canonical:** `docs/UML.md` §3 & §6.
 
-| Planned file group | Owner |
-|---|---|
-| 10 helpers (per `docs/UML_TEAM.md` split) | per-feature owners (see `docs/UML_TEAM.md`) |
+**What it does:** Holds `DEFAULT_DB_URL = "jdbc:sqlite:gym.db"`, exposes `setDbUrl`, `resetDbUrl`,
+`getDbUrl`, `getConnection()`, and creates all 13 SQLite tables in `initializeDatabase()`
+(`customers`, `trainers`, `memberships`, `workout_programs`, `sessions`, `equipment`, `attendance`,
+`payments`, `progress_records`, `medical_profiles`, `administrators`, `trainer_subscriptions`,
+`trainer_availability`).
 
-Status: **planned, not built** — track in `docs/COVERAGE.md` → "Backend domain services and SQLite DAOs".
+```java
+// Sketch — matches src/main/java/com/gym/util/DatabaseConnection.java
+public static Connection getConnection() throws DatabaseException {
+    try {
+        return DriverManager.getConnection(dbUrl);
+    } catch (SQLException e) {
+        throw new DatabaseException("Could not connect to SQLite database: " + dbUrl, e);
+    }
+}
+```
+
+### `SerializationUtil.java` — Binary object I/O (owner: Abdelrhman)
+
+**Status:** done (`51` lines). **Canonical:** `docs/UML.md` §6, COMP 301 Lecture 6 (Slides 37–45).
+
+**What it does:** Saves any `Serializable` object (or `List`) with `saveToFile(Object, String)` and
+reloads it with `Object loadFromFile(String)`. Caller casts the returned `Object` (no `<T>` generic method).
+
+```java
+// Sketch — caller casts returned Object (Lecture 6 Slide 39)
+SerializationUtil.saveToFile(customer, "backups/customer.ser");
+Customer loaded = (Customer) SerializationUtil.loadFromFile("backups/customer.ser");
+```
+
+## 6. How this layer connects to the others
+
+| Package / Class | Depends on | Used by |
+|---|---|---|
+| `com.gym.exception` | Standard `java.lang.Exception` | `com.gym.util`, `com.gym.dao`, and Milestone 3 controllers |
+| `com.gym.util.DatabaseConnection` | `java.sql.*`, `sqlite-jdbc`, `DatabaseException` | All 13 classes in `com.gym.dao` (and startup initialization in Milestone 3) |
+| `com.gym.util.SerializationUtil` | `java.io.*`, `DatabaseException` | Backup/export utilities and Milestone 3 callers |
+
+## 7. Common mistakes and review checklist
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `NotSerializableException` inside `saveToFile` | Passing a non-`Serializable` object (e.g., an un-serializable JavaFX control) | Save only `com.gym.model` entities or standard `ArrayList` collections of entities |
+| `ClassCastException` after `loadFromFile` | Casting loaded `Object` to the wrong class | Match the cast class with what was written (or check with `instanceof`) |
+| `DatabaseException: Could not connect to SQLite` | Missing `sqlite-jdbc` or `slf4j-api` on runtime classpath | Always launch via `./gradlew run` / `runGym`, or include `sqlite-jdbc` + `slf4j-api` jars on CLI classpath |
+| Schema missing error (`no such table`) | Forgot `DatabaseConnection.initializeDatabase()` | Run `initializeDatabase()` once before executing DAO queries |
+
+Checklist:
+
+- [ ] `DatabaseConnection` and `SerializationUtil` keep `private` constructors.
+- [ ] All 13 table DDLs match field types and column names read by the 13 DAOs.
+- [ ] Both `IOException` and `ClassNotFoundException` are caught cleanly in `loadFromFile`.
+- [ ] `GymException`, `ValidationException`, and `DatabaseException` each preserve `(message, cause)` constructors.
+
+## 8. Learning exercises (with answers)
+
+1. Why does `SerializationUtil.loadFromFile(String filePath)` return `Object` instead of a generic
+   `<T> T`?
+2. Look at `DatabaseConnection.initializeDatabase()`: why must every SQL string say
+   `CREATE TABLE IF NOT EXISTS` instead of `CREATE TABLE`?
+3. Explain why `ValidationException` and `DatabaseException` both extend `GymException` instead of
+   `RuntimeException`.
+4. What two things does `SerializationUtil.saveToFile` check before opening `FileOutputStream`?
+5. Why is `serialVersionUID = 1L` declared on `GymException`, `ValidationException`, and
+   `DatabaseException`?
+
+<details>
+<summary>Answers</summary>
+
+1. COMP 301 Lecture 6 (Slide 39) uses `ObjectInputStream.readObject()` returning `Object` with an
+   explicit caller cast, keeping syntax strictly within Lectures 1–6 beginner scope.
+2. Calling `initializeDatabase()` on every application startup must be harmless when `gym.db` and its
+   tables already exist; plain `CREATE TABLE` would fail on the second launch.
+3. Extending checked `GymException` forces callers to handle input validation vs persistence errors
+   explicitly (`try / catch`), making error paths visible in method signatures (`throws`).
+4. First, it checks `object == null` and throws `DatabaseException`. Second, it checks `parent != null
+   && !parent.exists()` and calls `parent.mkdirs()` so missing directories are created automatically.
+5. `Exception` itself implements `java.io.Serializable`, so declaring `serialVersionUID = 1L` avoids
+   `-Xlint:serial` compiler warnings.
+
+</details>
+
+## 9. Ownership and tasks
+
+| File | Responsibility | Owner | Status |
+|---|---|---|---|
+| `DatabaseConnection.java` | SQLite URL, `getConnection()`, 13-table `CREATE TABLE IF NOT EXISTS` DDL | Abdelrhman | Done (Milestone 2) |
+| `SerializationUtil.java` | Binary object I/O (`saveToFile`, `loadFromFile`) | Abdelrhman | Done (Milestone 2) |
+| `GymException.java`, `ValidationException.java`, `DatabaseException.java` | Checked backend exceptions | Abdelrhman | Done (Milestone 2) |
+
+`swing` branch rule: both `com.gym.util` and `com.gym.exception` are pure Java with zero UI toolkit
+imports and transfer unchanged to the `swing` branch.
+
+### Definition of done for a file in these packages
+
+- [ ] Compiles cleanly under `./gradlew compileJava` with `-Xlint:all` (including `-Xlint:serial`).
+- [ ] Zero JavaFX imports.
+- [ ] Every exception preserves chained root causes (`super(message, e)`).

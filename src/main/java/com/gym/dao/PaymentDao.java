@@ -1,0 +1,234 @@
+package com.gym.dao;
+
+import com.gym.exception.DatabaseException;
+import com.gym.exception.ValidationException;
+import com.gym.model.Payment;
+import com.gym.model.PaymentMethod;
+import com.gym.util.DatabaseConnection;
+
+import java.math.BigDecimal;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.List;
+
+// Database operations for payments
+public class PaymentDao {
+
+    public Payment insert(Payment payment) throws DatabaseException, ValidationException {
+        validate(payment);
+        String sql = "INSERT INTO payments (customer_id, membership_id, subscription_id, session_id, "
+                + "amount, method, payment_date, receipt_no, voided, void_reason, voided_date, previous_amount) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+
+            ps.setInt(1, payment.getCustomerId());
+            if (payment.getMembershipId() != null) {
+                ps.setInt(2, payment.getMembershipId());
+            } else {
+                ps.setNull(2, Types.INTEGER);
+            }
+            if (payment.getSubscriptionId() != null) {
+                ps.setInt(3, payment.getSubscriptionId());
+            } else {
+                ps.setNull(3, Types.INTEGER);
+            }
+            if (payment.getSessionId() != null) {
+                ps.setInt(4, payment.getSessionId());
+            } else {
+                ps.setNull(4, Types.INTEGER);
+            }
+            ps.setBigDecimal(5, payment.getAmount() != null ? payment.getAmount() : BigDecimal.ZERO);
+            ps.setString(6, payment.getMethod() != null ? payment.getMethod().name() : PaymentMethod.CASH.name());
+            ps.setString(7, payment.getDate());
+            ps.setString(8, payment.getReceiptNo());
+            ps.setInt(9, payment.isVoided() ? 1 : 0);
+            ps.setString(10, payment.getVoidReason());
+            ps.setString(11, payment.getVoidedDate());
+            if (payment.getPreviousAmount() != null) {
+                ps.setBigDecimal(12, payment.getPreviousAmount());
+            } else {
+                ps.setNull(12, Types.NUMERIC);
+            }
+
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                if (rs.next()) {
+                    payment.setId(rs.getInt(1));
+                }
+            }
+            return payment;
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to insert payment", e);
+        }
+    }
+
+    public void update(Payment payment) throws DatabaseException, ValidationException {
+        validate(payment);
+        String sql = "UPDATE payments SET customer_id = ?, membership_id = ?, subscription_id = ?, session_id = ?, "
+                + "amount = ?, method = ?, payment_date = ?, receipt_no = ?, voided = ?, "
+                + "void_reason = ?, voided_date = ?, previous_amount = ? WHERE id = ?";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, payment.getCustomerId());
+            if (payment.getMembershipId() != null) {
+                ps.setInt(2, payment.getMembershipId());
+            } else {
+                ps.setNull(2, Types.INTEGER);
+            }
+            if (payment.getSubscriptionId() != null) {
+                ps.setInt(3, payment.getSubscriptionId());
+            } else {
+                ps.setNull(3, Types.INTEGER);
+            }
+            if (payment.getSessionId() != null) {
+                ps.setInt(4, payment.getSessionId());
+            } else {
+                ps.setNull(4, Types.INTEGER);
+            }
+            ps.setBigDecimal(5, payment.getAmount() != null ? payment.getAmount() : BigDecimal.ZERO);
+            ps.setString(6, payment.getMethod() != null ? payment.getMethod().name() : PaymentMethod.CASH.name());
+            ps.setString(7, payment.getDate());
+            ps.setString(8, payment.getReceiptNo());
+            ps.setInt(9, payment.isVoided() ? 1 : 0);
+            ps.setString(10, payment.getVoidReason());
+            ps.setString(11, payment.getVoidedDate());
+            if (payment.getPreviousAmount() != null) {
+                ps.setBigDecimal(12, payment.getPreviousAmount());
+            } else {
+                ps.setNull(12, Types.NUMERIC);
+            }
+            ps.setInt(13, payment.getId());
+
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to update payment with id: " + payment.getId(), e);
+        }
+    }
+
+    public void delete(int id) throws DatabaseException {
+        String sql = "DELETE FROM payments WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to delete payment with id: " + id, e);
+        }
+    }
+
+    public Payment findById(int id) throws DatabaseException {
+        String sql = "SELECT * FROM payments WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return mapRow(rs);
+                }
+            }
+            return null;
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to find payment with id: " + id, e);
+        }
+    }
+
+    public Payment findByReceiptNo(String receiptNo) throws DatabaseException {
+        String sql = "SELECT * FROM payments WHERE receipt_no = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, receiptNo);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return mapRow(rs);
+                }
+            }
+            return null;
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to find payment with receipt: " + receiptNo, e);
+        }
+    }
+
+    public List<Payment> findByCustomerId(int customerId) throws DatabaseException {
+        List<Payment> list = new ArrayList<>();
+        String sql = "SELECT * FROM payments WHERE customer_id = ? ORDER BY payment_date DESC";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, customerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(mapRow(rs));
+                }
+            }
+            return list;
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to load payments for customer: " + customerId, e);
+        }
+    }
+
+    public List<Payment> findAll() throws DatabaseException {
+        List<Payment> list = new ArrayList<>();
+        String sql = "SELECT * FROM payments ORDER BY id ASC";
+        try (Connection conn = DatabaseConnection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            while (rs.next()) {
+                list.add(mapRow(rs));
+            }
+            return list;
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to load payments", e);
+        }
+    }
+
+    private Payment mapRow(ResultSet rs) throws SQLException {
+        Payment p = new Payment();
+        p.setId(rs.getInt("id"));
+        p.setCustomerId(rs.getInt("customer_id"));
+        int memId = rs.getInt("membership_id");
+        p.setMembershipId(rs.wasNull() ? null : memId);
+        int subId = rs.getInt("subscription_id");
+        p.setSubscriptionId(rs.wasNull() ? null : subId);
+        int sesId = rs.getInt("session_id");
+        p.setSessionId(rs.wasNull() ? null : sesId);
+        p.setAmount(rs.getBigDecimal("amount"));
+        String methStr = rs.getString("method");
+        if (methStr != null) {
+            try {
+                p.setMethod(PaymentMethod.valueOf(methStr));
+            } catch (IllegalArgumentException e) {
+                p.setMethod(PaymentMethod.CASH);
+            }
+        }
+        p.setDate(rs.getString("payment_date"));
+        p.setReceiptNo(rs.getString("receipt_no"));
+        p.setVoided(rs.getInt("voided") == 1);
+        p.setVoidReason(rs.getString("void_reason"));
+        p.setVoidedDate(rs.getString("voided_date"));
+        p.setPreviousAmount(rs.getBigDecimal("previous_amount"));
+        return p;
+    }
+
+    private void validate(Payment p) throws ValidationException {
+        if (p == null) {
+            throw new ValidationException("Payment cannot be null");
+        }
+        if (p.getCustomerId() <= 0) {
+            throw new ValidationException("Valid customer id is required");
+        }
+        if (p.getAmount() == null || p.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("Payment amount must be greater than zero");
+        }
+        if (p.getReceiptNo() == null || p.getReceiptNo().trim().isEmpty()) {
+            throw new ValidationException("Receipt number is required");
+        }
+    }
+}

@@ -1,14 +1,21 @@
 # `controller` — JavaFX UI Controllers (JavaFX branch)
 
-> **Signature authority:** `docs/UML.md` §5 owns every name, type and signature in this folder.
-> This README explains *why* each one exists and *how* to write it. Code here is an illustrative
-> sketch, not the specification — if a sketch and `UML.md` disagree, `UML.md` wins.
+> **Status & Architecture Note (Updated for Milestone 2 & Pure-Java Migration):**
+> 1. **Shipped UI Spine:** All **19 UI screen controllers + `AppShellController` + `LaunchGateController`**
+>    exist in this package today! In commit `fb3486d`, the screens were converted from FXML to pure Java
+>    views implementing [`ScreenController`](ScreenController.java) (`getRoot()`) and registered in
+>    [`Screen`](Screen.java) (`javafx.fxml` is no longer a project dependency).
+> 2. **Current Demo Mode vs Milestone 3:** Today's controllers hold hardcoded demo data so every screen
+>    renders cleanly right away. Meanwhile, the Milestone 2 SQLite/serialization backend (`model/`, `dao/`,
+>    `util/`, `exception/`) is shipped on disk. Per [`docs/DECISIONS.md`](../../../../docs/DECISIONS.md) 77,
+>    the planned 11-service tier (`com.gym.service`) was retired and `src/test/` removed: **Milestone 3**
+>    will connect these controllers directly to concrete `com.gym.dao.*` classes instead of `*Service`.
+> 3. **Reading this file:** Sections §1–§8 below still preserve early FXML/`*Service` teaching sketches
+>    for reference; use [`Screen.java`](Screen.java), [`AppShellController.java`](AppShellController.java),
+>    and [`docs/UML.md`](../../../../docs/UML.md) §2 & §5 as the canonical view of shipped names.
 >
-> Two neighbours own the parts this folder does not: `docs/UML.md` §1 owns `MainApp` (it is declared
-> there, and in `../README.md`, because it is the entry point rather than a screen), `docs/UML.md` §2
-> owns the startup and session flow, `docs/UML.md` → "Business rules" owns the 19 rules the screens
-> must not re-implement, and `docs/DECISIONS.md` 34/35 own the two boundary exceptions this folder
-> depends on (`SessionContext`, the m3fx overlay entry point).
+> **Signature authority:** `docs/UML.md` §5 owns controller scope, §2 owns the startup spine, and
+> `docs/DECISIONS.md` 69–77 record shell motion, launch gates, glass chrome, and beginner refactoring.
 
 ## 1. Purpose — the problem this layer solves
 
@@ -577,10 +584,11 @@ read-only, multi-service, list-binding pattern), then the rest grouped by area e
 screens are used day to day — customers, trainers, then the operational screens, then the record
 screens, then administration.
 
-**Status of the whole folder:** every controller below is **planned**. As of this revision
-`src/main/java/com/gym/` contains only `MainApp.java`; this package holds no `.java` file yet
-(`docs/COVERAGE.md` → "Gym Management System"). The FXML files do not exist either — only
-`main.fxml`.
+**Status of the whole folder:** **all 22 Java files in this folder exist and compile** (`Screen.java`,
+`ScreenController.java`, `AppShellController.java`, `LaunchGateController.java`, and 18 screen
+controllers covering all `19` `Screen` enum destinations). All views run on demo data today and will
+be wired to concrete DAOs in **Milestone 3** (`docs/DECISIONS.md` 77; `docs/COVERAGE.md`). Legacy
+`.fxml` files in `src/main/resources/fxml/` are archived reference artifacts and are no longer loaded.
 
 **What `UML.md` does and does not own here.** §5 owns the class names, the **method list** and the
 `..>` service edges. It does **not** own `fx:id` values, `@FXML` field names, private helpers or node
@@ -2886,14 +2894,14 @@ its FXML, its controller, its emptiness/error states and its manual verification
 
 | Task | Owner | Status |
 |------|-------|--------|
-| Skeleton + this README created | Abdelrhman | Done |
-| `MainApp.java` + main window/nav shell + theme/overlay wiring (Week 1–2) | Abdelrhman | To Do |
-| Controllers per owned screens (see table, M3-styled) | Each owner | To Do |
-| Error handling per screen: validation + friendly DB-error dialogs (no stack traces) | Each owner | To Do |
-| Replace the `main.fxml` showcase with the real nav shell | Abdelrhman | To Do |
+| Skeleton + folder README | Abdelrhman | Done |
+| `Screen` + `ScreenController` + `AppShellController` + `LaunchGateController` (Java-built UI spine) | Abdelrhman | Done (UI Demo) |
+| All 18 screen controllers (`LoginController` … `StaffController`) | Each owner | Done (UI Demo — demo data) |
+| Milestone 3 DAO wiring + error handling (`ValidationException` / `DatabaseException`) | Each owner | Planned (Milestone 3) |
 
-Port each finished screen to the `swing`/`view/` branch promptly (Week 5) instead of batching
-everything at the end. That branch has no Java files yet.
+Port each finished screen to the `swing` branch per vertical slice instead of batching everything
+at the end. That branch uses pure Swing views over the same `model/`, `dao/`, `util/`, and
+`exception/` backend classes.
 
 Per-screen ownership, from `docs/UML_TEAM.md` → "Who does what":
 

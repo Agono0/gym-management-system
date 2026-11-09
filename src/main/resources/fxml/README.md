@@ -1,13 +1,16 @@
-# `fxml` — Declarative screens: one file per controller (JavaFX branch)
+# `fxml` — Legacy Declarative Screen Artifacts (Archived Reference)
 
-> **Status note.** All 20 files in this folder exist and load (9 harness test classes verify them
-> headlessly — see `TEST_READY.md`). What the screens do *not* have is a persistence backend: the
-> controllers hold demo data, and sign-in is demo auth. `docs/UML.md` §5 remains the design source
-> for controller behaviour; this README documents the **view**: the real inventory, the load flow,
-> and how to write or extend a file.
+> **Status note (updated after pure-Java screen migration + Milestone 2).**
+> In commit `fb3486d`, all 19 UI screens and `AppShellController` were migrated from `FXMLLoader`
+> XML files to pure Java controllers implementing [`ScreenController`](../../java/com/gym/controller/ScreenController.java)
+> (`javafx.fxml` is no longer a Gradle module dependency, and the former `src/test/` harness was
+> removed per `docs/DECISIONS.md` 77).
+> **Runtime does not load any `.fxml` file in this folder today.** These 20 `.fxml` files stay on
+> disk as visual layout reference artifacts alongside the shipped Java controllers in `com.gym.controller`,
+> and the notes below document how the historical FXML layer was structured.
 >
-> **Not documented here:** what a controller *does*. Behaviour, demo-data conventions and screen
-> wiring live in `src/main/java/com/gym/controller/README.md`.
+> **Not documented here:** current controller behavior (`Screen`, `ScreenController`, demo data,
+> planned Milestone 3 DAO wiring) lives in `src/main/java/com/gym/controller/README.md`.
 
 ## 1. Purpose — the problem this folder solves
 

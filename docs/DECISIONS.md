@@ -544,3 +544,31 @@
     liquidGL-main and liquid-glass-main reference demos (Fluid Viewport with ROV/CAM HUD telemetry,
     3D Tilt Lens, Draggable Lens, Stacked Lenses, Apple Glass Buttons, True Refraction with live optical
     knobs, Frost & Specular Lissajous Lights, Tinted Glass, and Effect Container Spacing Merge).
+
+77. **Beginner Architecture Alignment & Milestone 2 Realization (Nov 2026).**
+    Aligned the backend architecture directly with the COMP 301 course syllabus (*Advanced Programming - Java*,
+    Dr. Nashwa Abdelghaffar, Faculty of Science, Ain Shams University, Lectures 1–6) and `fb3486d`'s
+    pure-Java screen architecture:
+    (1) **100% Preservation of Domain Entities:** Maintained the exact 13 Domain Entities (`Customer`, `Trainer`,
+    `Membership`, `WorkoutProgram`, `Session`, `Equipment`, `Attendance`, `Payment`, `ProgressRecord`, `MedicalProfile`,
+    `Administrator`, `TrainerSubscription`, `TrainerAvailability`) and 11 Enums from `docs/UML.md` §1 without altering
+    fields, data types, accessors, or constructors.
+    (2) **Lecture 6 Object Serialization:** All 13 Domain Entities implement `java.io.Serializable` with
+    `private static final long serialVersionUID = 1L;`. Added `SerializationUtil` with `saveToFile(Object, String)`
+    and non-generic `Object loadFromFile(String)` (caller casts per Lecture 6 slide 39) using
+    `ObjectOutputStream` / `ObjectInputStream` and separate successive `catch` blocks (slide 13).
+    (3) **Checked Exception Hierarchy:** Created custom checked exceptions rooted at `GymException extends Exception`,
+    with `ValidationException` and `DatabaseException` subclasses matching Lecture 6 slides 27–29.
+    (4) **Concrete DAOs over Interface Splitting:** Retired the 13 abstract DAO interfaces and 13 implementations in favor of
+    13 flat, concrete DAO classes (`CustomerDao`, `TrainerDao`, etc.) with standard JDBC CRUD (`insert`, `update`,
+    `delete`, `findById`, `findAll`) executing against SQLite `gym.db` using `PreparedStatement` and `try-with-resources`.
+    (5) **Service Layer Consolidation:** Retired the separate 11-service abstraction layer (`com.gym.service`) and
+    extra planned utility helpers (`DbConnection`, `DaoException`, `GuardService`, etc.) to eliminate redundant
+    multi-tier boilerplate for the beginner team; basic input checks throw `ValidationException` in DAOs, and UI
+    controllers (`Screen`/`ScreenController`) will call DAOs directly in Milestone 3.
+    (6) **Automatic SQLite Bootstrapping:** Restored `org.xerial:sqlite-jdbc:3.45.1.0` in `build.gradle` and added
+    `DatabaseConnection` (`setDbUrl`, `resetDbUrl`, `getDbUrl`, `getConnection`, `initializeDatabase`) with embedded
+    `CREATE TABLE IF NOT EXISTS` DDL bootstrapping all 13 tables in `gym.db`.
+    (7) **App Test Suite Removal:** Removed `src/test/java/com/gym/screen/` (and the earlier FXML harness) per
+    project preference so the gym app contains no test files, while keeping the JUnit 5 suites on `:m3fx-core`
+    and `:m3fx-controls`.

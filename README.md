@@ -17,16 +17,22 @@ toolkit supports it). It is the reference version: features land here first
 and are then ported to the `swing` branch. Target users are gym receptionists,
 trainers, and managers running the app on a Windows/Linux/macOS desktop.
 
-> **Honest scope (read this first).** What runs today is an **interactive M3 demo** of the whole
-> product: 19 FXML screens (including the app shell) behind a live launcher (`GymApp`), driven by
-> demo data held in the controllers and a demo sign-in (any email + a password of 4+ characters —
-> labelled as demo in the UI copy). The persistence backend (`model/`, `dao/`, `service/`, `util/`,
-> SQLite) is **planned, not built**: `docs/UML.md` is its agreed design, and the folder READMEs
-> teach how each layer will be written. [`docs/COVERAGE.md`](docs/COVERAGE.md) tracks exactly what
-> exists.
+> **Honest scope (read this first).** The project sits at **Milestone 2** of a three-milestone track:
+> - **UI demo (`com.gym`, `com.gym.controller`):** All 19 screens + the shell (`GymApp` → `AppShellController`
+>   and the `Screen` enum implementing `ScreenController`) are built in pure Java and run on demo data +
+>   demo sign-in (`SHOW_LAUNCH_GATES`). Legacy `.fxml` files in `src/main/resources/fxml/` are retained as
+>   reference artifacts only (`javafx.fxml` is not part of the build).
+> - **Persistence backend (shipped, COMP 301 Lectures 1–6 beginner scope per `docs/DECISIONS.md` 77):**
+>   `com.gym.model` (13 `Serializable` entities + 11 enums), `com.gym.dao` (13 concrete SQLite DAOs using
+>   `PreparedStatement` + `try-with-resources`), `com.gym.util` (`DatabaseConnection` with embedded
+>   13-table DDL + `SerializationUtil` binary object I/O), and `com.gym.exception` (`GymException` →
+>   `ValidationException` / `DatabaseException`).
+> - **Simplified architecture & next step:** The separate 11-service layer (`com.gym.service`), 13 DAO
+>   interfaces, and app test files under `src/test/` were intentionally retired/removed (`docs/DECISIONS.md` 77).
+>   **Milestone 3** connects the 20 UI controllers directly to `com.gym.dao.*` and `DatabaseConnection`.
+>   [`docs/COVERAGE.md`](docs/COVERAGE.md) tracks everything in detail.
 
-> ⚠️ **AI usage warning:** AI was used to generate the documentation and to
-> assist with GUI design.
+> ⚠️ **AI usage warning:** AI was used to generate documentation and assist with GUI design.
 
 ## 2b. m3fx — reusable Material Design 3 library (this repo builds it)
 
@@ -41,16 +47,17 @@ The `m3fx-core` + `m3fx-controls` Gradle modules are a **separate, reusable M3 l
   `implementation(project(':m3fx-core'))` / `implementation(project(':m3fx-controls'))`, then call
   `M3Stylesheets.applyTo(scene, M3Theme.baseline(false))` once. Full docs: `docs/SPEC_NOTES/`.
 
-Run the component showcase: `gradlew run` — `MainApp` builds the gallery in code (seed picker,
-light/dark, spring playground, 3D/effects pages, plus a "Gym App Screens" viewer that loads the 19
-app FXML screens). `fxml/main.fxml` is the controller-free FXML declaration artifact; no code
-loads it today.
+Run the component showcase: `.\gradlew.bat run` (POSIX: `./gradlew run`) — `MainApp` builds the
+gallery in code (seed picker, light/dark, spring playground, 3D/effects pages, plus a **"Gym App
+Screens (19 Java-Built)"** viewer that instantiates all 19 `Screen` enum entries directly via
+`Screen.create().getRoot()`). `src/main/resources/fxml/main.fxml` is a legacy declaration artifact;
+no code loads it at runtime.
 
 ## 2. Features
 
-These are the product's feature areas. Each has a matching screen in the demo today; the
-business logic behind them (validation, persistence, the 19 business rules in
-[`docs/UML.md`](docs/UML.md)) is the planned backend described by that design.
+These are the product's feature areas. Each has a matching Java-built screen in the demo today and its
+matching entity + SQLite DAO already built in `com.gym.model` and `com.gym.dao`. Wiring the UI controls
+to live queries and enforcing the 19 business rules in [`docs/UML.md`](docs/UML.md) happens in **Milestone 3**.
 
 ### Customer management (owner: Abdelrhman)
 - Register / edit / deactivate customers (personal info, contact, emergency contact).
@@ -117,13 +124,13 @@ business logic behind them (validation, persistence, the 19 business rules in
 
 | Layer      | Technology |
 |------------|------------|
-| Language   | Java 27 (OpenJDK 27) |
-| UI         | JavaFX 21+ (FXML + CSS) |
+| Language   | Java 21 bytecode (`options.release = 21` in `build.gradle`, compiled on OpenJDK 27); strict COMP 301 Lectures 1–6 beginner backend style |
+| UI         | JavaFX 21.0.4 (`javafx.controls` — 19 pure Java screens via `Screen`/`ScreenController`; legacy `.fxml` files are archived only) |
 | Design     | Material Design 3 via the in-repo **m3fx** library (`m3fx-core` + `m3fx-controls`, see §2b); M3 expressive motion where supported |
 | Build      | Gradle 9.8.0 via the committed wrapper (`gradlew`/`gradlew.bat` — never install Gradle by hand; see [`docs/BUILD_AND_RUN.md`](docs/BUILD_AND_RUN.md)) + `application` and JavaFX plugins |
-| Database   | **none yet** — the app runs on demo data in the controllers; SQLite (`gym.db`, JDBC) is the planned backend (`docs/UML.md` §3). The SQLite-JDBC dependency was removed from `build.gradle` until the DAO layer lands |
-| Error handling | demo screens answer with inline field errors, snackbars and dialogs; the service-layer validation + `DaoException` translation standard is planned with the backend (`README` §11) |
-| Testing    | JUnit 5 + the project's own JavaFX harness (`FXMLLoader`-driven, headless): 9 test classes / 59 tests in the app module, 195 tests across the 3 Gradle modules — `./gradlew test` |
+| Database & Binary I/O | **SQLite** via `org.xerial:sqlite-jdbc:3.45.1.0` (`DatabaseConnection.initializeDatabase()` creates all 13 tables in runtime `gym.db`) + `SerializationUtil` (`ObjectOutputStream` / `ObjectInputStream`). UI controllers still use demo data until Milestone 3 wiring |
+| Error handling | Backend checked hierarchy `GymException` → `ValidationException` / `DatabaseException` (`com.gym.exception`); demo screens use inline field errors, snackbars and dialogs (`README` §11) |
+| Testing    | JUnit 5 suites inside `:m3fx-core` and `:m3fx-controls` (`./gradlew test`); the root app has **zero** test files under `src/test/` per `docs/DECISIONS.md` 77 (`:test` reports `NO-SOURCE`) |
 | IDE        | IntelliJ IDEA (project SDK: `openjdk-27`, see `.idea/misc.xml`) |
 
 ## 4. Project Structure / Files Map
@@ -131,29 +138,31 @@ business logic behind them (validation, persistence, the 19 business rules in
 ```
 (build.gradle, settings.gradle — Gradle build)
 src/main/java/com/gym/
-  MainApp.java            m3fx gallery entry point (interactive component showcase)
-  GymApp.java             app entry point: launches app-shell.fxml, freeze watchdog, launch gates
-  M3Samples.java          convenience launcher alias for the gallery (extends MainApp)
-  controller/  20 controllers: AppShellController (nav shell), 18 FXML screen controllers,
-               LaunchGateController (code-built splash + login gate) → README
-  model/       planned — entity POJOs (Customer, Trainer, …); README only
-  dao/         planned — DAO interfaces + SQLite impls; README only
-  service/     planned — business logic + validation per feature; README only
-  util/        planned — DbConnection, validators, date/time + FX helpers; README only
+  MainApp.java       m3fx gallery entry point (interactive component showcase + Screen viewer)
+  GymApp.java        app entry point: Java-built AppShellController, freeze watchdog, launch gates
+  M3Samples.java     convenience launcher alias for the gallery (extends MainApp)
+  controller/        Screen enum, ScreenController interface, AppShellController, LaunchGateController,
+                     and 18 Java-built screen controllers (demo data today; Milestone 3 connects DAOs)
+  model/             shipped — 13 Serializable domain entities + 11 enums (docs/UML.md §1, §1b)
+  dao/               shipped — 13 concrete SQLite DAOs using JDBC PreparedStatement (docs/UML.md §3)
+  util/              shipped — DatabaseConnection (13-table DDL) + SerializationUtil (binary I/O)
+  exception/         shipped — GymException, ValidationException, DatabaseException
+  service/           retired per docs/DECISIONS.md 77 (README only — explains removal)
 src/main/resources/
-  fxml/       20 FXML files: 19 screens (incl. app-shell) + main.fxml (component artifact)
-  theme/      theme applied in code — `M3Stylesheets.applyTo(scene, M3Theme)` (no CSS file)
-  db/         planned — schema.sql + seed data; README only
-  images/     logo, icons, placeholders
-src/test/java/com/gym/fxml/   9 JUnit 5 harness classes, 59 tests (headless JavaFX)
+  fxml/              20 legacy FXML files retained as reference artifacts only (unused at runtime)
+  theme/             theme applied in code — `M3Stylesheets.applyTo(scene, M3Theme)` (no CSS file)
+  db/                `.gitkeep` + README only (the 13-table SQL DDL lives in `DatabaseConnection`)
+  images/            logo/placeholder conventions + glass textures (`images/glass/*`)
+m3fx-core/           reusable M3 color/token library + JUnit 5 tests (`m3fx-core/src/test/`)
+m3fx-controls/       reusable M3 JavaFX controls + JUnit 5 tests (`m3fx-controls/src/test/`)
 ```
 
-Each folder above contains its own `README.md`. The shipped folders' docs teach the real code;
-`model/`, `dao/`, `service/`, `util/` and `db/` are clearly marked **planned, not built** — they
-keep the agreed design from [`docs/UML.md`](docs/UML.md) and the how-to/learning material, without
-pretending the code exists. Start from the [docs index](docs/README.md) or the
-[learning guide](docs/LEARNING_GUIDE.md); [`docs/COVERAGE.md`](docs/COVERAGE.md) tracks what is
-actually built.
+Each folder above contains its own `README.md` matching [`docs/DOCS_STANDARD.md`](docs/DOCS_STANDARD.md).
+Backend folders (`model/`, `dao/`, `util/`, `exception/`) reflect the shipped Milestone 2 code;
+`service/` documents why the 11-service tier was retired (`docs/DECISIONS.md` 77); and `controller/`
+describes the pure-Java screens waiting for Milestone 3 DAO wiring. Start from the
+[docs index](docs/README.md) or the [learning guide](docs/LEARNING_GUIDE.md);
+[`docs/COVERAGE.md`](docs/COVERAGE.md) tracks what is built.
 
 ## 5. Installation & Running
 
@@ -165,22 +174,21 @@ setup and troubleshooting: [`docs/BUILD_AND_RUN.md`](docs/BUILD_AND_RUN.md).
 git clone https://github.com/Agono0/gym-management-system.git
 cd gym-management-system
 git checkout main
-.\gradlew.bat build    # POSIX: ./gradlew build  (also runs the test suites)
+.\gradlew.bat build    # POSIX: ./gradlew build  (compiles all modules + runs m3fx JUnit suites)
 .\gradlew.bat run      # opens the m3fx component gallery (MainApp)
-.\gradlew.bat runGym   # opens the full app shell (GymApp → app-shell.fxml, all 19 screens)
+.\gradlew.bat runGym   # opens the full Java-built app shell (GymApp → AppShellController, all 19 screens)
 ```
 
-There is no database to create: the demo keeps its data in the controllers. When the DAO layer
-lands, `gym.db` will be created in the working directory at first run and git-ignored, and
-`schema.sql` will be the committed half — see the (planned) design in
-[`src/main/resources/db/README.md`](src/main/resources/db/README.md).
+When the backend persistence layer runs (`DatabaseConnection.initializeDatabase()`), SQLite creates
+`gym.db` automatically in the working directory with all 13 tables (`CREATE TABLE IF NOT EXISTS`).
+`gym.db` and `.ser` object files are git-ignored — see [`src/main/resources/db/README.md`](src/main/resources/db/README.md).
 
 ## 6. Timeline (7 weeks)
 
-> Status against this plan: the UI track ran ahead of the original schedule (all 19 screens, the
-> app shell and the m3fx library are built and tested), while the Week-1 backend milestones
-> (SQLite schema v1, `DbConnection`, DAO base) have not started — they are the next track, per
-> [`docs/UML.md`](docs/UML.md) §3–§4 and `PLAN.md` "Current phase".
+> Status against this plan: **Milestone 2 is complete.** The `m3fx` library (`m3fx-core` + `m3fx-controls`),
+> all 19 Java-built screens + shell, and the beginner SQLite/serialization backend (`model/`, `dao/`, `util/`,
+> `exception/`) are shipped on disk. The 11-service layer was retired (`docs/DECISIONS.md` 77).
+> **Milestone 3 (next):** wiring the 20 UI controllers directly to the concrete DAOs and live admin login.
 
 | Week | Focus | Who |
 |------|-------|-----|
@@ -224,11 +232,11 @@ end-to-end (model → DAO → service → UI) in both branches.
 
 ## 9. Known Limitations / Future Improvements
 
-- **No persistence.** Everything the demo shows is demo data in the controllers; nothing survives a
-  restart. The SQLite backend is designed (`docs/UML.md` §3–§4, 19 business rules) but not built.
-- **Demo sign-in.** Any email plus a password of 4+ characters signs in; there are no roles yet.
-  Role-based login (ADMIN/MANAGER/STAFF) is designed (`Administrator`, `AdminService`,
-  `SessionContext.requireRole`) and lands with the backend.
+- **UI still shows controller demo data until Milestone 3.** The SQLite tables, 13 entities, 11 enums,
+  and 13 concrete DAOs (`docs/UML.md` §1, §3) are built in `com.gym.model`, `com.gym.dao`, and
+  `com.gym.util`, but Milestone 3 has not yet wired the 20 controllers to read and write `gym.db`.
+- **Demo sign-in.** Any email plus a password of 4+ characters enters the shell today (`LaunchGateController`);
+  database-backed authentication via `AdministratorDao` lands in Milestone 3.
 - SQLite = single-machine only; multi-branch gyms need a client-server DB later.
 - Offline QR/barcode check-in and payment-gateway integration are out of scope (manual entry only).
 - True M3 expressive animations depend on library support; complex motion may be simplified.
@@ -241,51 +249,44 @@ states which document wins when two disagree.
 
 | Document | What it is |
 |----------|------------|
-| [`docs/UML.md`](docs/UML.md) | **The design** — the shipped runtime spine (§5a), domain model, layer diagrams (backend layers marked planned), every class with its fields/signatures, the 19 business rules |
-| [`docs/LEARNING_GUIDE.md`](docs/LEARNING_GUIDE.md) | Study path, OOP concept index (where each concept is practised), glossary, 40 defence questions |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why each non-obvious choice was made (numbered, append-only) |
-| [`docs/BUILD_AND_RUN.md`](docs/BUILD_AND_RUN.md) | `build.gradle`/`settings.gradle` explained, commands, database paths, IntelliJ setup, troubleshooting |
+| [`docs/UML.md`](docs/UML.md) | **The design** — shipped runtime spine (§2), domain model (§1, §1b — 13 entities, 11 enums), 13 concrete DAOs (§3), retired services note (§4), controllers (§5), utilities & exceptions (§6), 19 business rules |
+| [`docs/LEARNING_GUIDE.md`](docs/LEARNING_GUIDE.md) | Study path anchored to COMP 301 Lectures 1–6, OOP concept index, glossary, 20 defence questions |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why each non-obvious choice was made (77 numbered entries, append-only) |
+| [`docs/BUILD_AND_RUN.md`](docs/BUILD_AND_RUN.md) | `build.gradle`/`settings.gradle` explained, commands, `sqlite-jdbc` + `slf4j-api` classpath note, database paths, troubleshooting |
 | [`docs/DOCS_STANDARD.md`](docs/DOCS_STANDARD.md) | The template and authority rules every folder README follows |
-| [`docs/UML_TEAM.md`](docs/UML_TEAM.md) · [`docs/COVERAGE.md`](docs/COVERAGE.md) | Ownership + status; honest built-vs-planned checklist |
+| [`docs/UML_TEAM.md`](docs/UML_TEAM.md) · [`docs/COVERAGE.md`](docs/COVERAGE.md) | Ownership + Milestone 2/3 status; honest built-vs-planned checklist |
 
 **Folder-level docs** — each one teaches its layer: purpose, the OOP concepts practised there, design
-patterns, the rules and the bug each rule prevents, then one detailed entry per file (why it is shaped
-that way, how to write it step by step, a sketch, how to verify it, common mistakes), a review
-checklist and learning exercises:
+patterns, rules, per-file explanations, review checklist, and learning exercises:
 
 | Folder | Doc | Covers |
 |--------|-----|--------|
-| `com.gym` | [`README`](src/main/java/com/gym/README.md) | Entry points: `MainApp` gallery, `GymApp` shell launcher (+ freeze watchdog, launch gates), `AppShellController`, `LaunchGateController` |
-| `model/` | [`README`](src/main/java/com/gym/model/README.md) | **Planned, not built.** 13 entities + 11 enums: encapsulation, `equals`/`hashCode`, enums with behaviour |
-| `dao/` | [`README`](src/main/java/com/gym/dao/README.md) | **Planned, not built.** 13 interface/impl pairs + JDBC: polymorphism at a seam, prepared statements, exception translation |
-| `service/` | [`README`](src/main/java/com/gym/service/README.md) | **Planned, not built.** 11 services: business rules 1–19, state machine, `BigDecimal` money |
-| `controller/` | [`README`](src/main/java/com/gym/controller/README.md) | The 20 shipped controllers: MVC in JavaFX, FXML binding, event handling, thin-controller discipline, demo-data convention |
-| `util/` | [`README`](src/main/java/com/gym/util/README.md) | **Planned, not built.** 10 helpers: static utilities, `DbConnection` seam, PBKDF2 hashing, ISO date handling, session state |
-| `resources/` | [`README`](src/main/resources/README.md) | Classpath assets, FXML, dynamic theming, images — plus one doc per sub-folder: [`fxml/`](src/main/resources/fxml/README.md) · [`db/`](src/main/resources/db/README.md) (planned schema) · [`theme/`](src/main/resources/theme/README.md) · [`images/`](src/main/resources/images/README.md) |
+| `com.gym` | [`README`](src/main/java/com/gym/README.md) | Entry points: `MainApp` gallery, `GymApp` shell launcher (+ freeze watchdog, launch gates), `Screen`/`ScreenController`, `AppShellController` |
+| `model/` | [`README`](src/main/java/com/gym/model/README.md) | **Shipped (Milestone 2).** 13 `Serializable` entities + 11 enums: encapsulation, `equals`/`hashCode`, enums |
+| `dao/` | [`README`](src/main/java/com/gym/dao/README.md) | **Shipped (Milestone 2).** 13 concrete SQLite DAOs: JDBC `PreparedStatement`, `try-with-resources`, `DatabaseException`, `ValidationException` |
+| `service/` | [`README`](src/main/java/com/gym/service/README.md) | **Retired (`DECISIONS.md` 77).** Explains why the 11-service layer was removed for beginner scope |
+| `controller/` | [`README`](src/main/java/com/gym/controller/README.md) | The 20 Java-built screen/shell controllers + `Screen`/`ScreenController`: event handling, demo data today, Milestone 3 DAO wiring |
+| `util/` + `exception/` | [`README`](src/main/java/com/gym/util/README.md) | **Shipped (Milestone 2).** `DatabaseConnection` (13-table DDL), `SerializationUtil` (binary I/O), and `GymException` → `ValidationException` / `DatabaseException` |
+| `resources/` | [`README`](src/main/resources/README.md) | Classpath assets, archived FXML reference files, runtime theming, images — plus sub-docs: [`fxml/`](src/main/resources/fxml/README.md) · [`db/`](src/main/resources/db/README.md) · [`theme/`](src/main/resources/theme/README.md) · [`images/`](src/main/resources/images/README.md) |
 
 > **New to the project?** Read the root README §1–§4, then
-> [`docs/LEARNING_GUIDE.md`](docs/LEARNING_GUIDE.md) §2 for the 90-minute orientation.
+> [`docs/LEARNING_GUIDE.md`](docs/LEARNING_GUIDE.md) for a walkthrough of the shipped classes.
 
 ## 11. Tests & Error-Handling Standard
 
-**The app does have automated tests.** `src/test/java/com/gym/fxml/` holds 9 JUnit 5 harness
-classes with 59 tests that run the real FXML screens headlessly: integrity/loading of all screens
-(strict by default), `fx:id`/`@FXML` binding contracts, scroll-height bounds, shell flows
-(trainer → profile, customer → profile, dashboard → sign-out, payment and attendance actions), and
-stress loads. Together with the m3fx suites (8 tests in `m3fx-core`, 128 in `m3fx-controls`) that is
-195 tests across 3 modules — `./gradlew test`, all green. `TEST_READY.md` documents the harness.
+**Test scope (`docs/DECISIONS.md` 77).** Following the COMP 301 beginner refactor, there are **zero test
+files in the gym app** (`src/test/` was removed, so the root `:test` Gradle task reports `NO-SOURCE`).
+Automated JUnit 5 suites remain active inside the reusable `m3fx` library modules (`m3fx-core/src/test/`
+and `m3fx-controls/src/test/`) and run on `./gradlew test`. Backend persistence and domain serialization
+are verified via live compilation and manual/Milestone 3 integration.
 
-**Error handling.** The demo screens answer invalid input with inline field errors, snackbars and
-dialogs — no stack traces reach the user. The service-layer standard below is what the planned
-backend adds on top (it is written out in the folder READMEs so the DAOs can follow it from day
-one):
+**Error handling.** Demo screens show inline validation messages and snackbars — no stack traces reach
+the user. In the shipped Milestone 2 backend:
 
-- Validate every user input at the service layer (`Validators`); reject bad
-  data with a clear field-level message before it reaches the DAO.
-- DAOs wrap `SQLException` in `DaoException`; services translate it into a
-  plain-language message for the UI (e.g. "Could not save customer — check
-  the database file and try again.").
-- Controllers show friendly dialogs; stack traces go to the log/console only,
-  never to the user.
-- Before release, each owner walks every screen of their modules and triggers
-  each failure path manually.
+- DAOs call private `validate(...)` helpers before running `INSERT` or `UPDATE` and throw checked
+  `ValidationException` (`extends GymException`) on invalid domain input.
+- DAOs wrap `SQLException` in checked `DatabaseException` (`extends GymException`, with original
+  cause chained). `DatabaseConnection` and `SerializationUtil` likewise throw `DatabaseException` for
+  SQL/IO/class-not-found errors.
+- In Milestone 3, controllers catch `ValidationException` and `DatabaseException`, display `e.getMessage()`
+  through friendly dialogs/snackbars, and print stack traces to stderr/console only.

@@ -113,41 +113,35 @@ Simplified vs Apple (honest scope):
 
 ## Gym Management System (the `com.gym` app)
 
-The graded deliverable, built on m3fx. Current state: **an interactive M3 demo** — `MainApp` hosts
-the comprehensive M3 / M3 Expressive flagship gallery showcase & 19-screen FXML Porting Studio;
-`GymApp` launches the standalone application shell. All data is demo data held in the controllers;
-sign-in is demo auth (any email + 4+ char password, labelled in the UI). **There is no backend** —
-the SQLite-JDBC dependency was removed from `build.gradle`.
+The graded deliverable, built on m3fx. Current state:
+`MainApp` hosts the M3 / M3 Expressive flagship gallery showcase & 19-screen interactive viewer;
+`GymApp` launches the standalone application shell. The backend persistence layer (`model/`, `dao/`,
+`util/`, `exception/`) is built for Milestone 2 with SQLite-JDBC (`gym.db`), automated 13-table DDL,
+and binary object serialization (`SerializationUtil`). The UI controllers build their screens in
+pure Java (`Screen` + `ScreenController`, commit `fb3486d`) using demo data today and are prepared for
+Milestone 3 DAO wiring.
 
-- [x] `MainApp` flagship M3 gallery (interactive 17-page showcase, seed picker, light/dark, 9 variants, contrast, spring playground, 19 FXML screen studio viewer)
-- [x] `GymApp` standalone desktop application launcher for `app-shell.fxml` (`./gradlew runGym`) — theme pre-registered before FXML inflation, maximized-before-show, `Platform.exit()`-only shutdown (no `System.exit`), daemon freeze watchdog (FX-thread CPU > 60% for 4 s dumps stacks to stderr)
-- [x] Launch gates (splash → glass login → morph into the shell) via the code-built `LaunchGateController`, shown only when `main()` sets `SHOW_LAUNCH_GATES=true` so the FXML test contracts stay byte-identical
-- [x] All 19 declarative FXML UI screens implemented in `src/main/resources/fxml/` (`login.fxml`, `app-shell.fxml`, `dashboard.fxml`, `customer-list.fxml`, `customer-profile.fxml`, `medical-profile.fxml`, `progress.fxml`, `trainer-list.fxml`, `trainer-profile.fxml`, `availability.fxml`, `workout.fxml`, `live-workout-hud.fxml`, `schedule.fxml`, `equipment.fxml`, `gym-floor-map.fxml`, `attendance.fxml`, `membership.fxml`, `payment.fxml`, `staff.fxml`)
-- [x] All 20 controllers in `src/main/java/com/gym/controller/` (19 FXML-backed + code-built `LaunchGateController`) with 711 `@FXML` bindings
-- [x] Wired app flows — real user journeys execute across screens, pinned by `WiredFlowSmokeTest`: trainer list → trainer profile with the chosen coach, customer list → full customer profile, dashboard end-shift → back to the login gate, payment record and attendance check-in produce visible answers
-- [x] Responsive Viewport & Side Menu Scrolling: ScrollPane integration for M3NavigationRail and M3NavigationDrawer; nested scroll conflict elimination and computed height bounds across all 19 FXML screens
-- [x] Automated test suites in `src/test/java/com/gym/fxml/` — 9 classes / 59 tests, honest by construction (strict-by-default screen integrity with `-Dtest.lenient=true` as the opt-out, binding-contract tests pin the `fx:id`/`@FXML` counts per screen, every case drives a real `FXMLLoader` load or the real shell); 195 tests total across the 3 modules via `./gradlew test`
+- [x] `MainApp` flagship M3 gallery (interactive showcase, seed picker, light/dark, 9 variants, contrast, spring playground, 19 Java-built screen viewer)
+- [x] `GymApp` standalone desktop application launcher (`./gradlew runGym`) — theme pre-registered, maximized-before-show, `Platform.exit()`-only shutdown, daemon freeze watchdog
+- [x] Launch gates (splash → glass login → morph into the shell) via `LaunchGateController`, shown when `main()` sets `SHOW_LAUNCH_GATES=true`
+- [x] All 19 Java-built UI screens implemented in `src/main/java/com/gym/controller/` and registered in `Screen.java`
+- [x] All 20 controllers in `src/main/java/com/gym/controller/` (`AppShellController` + 18 screen controllers implementing `ScreenController`, plus `LaunchGateController`)
+- [x] Wired UI demo flows across screens (trainer list → trainer profile, customer list → customer profile, dashboard end-shift → login gate, payment record, attendance check-in)
+- [x] Responsive Viewport & Side Menu Scrolling: `ScrollPane` integration for `M3NavigationRail` and `M3NavigationDrawer`
 - [x] Strict compile — `-Xlint:all,-processing` enabled everywhere with no truncation (`-Xmaxwarns 10000`), UTF-8 forced, and the build is warning-clean
-- [x] `fxml/main.fxml` — m3fx component showcase (controller-free FXML declaration artifact; no code loads it today)
-- [ ] Backend domain services and SQLite DAOs (13 entities, 11 enums, 13 DAO pairs, 11 services, 19 business rules) — **planned, not built**; designed in `docs/UML.md` §1–§4
-- [ ] `schema.sql` + seed data — **planned, not built**; designed in `src/main/resources/db/README.md`
+- [x] Backend domain model, concrete SQLite DAOs, and exceptions (`13` `Serializable` entities, `11` enums, `13` concrete DAOs, `DatabaseConnection`, `SerializationUtil`, `GymException`/`ValidationException`/`DatabaseException`) — **shipped (Milestone 2)**; abstract service tier retired for beginner simplicity (`DECISIONS.md` 77)
+- [x] SQLite auto-bootstrapping schema (`DatabaseConnection.initializeDatabase()` DDL creating all 13 tables) + binary serialization (`SerializationUtil.saveToFile` / `loadFromFile`) — **shipped (Milestone 2)**
+- [ ] Milestone 3: Connect the 20 UI controllers from demo data to the shipped SQLite DAOs and `SerializationUtil`
+- Note on tests (`DECISIONS.md` 77): `src/test/` was removed from the gym app root module (`./gradlew test` on root reports `NO-SOURCE`), while the JUnit 5 suites for `:m3fx-core` and `:m3fx-controls` remain active.
 
 ### Documentation for the app
 
-- [x] **Design spec** — `docs/UML.md`: the planned backend (13 entities, 11 enums, 13 DAO pairs, 11
-      services, 10 utilities, the 19 business rules) clearly marked *planned, not built*, plus the
-      shipped runtime spine (`GymApp`, `AppShellController`, `LaunchGateController`) with real
-      signatures in §5a.
-- [x] **Entry-point doc** — `src/main/java/com/gym/README.md`: the real launchers and spine, with
-      the backend composition root marked planned.
-- [x] **Shipped-layer doc** — `src/main/java/com/gym/controller/README.md` + `fxml/README.md`: the
-      20 controllers and 20 FXML files as built (real `fx:id` contracts, demo-data convention).
-- [x] **Planned-layer docs** — `model/`, `dao/`, `service/`, `util/` READMEs and `db/README.md`:
-      each is now an honest *planned, not built* stub that keeps the OOP/pattern teaching and the
-      build rules, and points at `docs/UML.md` instead of describing files that do not exist.
+- [x] **Design spec** — `docs/UML.md`: §1 and §1b (13 domain entities and 11 enums) preserved unchanged; §2, §3, §4, §5, §6, §7, and descriptions updated for Milestone 2 (concrete DAOs, retired service tier, Java-built UI spine).
+- [x] **Entry-point doc** — `src/main/java/com/gym/README.md`: launcher classes and Milestone 2 backend overview.
+- [x] **Controller-layer doc** — `src/main/java/com/gym/controller/README.md`: the 20 Java-built controllers (`Screen` / `ScreenController`).
+- [x] **Backend-layer & resource docs** — `model/`, `dao/`, `service/`, `util/`, `resources/db/`, `resources/fxml/` READMEs synced with Milestone 2 shipped files and `fb3486d`.
 - [x] **Project docs** — `docs/README.md` (index), `docs/DOCS_STANDARD.md`, `docs/LEARNING_GUIDE.md`,
-      `docs/BUILD_AND_RUN.md`, `TEST_READY.md` (harness), `PLAN.md` (current-phase note).
-- [ ] Each owner settles the open details in their folder while writing that folder's code.
+      `docs/BUILD_AND_RUN.md`, `docs/UML_TEAM.md`, root `README.md`, and `PLAN.md` updated (`TEST_READY.md` / `TEST_INFRA.md` marked archived).
 
 Track per-owner progress in `docs/UML_TEAM.md` → "Who does what".
 

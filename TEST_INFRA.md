@@ -1,4 +1,12 @@
-# JavaFX 21 FXML E2E Test Infrastructure
+> ## ⚠️ ARCHIVED — Historical FXML Test Infrastructure (`docs/DECISIONS.md` 77)
+> This document records the retired `src/test/java/com/gym/fxml/` harness architecture. All UI
+> screens now build their node trees in pure Java (`Screen` / `ScreenController`), `javafx.fxml` is
+> no longer in `build.gradle`, and `src/test/` was removed per `docs/DECISIONS.md` 77. JUnit 5 suites
+> remain active in `m3fx-core` and `m3fx-controls` (`./gradlew test`).
+>
+> ---
+
+# JavaFX 21 FXML E2E Test Infrastructure (Historical)
 
 ## 1. Overview & Objective
 This test harness verifies **Requirement R4** for the Gym Management System:

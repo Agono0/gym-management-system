@@ -1,10 +1,18 @@
-# `resources` — Classpath assets: FXML, DB schema, theme, images (JavaFX branch)
+# `resources` — Classpath assets: legacy FXML, DB docs, theme, images (JavaFX branch)
 
-> **Signature authority:** `docs/UML.md` §2 owns the startup flow (`MainApp` → theme → nav shell →
-> overlay layer), §3 owns every DAO query that `schema.sql` must be able to serve, and §5 owns the
-> 16 screens that the FXML files must match. This README explains *why* each asset folder exists and
-> *how* to write what goes in it. XML and SQL here are illustrative sketches, not the specification —
-> if a sketch and `docs/UML.md` disagree, `docs/UML.md` wins.
+> **Status note (updated after pure-Java screen migration + Milestone 2).**
+> - **`fxml/`:** All 20 `.fxml` files remain on disk as reference layout artifacts, **not loaded at
+>   runtime** (screens migrated to pure Java controllers implementing
+>   [`ScreenController`](../java/com/gym/controller/ScreenController.java) in commit `fb3486d`;
+>   `javafx.fxml` was removed from `build.gradle`).
+> - **`db/`:** Contains `.gitkeep` and `README.md` only; the 13 SQLite `CREATE TABLE IF NOT EXISTS`
+>   definitions live inside [`DatabaseConnection.initializeDatabase()`](../java/com/gym/util/DatabaseConnection.java).
+> - **`images/glass/`:** Active textures (`chrome1.png`, `fluid_bg.jpg`, etc.) used by m3fx glass chrome.
+> - **`theme/`:** Holds `.gitkeep` only — M3 themes are generated at runtime by `M3Stylesheets.applyTo(scene, theme)`.
+>
+> **Signature authority:** `docs/UML.md` §2 owns the startup spine (`GymApp` → `AppShellController`
+> → `Screen`), and §3/§6 own the SQLite tables queried by the 13 concrete DAOs.
+> If any historical illustrative XML/SQL sketch below conflicts with `docs/UML.md`, `docs/UML.md` wins.
 
 ## 1. Purpose — the problem this folder solves
 
@@ -104,10 +112,11 @@ There is one real asset today (`fxml/main.fxml`) plus four sub-folders, each wit
 README. Read them in this order: `fxml/` → `db/` → `theme/` → `images/`. The order follows what a
 screen needs first: a layout, then a table behind it, then a palette, then a picture.
 
-### `fxml/` — the declarative screens (owned by [`fxml/README.md`](fxml/README.md))
+### `fxml/` — legacy declarative layout reference (owned by [`fxml/README.md`](fxml/README.md))
 
-**Status:** folder exists; `main.fxml` only.
-**Canonical:** `docs/UML.md` §5 (the 16 controllers, each with a matching FXML file).
+**Status:** 20 legacy `.fxml` files (`app-shell.fxml`, `login.fxml`, …, `main.fxml`) stay on disk
+for reference only; runtime builds all views in pure Java (`Screen` / `ScreenController`).
+**Canonical:** `docs/UML.md` §5 and [`fxml/README.md`](fxml/README.md).
 
 **What it is.** One XML file per screen describing the node tree: containers, controls, their
 `fx:id`s, and which controller method each action calls. Sixteen screens are planned.
@@ -128,10 +137,11 @@ for all 16 files are in [`fxml/README.md`](fxml/README.md) — this README does 
 clearly exists, because FXML has no wildcard imports); a `fx:id` typo (compiles, then NPE); an
 `onAction="#handler"` pointing at a method with parameters (the loader reports a signature mismatch).
 
-### `db/` — the committed schema, not the data (owned by [`db/README.md`](db/README.md))
+### `db/` — SQLite database conventions (owned by [`db/README.md`](db/README.md))
 
-**Status:** folder exists; `schema.sql` is Week 1 foundation work.
-**Canonical:** `docs/UML.md` §3 (the DAO surface each table must serve) and the 13 entities in §1.
+**Status:** folder holds `.gitkeep` and `README.md` only; all 13 `CREATE TABLE IF NOT EXISTS`
+definitions execute from [`DatabaseConnection.initializeDatabase()`](../java/com/gym/util/DatabaseConnection.java).
+**Canonical:** `docs/UML.md` §3 and `DatabaseConnection.java`.
 
 **What it is.** `schema.sql` — the DDL (**Data Definition Language**: `CREATE TABLE`, `CREATE INDEX`)
 that creates the 13 tables — plus the demo seed rows. The database file itself is **not** here.
@@ -193,32 +203,12 @@ licence note per non-original file. Details in [`images/README.md`](images/READM
 **Common mistakes.** A 2 MB PNG for a 24 px icon; a logo whose background colour is baked in, so it
 turns into a light rectangle in dark mode; an asset with no licence record.
 
-### `fxml/main.fxml` — the m3fx showcase (testing only, to be replaced)
+### `fxml/main.fxml` — legacy declaration showcase (unloaded)
 
-**Status:** exists (155 lines), loaded by `MainApp.start` today.
-**Canonical:** `docs/UML.md` §5 (the real shell is one of the 16 screens; `main.fxml` is not).
-
-**What it is.** A two-tab window that renders every component of the external M3 library so the team
-can eyeball them (`M3Tabs`, `M3Button`, `M3SearchBar`, `M3Calendar`, `M3FabMenu`, …). Its own header
-comment says it: *"Testing only: no `fx:controller`, no `onAction` handlers."*
-
-**Why it is designed this way.** The library is being built in this repo, so a gallery is the fastest
-way to see a styling regression. It is deliberately controller-free: adding a controller would tie a
-throwaway file to production code.
-
-**How to write it.** Do not extend it. When the real shell lands, `MainApp` loads the shell FXML, and
-this file either moves to `../java/com/gym/M3Samples.java`'s test window (the git-ignored
-`M3Samples` class already exists for that, see `build.gradle` → `runSamples`) or is deleted.
-Note: `gradlew runSamples` requires that local, git-ignored `M3Samples.java` harness
-(`.gitignore`: `src/main/java/com/gym/M3Samples.java`) and fails on a fresh clone without it —
-it is a developer-side testing tool, never part of the shipped build.
-
-**How to know it is right.** `gradlew run` shows both tabs and nothing throws. It must never be the
-file the shipped app opens.
-
-**Common mistakes.** Adding a `fx:controller` to it and growing screen logic inside; treating its
-`text="..."` literals as the text convention (they are showcase labels, not externalized strings);
-leaving it as the app entry point after the nav shell is written.
+**Status:** exists (154 lines) as an archived XML declaration artifact. Runtime `MainApp` builds the
+component gallery in Java, and `M3Samples.java` (`extends MainApp`, target of `gradlew runSamples`) is
+checked into `src/main/java/com/gym/M3Samples.java`. Neither `MainApp` nor `GymApp` loads XML files
+via `FXMLLoader`.
 
 ### Resource naming conventions
 
@@ -338,40 +328,27 @@ before you rename a file.
 
 | Task | Owner | Status |
 |------|-------|--------|
-| Skeleton + this README created | Abdelrhman | Done |
-| `schema.sql` v1 + seed data (Week 1, foundation) | Abdelrhman | To Do |
-| M3 theme wiring via `M3Stylesheets.applyTo(scene, theme)` + overlay layer install (Week 1, foundation) | Abdelrhman | To Do |
-| Replace the `main.fxml` showcase with the real nav shell | Abdelrhman | To Do |
-| FXML per owned screen (Weeks 2–5) | Each owner | To Do |
+| Skeleton + sub-folder READMEs | Abdelrhman | Done |
+| 13-table SQLite schema (`DatabaseConnection.initializeDatabase()`) | Abdelrhman | Done (Milestone 2) |
+| M3 theme wiring (`M3Stylesheets.applyTo(scene, theme)`) + Java-built `AppShellController` | Abdelrhman | Done |
+| 19 pure-Java UI screens (`Screen` / `ScreenController`) + glass textures (`images/glass/*`) | Each owner | Done (UI Demo) |
 | Logo + placeholder images | Abdel Raouf | To Do |
 
-Rules: no hardcoded colors in FXML/controllers — reference `-md-sys-color-*` theme lookups;
-`gym.db` is git-ignored, only `schema.sql` is committed.
+Rules: no hardcoded colors in UI styles/controllers — reference `-md-sys-color-*` theme lookups;
+`gym.db` and `*.ser` are git-ignored.
 
-Note: the overlay layer for dialogs, snackbars and sheets lives in
-`io.m3fx.controls.internal`, which the `m3fx` module does **not** export. `MainApp` needs a public
-entry point from m3fx before those components can be used — either upstream a public
-`M3Overlay`/`OverlayLayer` facade or reword the shell to use the exported `M3Dialog` API
-(`DECISIONS.md` 35).
-
-**`swing` branch rules.** This folder is the JavaFX half of the project, and the `swing` branch is a
-second UI toolkit over the same domain. Port each finished piece per vertical slice instead of
-batching it at the end, and keep the shared parts identical:
+**`swing` branch rules.** Keep database schema (`DatabaseConnection`) and non-JavaFX assets identical
+across `main` (JavaFX) and `swing`:
 
 | Asset | On the `swing` branch |
 |---|---|
-| `db/schema.sql` | **Reuse unchanged.** The schema is toolkit-independent; both branches must create the same 13 tables or the two apps disagree about the same file. |
-| `db` seed data | Reuse unchanged for the same reason as the schema. |
-| `fxml/` | **Not portable.** Swing has no FXML; the branch rebuilds screens with Swing containers. Keep the naming convention (controller ↔ view) so the two branches stay readable side by side. |
-| `theme/` | **Not portable.** The M3 theme is a JavaFX stylesheet; the Swing branch needs its own look-and-feel, but the *colour role names* should keep matching so screens are described the same way. |
+| `db/` + `DatabaseConnection` schema | **Reuse unchanged.** Same 13 SQLite tables on both branches. |
+| `fxml/` | **Archived on `main`; not used on `swing`.** Keep screen-to-controller naming aligned across branches. |
+| `theme/` | **Not portable.** Swing uses its own look-and-feel while matching colour role intent. |
 | `images/` | Reuse unchanged — image files are toolkit-independent. |
-
-That branch has **no `.java` files yet**, so none of the above has been tested end to end; treat the
-table as the plan, not as history.
 
 **Definition of done for a file in this folder:**
 
-- [ ] The file loads at runtime (FXML opened, SQL executed, image rendered) — not just present on disk.
-- [ ] The matching sub-folder README entry is updated in the same PR.
-- [ ] No hardcoded colour, no business rule, no committed data file, no secret.
-- [ ] Any non-obvious choice is logged in `docs/DECISIONS.md` with a number.
+- [ ] Active asset loads via classpath (`getResourceAsStream("/images/...")`) — not unused orphan files.
+- [ ] The matching sub-folder README entry is updated in the same commit.
+- [ ] No hardcoded colour, no business rule, no committed `gym.db` or `*.ser` data file, no secret.

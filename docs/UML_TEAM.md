@@ -9,9 +9,9 @@
 > | Main domain model | `UML.md` §1 | §2 "Main diagram" |
 > | Layered architecture | `UML.md` §2 | §1 |
 > | Data access | `UML.md` §3 | §4 |
-> | Service layer | `UML.md` §5 | §5 |
+> | Service layer | `UML.md` §4 (Retired — Decision 77) | §5 |
 > | Controllers | `UML.md` §5 | §6 |
-> | Utilities | `UML.md` §6 | — |
+> | Utilities & exceptions | `UML.md` §6 | — |
 >
 > What stays here: **who owns what** (below), and the ownership overlay for slide decks.
 > Agreed business rules moved to `UML.md` → "Business rules" so the submitted document states them.
@@ -120,32 +120,29 @@ add a literal only after telling the other three.
 
 | Layer | Owner | Notes |
 |---|---|---|
-| `util/DbConnection`, `SqliteDbConnection`, `DaoException`, `Validators`, `SessionContext`, `PasswordUtils` | Abdelrhman | Foundation — everyone blocks on this in Week 1 |
-| `util/FxUtils` | Abdelrhman | The only JavaFX-aware utility |
-| `util/DateUtils` | Yousef | Date parsing and slot math |
-| `util/ChartUtils` | Abdel Raouf | Formatting only — no DAO access |
-| `model`, `dao`, `service`, `controller` for each area | see the tables below | One owner per vertical slice |
-| `MainApp` shell + m3fx wiring | Abdelrhman | m3fx itself is already built |
+| `util/DatabaseConnection`, `util/SerializationUtil`, `exception/*` (`GymException`, `ValidationException`, `DatabaseException`) | Abdelrhman | Foundation — SQLite DDL bootstrap, binary serialization, checked exceptions (`Done`) |
+| `model`, `dao` for each area (service tier retired per Decision 77) | see the checklist below | One owner per vertical domain slice (`Done` in Milestone 2) |
+| `controller` (19 Java-built screens + `LaunchGateController`) | see the checklist below | UI screens built in Java (`Screen`/`ScreenController`); wired to DAOs in Milestone 3 |
+| `MainApp` / `GymApp` shells + m3fx wiring | Abdelrhman | m3fx library + both launchers built |
 
 ## Who does what (checklist)
 
 | Area | Owner | Status |
 |---|---|---|
-| Foundation: `DbConnection`, `SqliteDbConnection`, `DaoException`, `Validators`, `FxUtils`, `SessionContext`, `PasswordUtils`, `MainApp` shell, m3fx already built | Abdelrhman | In progress |
-| `Customer` (+ trainerId) + DAO + service + list/profile screens | Abdelrhman | To do |
-| `Trainer`, `Membership` (+ `PlanType` enum) + DAOs + services + screens | Ziad | To do |
-| `WorkoutProgram`, `Session`, `Equipment` + DAOs + services + screens; `DateUtils` | Yousef | To do |
-| `Attendance`, `Payment` (nullable links + voided) + DAOs + services + screens; dashboard; `ChartUtils` | Abdel Raouf | To do |
-| `TrainerSubscription` + availability stack (entities, DAOs, booking rules) | Yousef | To do |
-| `AvailabilityController` screen + admin override methods | Ziad (screen), Abdelrhman (overrides) | To do |
-| `StaffController` screen + admin overrides | Abdelrhman | To do |
-| `MedicalProfile` stack (entity, DAO, service, controller) + trainer medical view support | Abdelrhman (+ Ziad view method) | To do |
-| `Administrator` stack (entity, DAO, `AdminService`, `LoginController`) | Abdelrhman | To do |
-| Session reservation flow (reserve, availability check, cancel with reason) | Yousef (`SchedulingService` + `ScheduleController`) | To do |
+| Foundation: `DatabaseConnection`, `SerializationUtil`, `GymException`/`ValidationException`/`DatabaseException`, `MainApp`/`GymApp` shells, m3fx library | Abdelrhman | Done (Milestone 2) |
+| `Customer` + `MedicalProfile` + `Administrator` + enums + DAOs | Abdelrhman | Done (Milestone 2) |
+| `Trainer` + `Membership` + `PlanType`/`MembershipStatus` enums + DAOs | Ziad | Done (Milestone 2) |
+| `WorkoutProgram`, `Session`, `Equipment`, `TrainerSubscription`, `TrainerAvailability` + enums + DAOs | Yousef | Done (Milestone 2) |
+| `Attendance`, `Payment`, `ProgressRecord` + enums + DAOs | Abdel Raouf | Done (Milestone 2) |
+| 19 Java-built UI screens & 20 controllers (`Screen` registry, demo data) | All (vertical slices) | Done (UI Demo) |
+| Service abstraction layer (`com.gym.service`) | All | Retired (`DECISIONS.md` 77) |
+| Milestone 3: wire UI screens/controllers directly to the concrete DAOs & `SerializationUtil` | Each screen owner | To do (Next milestone) |
 
 Rules: JavaFX-first per vertical slice, then each owner ports their own modules to the `swing`
 branch. Update the Status column as work moves. `swing` currently has **no `.java` files** — the
 port has not started, so the branch README claim "keep entities identical" is still untested.
+Note (`DECISIONS.md` 77): app-level JUnit tests under `src/test/` were removed; unit testing stays
+on the `m3fx-core` and `m3fx-controls` modules.
 
 ## Open business-rule decisions
 

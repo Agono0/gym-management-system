@@ -1,109 +1,200 @@
 # `dao` — Data Access Layer (JavaFX branch)
 
-> ## ⚠️ PLANNED, NOT BUILT
-> **This folder contains no `.java` files — only this README.** The 13 interface/impl pairs below
-> are the agreed design in [`docs/UML.md`](../../../../docs/UML.md) §3 ("§3 is the full DAO
-> surface"), written here so the layer can be built straight from the documentation. There is no
-> SQLite dependency in `build.gradle` today and no `schema.sql` yet — see
-> [`src/main/resources/db/README.md`](../../../resources/db/README.md) (also planned). Status:
-> [`docs/COVERAGE.md`](../../../../docs/COVERAGE.md). Do not cite a DAO as if it compiles.
+> **Status: SHIPPED (Milestone 2).** All **13 concrete Data Access Objects** in `com.gym.dao` are
+> implemented against SQLite (`gym.db`) using standard JDBC `PreparedStatement`, `ResultSet`, and
+> `try-with-resources` (`DatabaseConnection`). Per `docs/DECISIONS.md` 77, separate `XxxDao`
+> interfaces and `*DaoImpl` subclasses were consolidated into 13 direct concrete classes using
+> COMP 301 Lectures 1–6 Java syntax. Tracked in [`docs/COVERAGE.md`](../../../../docs/COVERAGE.md).
 
 ## 1. Purpose — the problem this layer solves
 
-This layer will be the **only** place in the application where SQL is written: 13 interfaces
-(`CustomerDao`, `TrainerDao`, …) and 13 implementations (`CustomerDaoImpl`, …), one pair per entity.
-Each interface is a small contract in domain words — `save`, `findById`, `findByCustomerAndDay`,
-`revenueBetween` — and each implementation is the JDBC code that keeps that promise against one
-SQLite file, `gym.db`. A DAO **maps rows to objects** and decides nothing about the gym.
+`com.gym.dao` is the **only** place in the application where table queries (`INSERT`, `UPDATE`,
+`DELETE`, `SELECT`) are written. Each of the 13 domain entities in `com.gym.model` has one matching
+DAO class (`CustomerDao`, `TrainerDao`, `PaymentDao`, etc.) responsible for:
 
-**Why the seam matters.** Put a customer-list `SELECT` inside `CustomerListController` and four
-things break at once: table names spread across 19 screens; no query is reused; nothing is testable
-without a `Stage`; and concatenated SQL strings invite injection and wrong-row bugs. The DAO layer
-exists so the UI asks a question in domain words and one file answers it. (Today's demo screens hold
-their data in the controllers — this layer is what replaces that.)
+1. Validating required fields before database writes (`validate(...)` throwing `ValidationException`).
+2. Executing parameterized SQL via `DatabaseConnection.getConnection()`.
+3. Mapping `ResultSet` rows back into entity objects inside a private `mapRow(ResultSet)` helper.
+4. Converting checked `SQLException` errors into `DatabaseException`.
 
-**What this layer deliberately does not do.** No business rules (no validation, no state
-transitions, no pricing — that is `service/`). No JavaFX — not one import, which is also what lets
-the `swing` branch reuse every file unchanged. No user-facing messages — a DAO says which operation
-failed and carries the technical cause; the controller formats it. No caching or lazy loading; no
-`begin`/`commit` — one statement per method (a two-statement atomic operation is a `UML.md` §3
-change, not a loop). `findById`/`findAll`/`delete` exist on almost every interface even where no
-screen calls them yet, so a future screen does not reopen the interface (`UML.md` §3, "Notes on
-scope").
+**What breaks if this layer is missing.** Putting SQL queries inside JavaFX screen controllers copies
+column names across 19 UI files, prevents code reuse on the `swing` branch, invites SQL injection if
+strings are concatenated, and leaves open `Connection`/`PreparedStatement` handles that lock `gym.db`
+(`SQLITE_BUSY`).
+
+**What this layer deliberately does not do.** No JavaFX imports (keeps the layer portable to `swing`
+and CLI tools), no dialog popups, no user-facing alerts, and no separate service wrappers
+(`docs/DECISIONS.md` 77). Today's UI screens still show demo data; **Milestone 3** connects the 20 UI
+controllers to these DAOs.
 
 ## 2. What you learn here (OOP concepts)
 
-| Concept | Where it will be practised | Why the project needs it | How to apply it (one line) |
+| Concept | Where in this folder | Why the project needs it | How to apply it (one line) |
 |---|---|---|---|
-| Abstraction / interface as a contract | the 13 `XxxDao` interfaces | A service says *what* it needs stored without knowing *how* | Declare the method on the interface; write SQL only in the impl |
-| Programming to an interface | `CustomerDao dao = new CustomerDaoImpl(conn);` | The database can be replaced or faked without touching 13 services (`DECISIONS.md` 33) | Type fields as `XxxDao`; name the impl once, at the composition root |
-| Runtime polymorphism | every `XxxDaoImpl implements XxxDao` | One service works with SQLite today and a fake tomorrow | Never branch on `instanceof` |
-| Encapsulation | SQL text, `DbConnection` field and `mapRow` all `private` | A leaked `ResultSet` keeps a cursor open; leaked SQL gets edited twice | Expose entities and `List`s only |
-| Single responsibility | one impl per entity | A change to `payments` touches exactly one file | If a method needs a second table, ask whether it belongs elsewhere |
-| Dependency injection by constructor | `public CustomerDaoImpl(DbConnection db)`, `private final` | The DAO does not choose its database | Take collaborators as constructor parameters |
-| Composition over inheritance | 13 impls that each *hold* a `DbConnection` | No `AbstractJdbcDao<T>` (`DECISIONS.md` 36): the shared part is already the seam | Keep the five-CRUD repetition readable per file |
-| Generics, used sparingly | `List<Customer>` returns | Type-safe with no casts; `T findById(int)` would still need a per-entity mapper, so a generic base saves nothing | Return `List<Entity>`; never a raw list, never a live `ResultSet` |
-| Enums as a type system | `status.name()` bound, `valueOf` read | A new literal needs no DAO change | Never store `ordinal()` |
-| Checked vs unchecked exceptions | `SQLException` checked; `DaoException` unchecked (`DECISIONS.md` 40) | A checked `SQLException` would poison every JavaFX handler signature | Catch the checked one at the boundary; throw the unchecked one |
-| Exception translation + chaining | `throw new DaoException("…", e)` | The log needs the technical cause; the UI catches one type | Pass the `SQLException` as the cause |
+| Encapsulation | `private mapRow(ResultSet)` and `private validate(Entity)` inside every DAO | Hides SQL columns, `ResultSet` cursors, and null conversions from callers | Expose domain methods (`insert`, `findById`), keep JDBC internal |
+| Single responsibility | One DAO class per SQLite table (13 classes total) | Editing a `payments` column touches `PaymentDao.java` and nowhere else | Keep each DAO focused on its owning entity table |
+| Resource management (try-with-resources) | Every `Connection`, `PreparedStatement`, `ResultSet` | Closing JDBC handles prevents SQLite file lock (`SQLITE_BUSY`) errors | Always wrap `Connection` and `PreparedStatement` in `try (...)` |
+| Checked exceptions (`Lecture 6`) | `throws DatabaseException, ValidationException` | Forces callers (Milestone 3 UI) to handle bad input and DB failures explicitly | Throw `ValidationException` for invalid fields; wrap `SQLException` in `DatabaseException` |
+| Enum persistence | Storing `status.name()` and reading with `EnumType.valueOf(...)` | Database rows stay human-readable and safe even if enum declaration order changes | Always store enum names (`TEXT`), never ordinal numbers |
+| Boxed nullable FK handling | `ps.setNull(idx, Types.INTEGER)` and `rs.wasNull()` | Distinguishes SQL `NULL` from integer `0` (e.g., `Customer.trainerId`, `Payment.membershipId`) | Check `rs.wasNull()` after `rs.getInt(...)` for nullable `Integer` fields |
 
 ## 3. Design patterns in this layer
 
-| Pattern | Where | Why | What goes wrong if used carelessly |
+| Pattern | Where | Why this pattern | What goes wrong if used carelessly |
 |---|---|---|---|
-| **DAO (Data Access Object)** | the 13 pairs | One class per entity hides one table and gives services domain words | A DAO that validates or prices becomes a second service |
-| **Facade over JDBC** | `Connection` → `PreparedStatement` → `ResultSet` → entity | Callers ask for a `Customer`, not for rows and cursors | Leaking a JDBC type hands the caller a resource to close |
-| **Dependency injection / Strategy at the `DbConnection` seam** | the composition root names `SqliteDbConnection` once | "Which database" is a strategy the impls never see | A DAO that builds its own connection is a second source of truth |
-| **Row Mapper** | one `private Xxx mapRow(ResultSet)` per impl | A new column is one edit in one place | Inline mapping in five methods = five chances to misread a column |
-| **Template Method — rejected** | no `AbstractJdbcDao<T>` (`DECISIONS.md` 36) | A base class would hide the SQL that differs behind a superclass call | The 13 explicit `..> DbConnection` edges stop being checkable |
-| **Singleton — avoided** | no `DbProvider.get()` | A global makes every DAO untestable without a real file | "It is only one connection" |
-| **Repository — not claimed** | the name is DAO on purpose | The contracts are table-shaped CRUD, not aggregates | Calling it a repository sets an expectation it does not meet |
+| **Concrete Data Access Object (DAO)** | All 13 `*Dao` classes | Centralizes SQL, parameter binding, and row mapping per table without over-engineering interfaces (`DECISIONS.md` 77) | Writing SQL directly in UI controllers breaks separation of concerns |
+| **Row Mapper** | `private Xxx mapRow(ResultSet rs)` on every DAO | One edit updates every `find*` method in that file | Duplicating column reads across 4 methods causes column typos |
+| **Fail-fast Input Guard** | `private void validate(Entity)` before `insert`/`update` | Rejects missing/negative required fields with `ValidationException` before opening SQLite | Letting invalid `null` fields hit `NOT NULL` SQL errors produces cryptic constraint failures |
+| **Abstract generic DAO (`AbstractDao<T>`) — rejected** | Kept 13 explicit concrete classes (`DECISIONS.md` 36, 77) | Beginner readability: every student can read their assigned DAO top-to-bottom in plain Java | Generic wrappers introduce casts/lambdas beyond COMP 301 Lectures 1–6 |
 
 ## 4. Rules you must follow (and the bug each rule prevents)
 
-1. **SQL lives here and nowhere else.** A screen or service holding SQL ends the single-place-to-fix
-   guarantee.
-2. **Every statement is a `PreparedStatement` with bound parameters.** A concatenated search box is
-   how one member's query returns another member's rows.
-3. **`DaoException` is the only exception that crosses this boundary**, with the original
-   `SQLException` chained as the cause.
-4. **Return empty lists, never `null`, never a live `ResultSet`.** "None found" is a normal answer.
-5. **Resources are closed with try-with-resources** — a leaked connection locks `gym.db`
-   (`SQLITE_BUSY`).
-6. **One statement per method; no transactions, no cascades.** Hard delete stays admin-only behind
-   `GuardService.countReferences` (rule 4) because the schema uses no `ON DELETE CASCADE`.
-7. **Bind enums as `name()`**, read with `valueOf`.
-8. **No JavaFX import, no static mutable state, no business rule.** The `swing` branch reuses these
-   files only if this holds.
+1. **SQL lives here and inside `DatabaseConnection` only.** Keeps queries maintainable in one layer.
+2. **Always use `PreparedStatement` with `?` placeholders** — prevents SQL injection and quoting bugs
+   in text fields (names, emails, reasons, notes).
+3. **Always close `Connection`, `PreparedStatement`, and `ResultSet` with `try-with-resources`** —
+   prevents locked SQLite files across successive clicks.
+4. **Return empty `List` (`new ArrayList<>()`) on multi-row queries (`findAll`, `findByCustomerId`),
+   never `null`** — avoids `NullPointerException` when looping over empty query results. Single-row
+   queries (`findById`, `findByUsername`, `findByReceiptNo`) return `null` when no row matches.
+5. **Check `rs.wasNull()` for nullable columns** (`Integer` / `Double`) and bind SQL `NULL` via
+   `ps.setNull(..., Types.INTEGER)` or `Types.DECIMAL` / `Types.REAL`.
+6. **Check enum parsing defensively** (store `.name()`, handle `valueOf` cleanly) — prevents database
+   drift from crashing `findAll()`.
+7. **Zero JavaFX imports** — preserves `swing` branch compatibility (`docs/UML.md` §2).
 
-## 5. How this layer connects to the others
+## 5. The files in this folder
 
-| Will depend on | Will be used by |
+All 13 concrete DAOs follow the same consistent COMP 301 structure: `insert`, `update`, `delete`,
+`findById`, `findAll`, domain-specific lookup queries where defined in `docs/UML.md` §3, `mapRow`,
+and `validate`:
+
+| DAO File | Table (`DatabaseConnection`) | Public Methods Beyond `insert`/`update`/`delete`/`findById`/`findAll` | Key `validate(...)` Checks |
+|---|---|---|---|
+| `CustomerDao.java` | `customers` | — | Non-null entity, non-blank `fullName` |
+| `TrainerDao.java` | `trainers` | — | Non-null entity, non-blank `fullName`, valid `hourlyRate` |
+| `AdministratorDao.java` | `administrators` | `findByUsername(String)` | Non-null entity, non-blank `username`, `role` present |
+| `EquipmentDao.java` | `equipment` | — | Non-null entity, non-blank `name` |
+| `MedicalProfileDao.java` | `medical_profiles` | `findByCustomerId(int)` | Non-null entity, valid `customerId` |
+| `MembershipDao.java` | `memberships` | `findByCustomerId(int)` | Non-null entity, valid `customerId`, non-null `plan`/`price` (`>= 0`) |
+| `WorkoutProgramDao.java` | `workout_programs` | `findByCustomerId(int)` | Non-null entity, valid IDs, non-blank `name` |
+| `TrainerAvailabilityDao.java` | `trainer_availability` | `findByTrainerId(int)` | Non-null entity, valid `trainerId`, `maxCustomers > 0` |
+| `TrainerSubscriptionDao.java` | `trainer_subscriptions` | `findByCustomerId(int)` | Non-null entity, valid IDs, non-negative `ratePerPeriod` |
+| `SessionDao.java` | `sessions` | `findByTrainerId(int)` | Non-null entity, valid IDs, positive `durationMin` |
+| `AttendanceDao.java` | `attendance` | `findByCustomerId(int)` | Non-null entity, valid `customerId` |
+| `ProgressRecordDao.java` | `progress_records` | `findByCustomerId(int)` | Non-null entity, valid `customerId`, positive `weightKg` |
+| `PaymentDao.java` | `payments` | `findByReceiptNo(String)`, `findByCustomerId(int)` | Non-null entity, valid `customerId`, `amount > 0`, non-blank `receiptNo`, XOR link check (rule 12) |
+
+### Representative Sketches (authoritative signatures in `docs/UML.md` §3)
+
+#### `CustomerDao.java` — CRUD + nullable `trainerId` mapping
+
+```java
+// Sketch — full implementation in src/main/java/com/gym/dao/CustomerDao.java
+public Customer findById(int id) throws DatabaseException {
+    String sql = "SELECT * FROM customers WHERE id = ?";
+    try (Connection conn = DatabaseConnection.getConnection();
+         PreparedStatement ps = conn.prepareStatement(sql)) {
+        ps.setInt(1, id);
+        try (ResultSet rs = ps.executeQuery()) {
+            if (rs.next()) {
+                return mapRow(rs);
+            }
+        }
+        return null;
+    } catch (SQLException e) {
+        throw new DatabaseException("Failed to find customer with id: " + id, e);
+    }
+}
+```
+
+#### `PaymentDao.java` — `BigDecimal` columns + XOR rule guard
+
+```java
+// Sketch — ensures exactly one of membershipId / subscriptionId / sessionId is set (rule 12)
+private void validate(Payment p) throws ValidationException {
+    if (p == null) throw new ValidationException("Payment cannot be null");
+    if (p.getAmount() == null || p.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+        throw new ValidationException("Payment amount must be greater than zero");
+    }
+    int links = 0;
+    if (p.getMembershipId() != null) links++;
+    if (p.getSubscriptionId() != null) links++;
+    if (p.getSessionId() != null) links++;
+    if (links != 1) {
+        throw new ValidationException("Payment must link to exactly one target (membership, subscription, or session)");
+    }
+}
+```
+
+## 6. How this layer connects to the others
+
+| Layer | Connection |
 |---|---|
-| `model/` (planned) entities; `util/` (planned) `DbConnection` + `DaoException`; `java.sql` only | `service/` (planned) — the only caller of DAO methods; the composition root (`GymApp`/the shell bootstrap) names the impls once |
+| `com.gym.util.DatabaseConnection` | Supplies `getConnection()` and creates all 13 tables via `initializeDatabase()` |
+| `com.gym.model.*` | Supplied as parameters (`insert`, `update`) and returned by queries (`findById`, `findAll`) |
+| `com.gym.exception.*` | Every DAO throws `ValidationException` and `DatabaseException` (never raw `SQLException`) |
+| `com.gym.controller.*` | Today screens use demo data; **Milestone 3** connects controllers directly to these 13 DAOs |
 
-When the backend starts: write `schema.sql` first (`db/README.md`), then one DAO pair per entity in
-`docs/UML.md` §3 order, each interface exactly as §3 declares it. The demo controllers' data paths
-are the acceptance tests' specification for what each screen needs (`src/test/java/com/gym/fxml/`
-pins the screens' behaviour).
+## 7. Common mistakes and review checklist
 
-## 6. Learning exercises
+| Symptom | Cause | Fix |
+|---|---|---|
+| `no such table: customers` | `DatabaseConnection.initializeDatabase()` was never called before querying | Call `DatabaseConnection.initializeDatabase()` once on startup |
+| `trainerId` becomes `0` when SQLite column is `NULL` | Called `rs.getInt("trainer_id")` without checking `rs.wasNull()` | Check `int v = rs.getInt(...); entity.setTrainerId(rs.wasNull() ? null : v);` |
+| `SQLITE_BUSY` / locked database | Left a `Connection` or `ResultSet` open across queries | Wrap every JDBC resource in `try (...)` |
+| String concatenation in `WHERE` clause | Breaks on apostrophes (`O'Connor`) and enables SQL injection | Always use `PreparedStatement` with `?` bindings |
 
-1. Explain to a teammate why the field type is `CustomerDao` but the `new` is `CustomerDaoImpl` —
-   and where the one `new` is allowed to appear.
-2. A reviewer sees `stmt.executeUpdate("… WHERE name = '" + input + "'")`. State the two bugs and the
-   one-line fix.
-3. Why does `DaoException` extend `RuntimeException` instead of `Exception`? What would break in
-   JavaFX event handlers otherwise?
-4. Propose `AbstractJdbcDao<T>` and then argue against it using `DECISIONS.md` 36 — what does the
-   base class hide?
-5. A `delete` must not orphan referenced rows. Which rule and which planned helper enforce it, and
-   why is there no `ON DELETE CASCADE` in the schema?
+Review checklist:
 
-## 7. Ownership
+- [ ] Every SQL query uses `PreparedStatement` with `?` placeholders (except fixed parameterless `findAll`).
+- [ ] Every `Connection`, `PreparedStatement`, and `ResultSet` is inside `try-with-resources`.
+- [ ] `SQLException` is wrapped in `DatabaseException` with cause chained.
+- [ ] `validate(...)` runs before `insert` and `update`, throwing `ValidationException`.
+- [ ] Zero JavaFX imports anywhere in `com.gym.dao`.
 
-| Planned file group | Owner |
-|---|---|
-| 13 `XxxDao` / `XxxDaoImpl` pairs (per `docs/UML_TEAM.md` split) | per-feature owners (see `docs/UML_TEAM.md`) |
+## 8. Learning exercises (with answers)
 
-Status: **planned, not built** — track in `docs/COVERAGE.md` → "Backend domain services and SQLite DAOs".
+1. Why does `CustomerDao.insert` pass `Statement.RETURN_GENERATED_KEYS` when preparing the `INSERT`?
+2. Look at `CustomerDao.mapRow(ResultSet)`: why do we check `rs.wasNull()` after reading
+   `trainer_id`, instead of trusting `rs.getInt("trainer_id")` directly?
+3. Explain the difference between returning `null` in `findById(int)` and returning an empty `List` in
+   `findAll()`.
+4. Why does `PaymentDao.insert` store `BigDecimal` safely without `double` precision errors?
+5. What happens if someone writes `SELECT * FROM customers WHERE id = ` + id using `Statement`
+   instead of `PreparedStatement`?
+
+<details>
+<summary>Answers</summary>
+
+1. SQLite auto-generates the `INTEGER PRIMARY KEY AUTOINCREMENT` `id`; reading `ps.getGeneratedKeys()`
+   lets `insert` set the new `id` back onto the returned entity object.
+2. `ResultSet.getInt` returns primitive `0` when a database column is SQL `NULL`. Checking `rs.wasNull()`
+   preserves `null` in Java's boxed `Integer trainerId`.
+3. `findById` looks up at most one record (`null` = absent), while `findAll` represents zero-to-many rows,
+   where an empty list prevents `NullPointerException` in loops.
+4. `PaymentDao` passes/reads `BigDecimal` values directly (`ps.setBigDecimal` / string representation)
+   and stores them in SQLite `NUMERIC` columns, avoiding IEEE-754 floating-point drift.
+5. Concatenation opens SQL injection risk, fails on unescaped special characters, and skips SQLite
+   prepared statement caching.
+
+</details>
+
+## 9. Ownership and tasks
+
+| DAO Group | Responsibility | Owner | Status |
+|---|---|---|---|
+| `CustomerDao`, `MedicalProfileDao`, `AdministratorDao` | Member, medical & admin persistence | Abdelrhman | Done (Milestone 2) |
+| `TrainerDao`, `TrainerAvailabilityDao`, `MembershipDao` | Coach, availability & plan persistence | Ziad | Done (Milestone 2) |
+| `WorkoutProgramDao`, `SessionDao`, `TrainerSubscriptionDao`, `EquipmentDao` | Program, schedule & gear persistence | Yousef | Done (Milestone 2) |
+| `AttendanceDao`, `PaymentDao`, `ProgressRecordDao` | Attendance, billing & progress persistence | Abdel Raouf | Done (Milestone 2) |
+
+`swing` branch rule: because `com.gym.dao` contains zero JavaFX imports, all 13 DAO classes compile and
+work identically on the `swing` branch.
+
+### Definition of done for a file in this folder
+
+- [ ] Matches `docs/UML.md` §3 signatures and `DatabaseConnection` column names.
+- [ ] Compiles cleanly under `./gradlew compileJava` with `-Xlint:all`.
+- [ ] Uses `try-with-resources`, `PreparedStatement`, and `ValidationException` / `DatabaseException`.
+- [ ] Zero JavaFX imports.

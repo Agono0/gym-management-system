@@ -1,124 +1,237 @@
 # `model` — Entity Classes (JavaFX branch)
 
-> ## ⚠️ PLANNED, NOT BUILT
-> **This folder contains no `.java` files — only this README.** The 13 entities and 11 enums below
-> are the agreed design in [`docs/UML.md`](../../../../docs/UML.md) §1 and §1b, written here so the
-> layer can be built straight from the documentation. The shipped app runs on demo data held in the
-> controllers; nothing in this package exists yet. Status lives in
-> [`docs/COVERAGE.md`](../../../../docs/COVERAGE.md). Do not cite a class in this folder as if it
-> compiles.
+> **Status: SHIPPED (Milestone 2).** All **13 domain entities and 11 enums** from
+> [`docs/UML.md`](../../../../docs/UML.md) §1 and §1b are implemented in `com.gym.model` using
+> COMP 301 Lectures 1–6 syntax. Every entity implements `java.io.Serializable` with
+> `private static final long serialVersionUID = 1L;`. Field names, constructors, factory methods, and
+> enum literals strictly match `docs/UML.md`. Tracked in [`docs/COVERAGE.md`](../../../../docs/COVERAGE.md).
 
 ## 1. Purpose — the problem this layer solves
 
-`model` is the vocabulary of the application. Each of the 13 entity classes will be the Java shape of
-one row in `gym.db`, and the 11 enumerations are the closed sets of values those rows are allowed to
-hold. Nothing else in the project may invent a second copy of a member, a payment or a session: the
-DAO fills these objects from SQLite, the service validates and mutates them, the controller renders
-them and the FXML table columns read them. One type, one definition, five users.
+`model` is the shared vocabulary of the entire application. Each of the 13 entity classes represents
+the Java shape of one table row in SQLite `gym.db`, and the 11 enumerations define the closed sets of
+allowed values (`CustomerStatus`, `MembershipStatus`, `PlanType`, etc.). Because every class
+implements `Serializable`, entities can also be saved to and loaded from binary `.ser` files via
+`SerializationUtil`.
 
-**What breaks if this layer is missing** — currently visible in the shipped demo: the controllers
-pass loose UI values and hard-coded demo rows around. Once the backend lands, `CustomerDao.findById`
-returning a `Map<String, Object>` instead of a `Customer` would mean a column rename breaks the DAO,
-the service and the screen at once, with no compiler help; money summed as `double` stops
-reconciling (`DECISIONS.md` 31); a misspelled status is a valid `String` no `switch` recognises.
+**What breaks if this layer is missing.** Without shared model classes, DAOs and screens would pass
+raw strings or `Object[]` arrays around: renaming a database column or mistyping a status like
+`"ACTVE"` would silently fail at runtime with zero compiler checks, and using `double` for prices
+would introduce floating-point rounding drift (`docs/DECISIONS.md` 31).
 
-**What this layer deliberately does not do.** No SQL or JDBC types, no JavaFX imports, no
-computation. It does not validate — the (planned) services and `Validators` own that, because two
-callers would otherwise validate differently and the DAO must still be able to *load* a row that a
-strict setter would reject. It does not inherit (`UML.md` §7, `DECISIONS.md` 36) and it holds object
-references to other entities **by id only** (`customerId`, `trainerId`, …) — no object graph
-(`DECISIONS.md` 32).
-
-**The entity contract** (applies to all 13 classes when written): a plain POJO — **not a record** —
-with a no-arg constructor (what the DAO needs to build the object row by row) plus a full
-constructor, and `toString`/`equals`/`hashCode` as part of the contract, not extras. `Payment` needs
-`equals` most: rule 12 (the XOR link) is defined over it and tests compare payments.
-
-**Conventions** (`docs/UML.md` header): money is `BigDecimal`, never `double`; boxed
-`Integer`/`Double`/`Boolean` marks a nullable column and primitives mark NOT NULL; dates and times
-are ISO-8601 `String`s (`yyyy-MM-dd`, `HH:mm`) owned by the planned `DateUtils`.
-
-**The 11 enums** (`UML.md` §1b has the full literal lists): `CustomerStatus`, `MembershipStatus`,
-`PlanType`, `SessionStatus` (includes `NO_SHOW`), `SubscriptionStatus`, `AvailabilityStatus`,
-`StaffRole`, `PaymentMethod`, `EquipmentStatus`, `EquipmentCondition`, `ProgressMetric`.
-`AvailabilityStatus.FULL` and both `EXPIRED` literals are **derived** — recomputed on read, never
-set by hand (rule 13). `PlanType` is the only enum with state and behaviour (price + duration).
+**What this layer deliberately does not do.** No SQL, no `Connection`, no JavaFX imports, and no
+validation exceptions. DAOs validate input via `ValidationException` before writing and must still be
+able to construct entities via the no-arg constructor when reading any stored database row. Entities
+do not extend any parent base class (`docs/UML.md` §7, `docs/DECISIONS.md` 36) and reference related
+entities **by ID only** (`customerId`, `trainerId`, etc. — `docs/DECISIONS.md` 32).
 
 ## 2. What you learn here (OOP concepts)
 
-| Concept | Where it will be practised | Why the project needs it | How to apply it (one line) |
+Concepts follow COMP 301 Lectures 1–6 and [`docs/LEARNING_GUIDE.md`](../../../../docs/LEARNING_GUIDE.md):
+
+| Concept | Where in this folder | Why the project needs it | How to apply it (one line) |
 |---|---|---|---|
-| Encapsulation / information hiding | the ~113 `«get/set»` fields of `UML.md` §1 | The public API of a class is a promise; the field is an implementation detail | Private field + public getter/setter; never a public field; never a getter added "just for logging" |
-| Constructor + overloading | `Customer()` **and** `Customer(int, String, …)` on all 13 entities | The no-arg constructor is required by DAO mapping; the full one is convenient for tests | Write both, in that order |
-| Boxed vs primitive (nullability signalling) | `Customer.trainerId` is `Integer`; `Session.durationMin` is `int`; `ProgressRecord.targetWeightKg` is `Double` | The type *is* the schema: boxed = column may be `NULL`, primitive = NOT NULL | Choose the type from the column |
-| Value objects | `PlanType` (price + duration), `BigDecimal` money | A plan's price belongs to the plan; a shared immutable value cannot drift | Enums/`BigDecimal` for values; the 13 entities are mutable and carry identity — not value objects |
-| `equals`/`hashCode` contract | every entity, `Payment` most of all | Two payments for the same receipt must compare equal or rule 12's tests are a coin flip | Write the pair together, keep them consistent |
-| `toString` for debugging | every entity | A failing test must print *which* object, without opening the DB | Identity + the few fields a human needs — never a password hash or a medical list |
-| Enums as types instead of magic strings | all 11 enums replace `String status` / `int role` | `"ADMNI"` compiles; `StaffRole.ADMNI` does not, and the IDE lists legal values | Type the field with the enum; never compare `name()` to a literal |
-| Derived vs stored state | rule 13: `FULL`, both `EXPIRED` | A stored derived value goes stale the moment the row changes | Compute on read; one documented producer |
-| Composition, FK-by-id | `Session.customerId`, `Payment.sessionId` | An object reference would force lazy loading and drag JDBC in (`DECISIONS.md` 32) | Store the id; ask the service for both rows |
-| Inheritance — absent on purpose | no `BaseEntity`/`AbstractEntity` (`UML.md` §7, `DECISIONS.md` 36) | A base class holding `id` would put a field where §1 shows none and hide column ownership | Reject the base class; argue in `DECISIONS.md` first |
-| Exhaustive `switch` over enums | consumers a layer up (`canTransition`, `series`) | A forgotten case becomes a compile error instead of a silent `null` | Use `switch` expressions |
-| `Optional` — deliberately not used | entity getters | The design returns `null` for "not found" everywhere; mixing styles makes every caller guess | Return the boxed type or `null` |
+| Encapsulation (Lectures 2–3) | Private fields + public `get`/`set` accessors on all 13 entities | Controls how data is read and modified cleanly without exposing internal storage | Keep fields `private`; expose `public` getters/setters matching `UML.md` §1 |
+| Constructors & Overloading | No-arg constructor + parameterized constructor on all 13 entities | `mapRow(ResultSet)` uses the no-arg constructor; tests/callers use the full constructor | Always keep both constructors |
+| Serialization (`Lecture 6`) | `implements Serializable` + `serialVersionUID = 1L` | Allows entities to be saved/loaded with `ObjectOutputStream` / `ObjectInputStream` | Keep `serialVersionUID = 1L` across versions |
+| Boxed vs primitive types | `Integer trainerId`, `Double targetWeightKg` vs `int id`, `boolean voided` | Distinguished nullable database columns (`NULL`) from `NOT NULL` columns | Use boxed wrappers only where `UML.md` allows `null` |
+| Exact decimal money (`BigDecimal`) | `Membership.price`, `Trainer.hourlyRate`, `Payment.amount`, `TrainerSubscription.ratePerPeriod` | Avoids binary floating-point rounding error (`0.1 + 0.2 != 0.3`) | Always construct from `String` (`new BigDecimal("45.00")`) |
+| `equals` / `hashCode` / `toString` | Overridden on every entity (`Objects.hash(...)`, readable summaries) | Lets lists/collections compare entities by identity and print useful debug logs | Keep sensitive fields (e.g., `passwordHash`) out of `toString()` |
+| Enums as fixed vocabularies | All 11 enums (`StaffRole`, `PaymentMethod`, `PlanType`, …) | Compile-time safety prevents typos like `"MNTNANCE"` | Store `.name()` in SQLite and parse back with `EnumType.valueOf(...)` |
+| Static factory methods | `Payment.forMembership`, `forSubscription`, `forSession` | Makes mutually exclusive payment links clear at call sites | Call the named factory instead of manually juggling 3 `null`/non-`null` IDs |
 
 ## 3. Design patterns in this layer
 
-| Pattern | Where | Why | What goes wrong if used carelessly |
+| Pattern | Where | Why this pattern | What goes wrong if used carelessly |
 |---|---|---|---|
-| Value Object | `PlanType`, the pure enums, `BigDecimal` amounts | The value is the identity; immutable values cannot drift | Settable static state on an enum turns a shared value into global state |
-| Entity / DTO (plain POJO) | all 13 classes | One dumb carrier the DAO and service both trust; behaviour here would move rules into a layer that must load any row | A validating setter stops the DAO loading legacy rows |
-| Factory Method | `Payment.forMembership(...)` / `forSubscription(...)` / `forSession(...)` | Three adjacent `Integer` links swap silently; a named factory states intent | A factory that also validates hides the XOR bug rule 12 exists to catch |
-| State machine over an enum | `SessionStatus`; transitions enforced by `SchedulingService.canTransition` (rule 18) | Legal states are a closed set; *transitions* are a business rule | A controller moving `NO_SHOW` → `CONFIRMED` via a setter — the enum will not stop it |
-| Nullable FK with an XOR link | `Payment.membershipId`/`subscriptionId`/`sessionId` (boxed) | `null` says "no link"; an `int` needs a colliding sentinel | Treating `0` as "no link" |
-| Template Method / inheritance, Singleton, Builder | **all rejected** (`UML.md` §7, `DECISIONS.md` 36) | The design is 13 flat POJOs with a fixed constructor list | Each alternative hides the field list that must match `UML.md` §1 |
+| Entity / POJO | All 13 domain classes | Plain carriers shared between `dao/`, `SerializationUtil`, and (Milestone 3) `controller/` | Adding JDBC or JavaFX imports breaks `Swing` portability |
+| Static Factory Method | `Payment.forMembership(...)`, `forSubscription(...)`, `forSession(...)` | Prevents accidentally swapping adjacent `Integer` link parameters (`rule 12`) | Putting business rules inside factories duplicates validation |
+| Nullable Foreign Key (XOR) | `Payment.membershipId` / `subscriptionId` / `sessionId` | `null` cleanly means "not linked"; primitive `0` collides with IDs | Treating `0` as "unset" causes invalid joins |
+| Inheritance — deliberately absent | No `BaseEntity` parent (`docs/UML.md` §7, `DECISIONS.md` 36) | Keeps every class self-contained with its exact fields visible in one file | A base `id` field hides column ownership and adds unnecessary hierarchy |
 
 ## 4. Rules you must follow (and the bug each rule prevents)
 
-1. **Fields are `private`; accessors are `public`.** A public field makes the memory layout the API.
-2. **Plain classes, never records** — the DAO needs the no-arg constructor and setters.
-3. **Money is `BigDecimal` from the `String` constructor** (`new BigDecimal("45.00")`), compared with
-   `compareTo` — `double` drifts and `equals` compares scale too (`DECISIONS.md` 31).
-4. **Dates/times are ISO-8601 `String`s; no `java.time` type appears here** — one parser
-   (`DateUtils`) means `findByDay` and slot comparisons agree (rule 9).
-5. **Boxed = nullable, primitive = NOT NULL** — an `int` FK forces a sentinel `0` that collides with
-   real ids.
-6. **`equals`/`hashCode` written together** and consistent.
-7. **Reference other entities by id only** — no object graph, no collections in entities.
-8. **No JavaFX import, no static mutable state** in this package — ever.
+1. **Fields are `private`; getters/setters are `public`.** Prevents external callers from mutating
+   data unpredictably without passing through accessors.
+2. **Keep both no-arg and full constructors** matching `docs/UML.md` §1 — DAOs construct blank
+   objects inside `mapRow(ResultSet)` using setters.
+3. **Keep `implements Serializable` and `serialVersionUID = 1L`** — prevents `InvalidClassException`
+   when reloading saved `.ser` snapshots via `SerializationUtil`.
+4. **Money uses `BigDecimal` (never `double`)** constructed from `String` (`DECISIONS.md` 31) —
+   prevents penny drift in membership fees, session rates, and payment totals.
+5. **Dates and times are ISO-8601 `String`s** (`yyyy-MM-dd`, `HH:mm`) — keeps SQLite `TEXT` storage
+   simple and lexicographically sortable without extra parser classes.
+6. **Boxed wrappers (`Integer`, `Double`) mark nullable fields; primitives mark non-null fields** —
+   prevents sentinel `0` values masquerading as valid foreign keys or benchmarks.
+7. **Reference other entities by ID only** (`customerId`, `trainerId`) — avoids loading whole object
+   graphs inside simple POJOs (`DECISIONS.md` 32).
+8. **Zero JavaFX imports, zero SQL imports** — guarantees backend portability (`swing` branch and CLI tools).
 
-Full field-by-field authority: `docs/UML.md` §1 (fields) and §1b (descriptions). When you write the
-first entity, keep `UML.md` and this folder in sync in the same commit.
+## 5. The files in this folder
 
-## 5. How this layer connects to the others
+Write / dependency order: **enums first** (zero dependencies), then **core actors** (`Customer`, `Trainer`,
+`Administrator`, `Equipment`), then **dependent entities** (`MedicalProfile`, `Membership`, `WorkoutProgram`,
+`TrainerAvailability`, `TrainerSubscription`, `Session`, `Attendance`, `ProgressRecord`, `Payment`).
 
-| Will be used by | How |
+### Enumerations (11 files)
+
+| File | Literals (`docs/UML.md` §1b) | Purpose |
+|---|---|---|
+| `CustomerStatus.java` | `ACTIVE`, `INACTIVE`, `SUSPENDED` | Tracks member standing |
+| `MembershipStatus.java` | `ACTIVE`, `FROZEN`, `EXPIRED`, `CANCELLED` | Membership lifecycle state |
+| `PlanType.java` | `MONTHLY`, `QUARTERLY`, `YEARLY` | Membership duration tier (pure enum in code, matching COMP 301 beginner scope) |
+| `SessionStatus.java` | `REQUESTED`, `CONFIRMED`, `COMPLETED`, `NO_SHOW`, `CANCELLED` | Training session state machine |
+| `SubscriptionStatus.java` | `ACTIVE`, `EXPIRED`, `CANCELLED` | Personal trainer subscription standing |
+| `AvailabilityStatus.java` | `OPEN`, `FULL`, `CLOSED` | Availability slot capacity state |
+| `StaffRole.java` | `ADMIN`, `MANAGER`, `STAFF` | Operator permission role |
+| `PaymentMethod.java` | `CASH`, `CARD`, `TRANSFER` | Accepted payment tenders |
+| `EquipmentStatus.java` | `AVAILABLE`, `IN_MAINTENANCE`, `RETIRED` | Floor availability of gym equipment |
+| `EquipmentCondition.java` | `NEW`, `GOOD`, `FAIR`, `POOR` | Physical wear assessment |
+| `ProgressMetric.java` | `WEIGHT_KG`, `BODY_FAT_PCT` | Chart metric selector (`docs/UML.md` §1b) |
+
+### Domain Entities (13 `Serializable` POJOs)
+
+| File | Key Fields / Link Highlight | Authoritative Spec |
+|---|---|---|
+| `Customer.java` | Member profile; nullable `Integer trainerId`, `CustomerStatus status` | `docs/UML.md` §1 |
+| `Trainer.java` | Coach profile; `BigDecimal hourlyRate`, `experienceYears` | `docs/UML.md` §1 |
+| `Administrator.java` | Login account; `StaffRole role`, `boolean active` (note: `passwordHash` omitted from `toString()`) | `docs/UML.md` §1 |
+| `Equipment.java` | Machine inventory; `EquipmentCondition condition`, `EquipmentStatus status` | `docs/UML.md` §1 |
+| `MedicalProfile.java` | Unique per `customerId` (`bloodType`, `conditions`, `allergies`, `medications`, `injuries`, doctor info) | `docs/UML.md` §1 |
+| `Membership.java` | Linked to `customerId`; `PlanType plan`, `BigDecimal price`, `MembershipStatus status`, `int frozenDays` | `docs/UML.md` §1 |
+| `WorkoutProgram.java` | Linked to `customerId` and `creatorTrainerId`; `int version` | `docs/UML.md` §1 |
+| `TrainerAvailability.java` | Linked to `trainerId`; `int maxCustomers`, `AvailabilityStatus status` | `docs/UML.md` §1 |
+| `TrainerSubscription.java` | Linked to `customerId` and `trainerId`; `BigDecimal ratePerPeriod`, `SubscriptionStatus status` | `docs/UML.md` §1 |
+| `Session.java` | Linked to `customerId`, `trainerId`; nullable `Integer availabilityId`, `Integer subscriptionId`, `BigDecimal price` | `docs/UML.md` §1 |
+| `Attendance.java` | Linked to `customerId`; `date`, `checkIn`, `checkOut` | `docs/UML.md` §1 |
+| `ProgressRecord.java` | Linked to `customerId`; `double weightKg`, `double bodyFatPct`, nullable `Double targetWeightKg` | `docs/UML.md` §1 |
+| `Payment.java` | Linked to `customerId` + nullable XOR FKs (`membershipId`, `subscriptionId`, `sessionId`), `BigDecimal amount`, `voidReason`, `voidedDate`, `previousAmount`, plus 3 factory methods | `docs/UML.md` §1 |
+
+### Representative Sketches (canonical definitions live in `docs/UML.md` §1)
+
+#### `Customer.java` — member profile entity (owner: Abdelrhman)
+
+**Status:** done. **Canonical:** `docs/UML.md` §1 (`Customer`).
+
+```java
+// Sketch — field list is authoritative in docs/UML.md §1
+public class Customer implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private int id;
+    private String fullName;
+    private CustomerStatus status;
+    private Integer trainerId; // nullable FK: null means no assigned trainer
+
+    public Customer() {
+    }
+
+    public Customer(int id, String fullName, /* ... remaining UML fields ... */ Integer trainerId) {
+        this.id = id;
+        this.fullName = fullName;
+        this.trainerId = trainerId;
+    }
+
+    // getters, setters, equals(id), hashCode(), toString()
+}
+```
+
+#### `Payment.java` — financial receipt with XOR links (owner: Abdel Raouf)
+
+**Status:** done. **Canonical:** `docs/UML.md` §1 (`Payment`), rule 12, rule 19.
+
+```java
+// Sketch — shows factory methods matching rule 12
+public class Payment implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private int id;
+    private int customerId;
+    private Integer membershipId;
+    private Integer subscriptionId;
+    private Integer sessionId;
+    private BigDecimal amount;
+    // voided, voidReason, voidedDate, previousAmount...
+
+    public static Payment forMembership(int customerId, int membershipId, BigDecimal amount,
+                                        PaymentMethod method, String date, String receiptNo) {
+        return new Payment(0, customerId, membershipId, null, null, amount, method, date, receiptNo, false);
+    }
+}
+```
+
+**Verify:** Confirm `model/*.java` compiles under Java 21 (`./gradlew compileJava`), serializes and
+reloads via `SerializationUtil`, and preserves every field and constructor in `docs/UML.md` §1.
+
+## 6. How this layer connects to the others
+
+| Layer / Utility | How it uses `com.gym.model` |
 |---|---|
-| `dao/` (planned) | `mapRow(ResultSet)` builds entities; DAOs take and return them |
-| `service/` (planned) | validates and mutates entities; owns every rule 1–19 |
-| `controller/` (shipped) | renders entity fields; today holds demo data that will be replaced by service-returned entities |
-| `docs/UML.md` | the single source of truth for every field name, type and nullability mark |
+| `com.gym.dao` (shipped) | Reads/writes entity objects to SQLite rows in `gym.db`; enforces `ValidationException` rules before SQL execution |
+| `com.gym.util.SerializationUtil` (shipped) | Saves and loads `Serializable` entities (or `List`s of entities) to binary `.ser` backup files |
+| `com.gym.controller` (Milestone 3) | Currently uses UI demo models; Milestone 3 binds table/form views directly to these entities |
+| `docs/UML.md` §1 & §1b | Single source of truth for every class name, field name, type, constructor, and enum literal |
 
-Write order when the backend starts: the 11 enums first (`UML.md` "Enumerations" is the complete
-literal list), then the entities in dependency order (`Customer` → the rest), one per file, each
-against `UML.md` §1. [`../dao/README.md`](../dao/README.md) and
-[`../service/README.md`](../service/README.md) describe how these objects will be consumed.
+## 7. Common mistakes and review checklist
 
-## 6. Learning exercises
+- **Floating-point money bug:** Passing a Java `double` to `new BigDecimal(45.50)` stores binary error;
+  always pass a `String` (`new BigDecimal("45.50")`).
+- **Primitive `0` vs `null` FK:** Writing `int trainerId` makes unassigned customers look like they belong
+  to trainer `0`; keep nullable FKs boxed (`Integer`).
+- **Leaking passwords in `toString()`:** Printing `Administrator.toString()` should display `username`
+  and `role`, never `passwordHash`.
+- **Missing `serialVersionUID = 1L`:** Editing a class later causes `SerializationUtil.loadFromFile`
+  to fail on older `.ser` files.
 
-1. Explain, in one sentence each, why a `record` is rejected and why `equals`/`hashCode` are contract,
-   not extras. Which rule depends on `Payment.equals`?
-2. A teammate proposes `abstract class BaseEntity { protected int id; }`. Give three concrete reasons
-   from `UML.md` §7 / `DECISIONS.md` 36 to refuse.
-3. `MembershipStatus.EXPIRED` is derived. What breaks if a controller writes it after a renewal — and
-   who is the documented producer instead?
-4. Why is `Customer.trainerId` an `Integer` while `Session.durationMin` is an `int`? What does the
-   boxed type cost and buy?
-5. Sketch the two constructors of `Payment` and name the three factory methods rule 12 needs.
+Checklist:
 
-## 7. Ownership
+- [ ] All fields are `private` with `public` getters and setters.
+- [ ] Every entity implements `Serializable` with `private static final long serialVersionUID = 1L;`.
+- [ ] No SQL (`java.sql.*`) or JavaFX (`javafx.*`) imports anywhere in `com.gym.model`.
+- [ ] Every class/enum matches `docs/UML.md` §1 and §1b verbatim.
 
-| Planned file group | Owner |
-|---|---|
-| 13 entities + 11 enums (per `docs/UML_TEAM.md` split) | per-feature owners (see `docs/UML_TEAM.md`) |
+## 8. Learning exercises (with answers)
 
-Status: **planned, not built** — track in `docs/COVERAGE.md` → "Backend domain services and SQLite DAOs".
+1. Why do every entity's constructors include a no-arg constructor (`public Customer()`) even when a
+   full constructor already exists?
+2. Why does `Payment` store `customerId` (`int`) and `membershipId` (`Integer`) instead of storing a
+   `Customer` reference and a `Membership` reference?
+3. What happens during `SerializationUtil.loadFromFile(...)` if an entity in `com.gym.model` forgets
+   `implements Serializable`?
+4. Explain why `Administrator.toString()` omits `passwordHash`.
+5. Look at `PlanType.java` vs `Payment.java`. Which one is an enum and which one holds factory methods?
+
+<details>
+<summary>Answers</summary>
+
+1. DAO `mapRow(ResultSet)` methods construct an empty entity first (`new Customer()`) and populate fields
+   from SQLite columns using setter methods.
+2. Storing IDs keeps entities lightweight, JDBC-free, and straightforward to serialize cleanly without
+   pulling cyclic or whole-database object graphs into memory (`DECISIONS.md` 32).
+3. `ObjectOutputStream.writeObject(...)` throws `NotSerializableException` (wrapped into
+   `DatabaseException` by `SerializationUtil.saveToFile`).
+4. `toString()` is often printed in logs or debug output; omitting `passwordHash` prevents leaking
+   stored credentials.
+5. `PlanType` is an enum (`MONTHLY`, `QUARTERLY`, `YEARLY`); `Payment` is a domain entity providing
+   `forMembership`, `forSubscription`, and `forSession` static factories.
+
+</details>
+
+## 9. Ownership and tasks
+
+| File Group | Responsibility | Owner(s) | Status |
+|---|---|---|---|
+| `Customer`, `CustomerStatus`, `MedicalProfile`, `Administrator`, `StaffRole` | Core members, medical & admin models | Abdelrhman | Done (Milestone 2) |
+| `Trainer`, `TrainerAvailability`, `AvailabilityStatus`, `Membership`, `MembershipStatus`, `PlanType` | Trainers, schedules & plans | Ziad | Done (Milestone 2) |
+| `WorkoutProgram`, `Session`, `SessionStatus`, `TrainerSubscription`, `SubscriptionStatus`, `Equipment`, `EquipmentStatus`, `EquipmentCondition` | Workouts, sessions & equipment | Yousef | Done (Milestone 2) |
+| `Attendance`, `Payment`, `PaymentMethod`, `ProgressRecord`, `ProgressMetric` | Attendance, billing & progress | Abdel Raouf | Done (Milestone 2) |
+
+`swing` branch rule: every `.java` file in `com.gym.model` uses zero JavaFX imports, so the exact same
+domain files copy directly to the `swing` branch unchanged.
+
+### Definition of done for a file in this folder
+
+- [ ] Matches `docs/UML.md` §1 / §1b exact names, types, and constructors.
+- [ ] Implements `Serializable` (`serialVersionUID = 1L`) for all 13 entities.
+- [ ] Compiles cleanly under `./gradlew compileJava` with `-Xlint:all`.
+- [ ] Zero JavaFX or `java.sql` imports.

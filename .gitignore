@@ -100,10 +100,11 @@ surefire-reports/
 *.p12
 local.properties
 
-# App database (created on first run — never commit)
+# App database and serialized backups (created at runtime — never commit)
 gym.db
 gym.db-*
 *.db
+*.ser
 
 # Testing-only sample (never commit)
 src/main/java/com/gym/M3Samples.java
@@ -118,6 +119,9 @@ material-web-2.5.0/
 
 # Antigravity agent coordination artifacts
 .agents/
+
+# Local course lecture slides (not committed to Git)
+lectures/
 
 .zcode/
 liquidGL-main/

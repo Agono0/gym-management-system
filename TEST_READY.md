@@ -1,4 +1,17 @@
-# TEST_READY: JavaFX 21 FXML E2E Verification Suite
+> ## ⚠️ ARCHIVED — Historical FXML Harness Doc (`docs/DECISIONS.md` 77)
+> This document describes the legacy FXML E2E test suite (`src/test/java/com/gym/fxml/`).
+> Since this note was written:
+> 1. All 19 UI screens were converted from FXML to pure Java controllers implementing
+>    [`ScreenController`](src/main/java/com/gym/controller/ScreenController.java) (`javafx.fxml`
+>    was removed from `build.gradle`).
+> 2. Per `docs/DECISIONS.md` 77, **all application test files under `src/test/` have been removed**
+>    to match the COMP 301 beginner team scope (`:test` reports `NO-SOURCE`).
+> 3. Automated JUnit 5 tests continue to run for `:m3fx-core:test` and `:m3fx-controls:test` via
+>    `./gradlew test`.
+>
+> ---
+
+# TEST_READY: JavaFX 21 FXML E2E Verification Suite (Historical)
 
 ## Status: READY
 

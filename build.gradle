@@ -26,6 +26,7 @@ dependencies {
     // Local reusable M3 library (separated so it can be reused in many projects).
     implementation(project(':m3fx-core'))
     implementation(project(':m3fx-controls'))
+    implementation('org.xerial:sqlite-jdbc:3.45.1.0')
 
     testImplementation('org.junit.jupiter:junit-jupiter:5.11.3')
     testRuntimeOnly('org.junit.platform:junit-platform-launcher')
