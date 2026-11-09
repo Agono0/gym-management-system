@@ -13,6 +13,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,7 +23,7 @@ import java.util.List;
 public class SessionDao {
 
     public Session insert(Session session) throws DatabaseException, ValidationException {
-        validate(session);
+        validate(session, false);
         String sql = "INSERT INTO sessions (customer_id, trainer_id, session_date, start_time, duration_min, "
                 + "status, availability_id, subscription_id, price, cancel_reason, session_notes) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -61,7 +64,7 @@ public class SessionDao {
     }
 
     public void update(Session session) throws DatabaseException, ValidationException {
-        validate(session);
+        validate(session, true);
         String sql = "UPDATE sessions SET customer_id = ?, trainer_id = ?, session_date = ?, start_time = ?, "
                 + "duration_min = ?, status = ?, availability_id = ?, subscription_id = ?, "
                 + "price = ?, cancel_reason = ?, session_notes = ? WHERE id = ?";
@@ -181,12 +184,107 @@ public class SessionDao {
         return s;
     }
 
-    private void validate(Session s) throws ValidationException {
+    private void validate(Session s, boolean isUpdate) throws ValidationException, DatabaseException {
         if (s == null) {
             throw new ValidationException("Session cannot be null");
         }
-        if (s.getCustomerId() <= 0 || s.getTrainerId() <= 0) {
-            throw new ValidationException("Valid customer and trainer ids are required");
+        if (s.getCustomerId() <= 0 || !recordExists("customers", s.getCustomerId())) {
+            throw new ValidationException("Customer does not exist with id: " + s.getCustomerId());
+        }
+        if (s.getTrainerId() <= 0 || !recordExists("trainers", s.getTrainerId())) {
+            throw new ValidationException("Trainer does not exist with id: " + s.getTrainerId());
+        }
+        if (s.getDate() == null || !isValidDate(s.getDate())) {
+            throw new ValidationException("Session date must be in yyyy-MM-dd format (Rule 9)");
+        }
+        if (s.getStartTime() == null || !isValidTime(s.getStartTime())) {
+            throw new ValidationException("Session start time must be in HH:mm format (Rule 9)");
+        }
+        if (s.getDurationMin() <= 0) {
+            throw new ValidationException("Session durationMin must be greater than zero");
+        }
+        if (s.getPrice() != null && s.getPrice().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ValidationException("Session price cannot be negative");
+        }
+        if (s.getSubscriptionId() != null) {
+            verifySubscriptionMatch(s.getSubscriptionId().intValue(), s.getCustomerId(), s.getTrainerId());
+            if (s.getPrice() != null && s.getPrice().compareTo(BigDecimal.ZERO) != 0) {
+                throw new ValidationException("Rule 11: Session covered by a subscription must have price == 0");
+            }
+        }
+        if (s.getAvailabilityId() != null && !recordExists("trainer_availability", s.getAvailabilityId().intValue())) {
+            throw new ValidationException("Availability slot does not exist with id: " + s.getAvailabilityId());
+        }
+        if (isUpdate) {
+            Session existing = findById(s.getId());
+            SessionStatus newStatus = s.getStatus() != null ? s.getStatus() : SessionStatus.REQUESTED;
+            if (existing != null && existing.getStatus() != newStatus) {
+                validateTransition(existing.getStatus(), newStatus);
+            }
+        }
+    }
+
+    private void validateTransition(SessionStatus oldStatus, SessionStatus newStatus) throws ValidationException {
+        if (newStatus == SessionStatus.CONFIRMED && oldStatus != SessionStatus.REQUESTED) {
+            throw new ValidationException("Rule 18: Only REQUESTED sessions may become CONFIRMED");
+        }
+        if ((newStatus == SessionStatus.COMPLETED
+                || newStatus == SessionStatus.NO_SHOW
+                || newStatus == SessionStatus.CANCELLED)
+                && oldStatus != SessionStatus.CONFIRMED) {
+            throw new ValidationException("Rule 18: Only CONFIRMED sessions may become " + newStatus);
+        }
+        if (newStatus == SessionStatus.REQUESTED && oldStatus != SessionStatus.REQUESTED) {
+            throw new ValidationException("Rule 18: Cannot revert a session back to REQUESTED");
+        }
+    }
+
+    private void verifySubscriptionMatch(int subId, int customerId, int trainerId) throws ValidationException, DatabaseException {
+        String sql = "SELECT customer_id, trainer_id FROM trainer_subscriptions WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, subId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new ValidationException("Trainer subscription does not exist with id: " + subId);
+                }
+                if (rs.getInt("customer_id") != customerId || rs.getInt("trainer_id") != trainerId) {
+                    throw new ValidationException("Rule 11: Session customer/trainer must match the linked subscription");
+                }
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify trainer subscription id: " + subId, e);
+        }
+    }
+
+    private boolean recordExists(String table, int id) throws DatabaseException {
+        String sql = "SELECT 1 FROM " + table + " WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify record in " + table + " for id: " + id, e);
+        }
+    }
+
+    private boolean isValidDate(String value) {
+        try {
+            LocalDate.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    private boolean isValidTime(String value) {
+        try {
+            LocalTime.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
         }
     }
 }

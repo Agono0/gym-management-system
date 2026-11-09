@@ -84,3 +84,19 @@ tasks.register('runGym', JavaExec) {
         '--sun-misc-unsafe-memory-access=allow'
     ]
 }
+
+// Runs the interactive CMD Terminal UI & TA Validation Showcase
+tasks.register('runCli', JavaExec) {
+    group = 'application'
+    description = 'Runs the interactive CMD Terminal UI and TA Validation Showcase.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.gym.cli.GymCliApp'
+    standardInput = System.in
+    jvmArgs = [
+        '-Xms256m',
+        '-Xmx512m',
+        '-Dfile.encoding=UTF-8',
+        '--enable-native-access=ALL-UNNAMED',
+        '--sun-misc-unsafe-memory-access=allow'
+    ]
+}

@@ -12,6 +12,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,7 +32,7 @@ public class TrainerSubscriptionDao {
             ps.setInt(2, sub.getTrainerId());
             ps.setString(3, sub.getStartDate());
             ps.setString(4, sub.getEndDate());
-            ps.setBigDecimal(5, sub.getRatePerPeriod() != null ? sub.getRatePerPeriod() : BigDecimal.ZERO);
+            ps.setBigDecimal(5, sub.getRatePerPeriod());
             ps.setString(6, sub.getStatus() != null ? sub.getStatus().name() : SubscriptionStatus.ACTIVE.name());
 
             ps.executeUpdate();
@@ -57,7 +59,7 @@ public class TrainerSubscriptionDao {
             ps.setInt(2, sub.getTrainerId());
             ps.setString(3, sub.getStartDate());
             ps.setString(4, sub.getEndDate());
-            ps.setBigDecimal(5, sub.getRatePerPeriod() != null ? sub.getRatePerPeriod() : BigDecimal.ZERO);
+            ps.setBigDecimal(5, sub.getRatePerPeriod());
             ps.setString(6, sub.getStatus() != null ? sub.getStatus().name() : SubscriptionStatus.ACTIVE.name());
             ps.setInt(7, sub.getId());
 
@@ -145,12 +147,69 @@ public class TrainerSubscriptionDao {
         return s;
     }
 
-    private void validate(TrainerSubscription s) throws ValidationException {
+    private void validate(TrainerSubscription s) throws ValidationException, DatabaseException {
         if (s == null) {
             throw new ValidationException("Trainer subscription cannot be null");
         }
         if (s.getCustomerId() <= 0 || s.getTrainerId() <= 0) {
             throw new ValidationException("Valid customer and trainer ids are required");
+        }
+        Integer assignedTrainerId = findAssignedTrainerId(s.getCustomerId());
+        if (!recordExists("trainers", s.getTrainerId())) {
+            throw new ValidationException("Trainer does not exist with id: " + s.getTrainerId());
+        }
+        if (assignedTrainerId == null || assignedTrainerId.intValue() != s.getTrainerId()) {
+            throw new ValidationException("Rule 11: Subscription trainerId must match customer's assigned trainerId");
+        }
+        if (s.getStartDate() == null || !isValidDate(s.getStartDate()) || s.getEndDate() == null || !isValidDate(s.getEndDate())) {
+            throw new ValidationException("Subscription start and end dates must be in yyyy-MM-dd format");
+        }
+        LocalDate start = LocalDate.parse(s.getStartDate().trim());
+        LocalDate end = LocalDate.parse(s.getEndDate().trim());
+        if (end.isBefore(start)) {
+            throw new ValidationException("Subscription end date cannot precede start date");
+        }
+        if (s.getRatePerPeriod() == null || s.getRatePerPeriod().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ValidationException("Subscription rate cannot be negative");
+        }
+    }
+
+    private Integer findAssignedTrainerId(int customerId) throws ValidationException, DatabaseException {
+        String sql = "SELECT trainer_id FROM customers WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, customerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new ValidationException("Customer does not exist with id: " + customerId);
+                }
+                int trainerId = rs.getInt("trainer_id");
+                return rs.wasNull() ? null : trainerId;
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify customer trainer assignment", e);
+        }
+    }
+
+    private boolean recordExists(String table, int id) throws DatabaseException {
+        String sql = "SELECT 1 FROM " + table + " WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify record in " + table + " for id: " + id, e);
+        }
+    }
+
+    private boolean isValidDate(String value) {
+        try {
+            LocalDate.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
         }
     }
 }

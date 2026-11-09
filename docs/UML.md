@@ -531,18 +531,20 @@ classDiagram
 ```mermaid
 flowchart TD
     APP[GymApp / MainApp<br/>entry points, shell, theme] --> CTRL[Controllers<br/>Screen / ScreenController + LaunchGateController<br/>19 Java-built screens — demo data today]
-    CTRL -. Milestone 3 wiring .-> DAO[Concrete DAOs<br/>13 JDBC DAOs in com.gym.dao — shipped Milestone 2]
+    CLI[GymCliApp / com.gym.cli<br/>CMD Workflow Console + TA Suite — shipped Decision 78] --> DAO[Concrete DAOs<br/>13 JDBC DAOs in com.gym.dao — shipped Milestone 2 + Decision 78 validation]
+    CTRL -. Milestone 3 wiring .-> DAO
     DAO --> DB[(SQLite<br/>gym.db — auto-created via DatabaseConnection)]
     UTIL[util + exception<br/>DatabaseConnection, SerializationUtil,<br/>GymException, ValidationException, DatabaseException — shipped] -. supports .-> DAO
+    UTIL -. supports .-> CLI
     UTIL -. supports .-> CTRL
     M3FX[External: m3fx library<br/>M3 theme + components] -. styles .-> APP
     M3FX -. styles .-> CTRL
 ```
 
-Layer rules (following COMP 301 beginner architecture, `DECISIONS.md` 77):
-- Controllers contain no raw SQL — persistence goes through the 13 concrete DAOs in `com.gym.dao` (connected in Milestone 3).
-- `com.gym.model`, `com.gym.dao`, `com.gym.util`, and `com.gym.exception` never import JavaFX (`Swing`-portable).
-- Checked exception contract: `ValidationException` reports bad input before SQL runs; `DatabaseException` wraps `SQLException` or `IOException`/`ClassNotFoundException` from `SerializationUtil`.
+Layer rules (following COMP 301 beginner architecture, `DECISIONS.md` 77, 78):
+- Controllers and `com.gym.cli` contain no SQL `INSERT`/`UPDATE` mutations — persistence goes through the 13 concrete DAOs in `com.gym.dao` (connected live today in `com.gym.cli`, and wired into `com.gym.controller` in Milestone 3).
+- `com.gym.model`, `com.gym.dao`, `com.gym.util`, `com.gym.exception`, and `com.gym.cli` never import JavaFX (`Swing` / headless-portable).
+- Checked exception contract: `ValidationException` reports bad input or rule breaches before writes run; `DatabaseException` wraps `SQLException` or `IOException`/`ClassNotFoundException` from `SerializationUtil`.
 
 **Shipped runtime spine (`GymApp` / `MainApp`):**
 
@@ -1124,6 +1126,19 @@ Design notes on flatness vs inheritance (`DECISIONS.md` 36, 77):
 | `LiveWorkoutController` | Live workout HUD telemetry cockpit |
 | `GymFloorMapController` | Facility floorplan and equipment occupancy map |
 
+### Terminal Workflow Console (`com.gym.cli`, Decision 78)
+
+> **Shipped.** Interactive 80-column ASCII terminal UI + automated 22-scenario TA verification suite
+> driving all 13 DAOs, rules 1–19, `ValidationException`/`DatabaseException`, and `.ser` object snapshots.
+
+| Class | Description |
+|---|---|
+| `GymCliApp` | Entry point (`gradlew runCli` / `run-cli.bat`), SQLite Login Gate (`AdministratorDao`), live KPIs, main router |
+| `CliTheme`, `CliInput`, `CliSession` | Pure 7-bit ASCII formatting, EOF-safe `Scanner` input parsers, navigation flags |
+| `GymBackupSnapshot`, `SampleDataSeeder`, `GymRulesHelper` | 13-table `Serializable` `.ser` container, startup sample seed/reset, cross-entity rules 1–19 engine |
+| `MemberCliMenu`, `TrainerCliMenu`, `MembershipBillingCliMenu`, `ScheduleWorkoutCliMenu`, `FacilityAdminCliMenu` | Modules `[1]`–`[10]` (Member 360, Medical, Progress, Coaches, Slots, Memberships, Sessions, Live HUD, Attendance, Payments, Floor Map, Staff RBAC, Backup/DB Tools) |
+| `TaShowcaseRunner` | `[T]` automated 22-scenario sandbox runner + individual scenario picker `#1–#11` (`gym_ta_showcase.db`) |
+
 ### Utilities & Exceptions (`com.gym.util`, `com.gym.exception`)
 
 > **Shipped (Milestone 2).** Five classes total, written strictly with COMP 301 Lectures 1–6 patterns.
@@ -1141,8 +1156,8 @@ Design notes on flatness vs inheritance (`DECISIONS.md` 36, 77):
 ## Business rules
 
 Domain rules 1–19 stay intact as the product contract across milestones:
-- **Enforced in Milestone 2 (DAOs + SQLite DDL):** null/blank required fields and invalid amounts/durations throw `ValidationException`; unique constraints (`receipt_no`, `medical_profiles.customer_id`, `administrators.username`) and column types are enforced in SQLite.
-- **Deferred to Milestone 3 (Controller-to-DAO integration):** cross-entity workflow checks (session transitions, slot capacity counting, suspension cascades, role checks, balance sums). With the service tier retired (`DECISIONS.md` 77), note that service/util class names mentioned in the table below (`SchedulingService`, `AdminService`, `GuardService`, `DateUtils`, etc.) represent where those checks will execute in Milestone 3 controllers directly via DAOs.
+- **Enforced in Milestone 2 & Terminal Console (`com.gym.dao` + `com.gym.cli`, `DECISIONS.md` 78):** all 13 DAOs validate required fields, email/phone/ISO-8601 formats, FK existence, unique constraints (`administrators.username`, `payments.receipt_no`, `(workout_programs.customer_id, version)`, single `medical_profiles` per customer per rule 3), rule 5 active check-in checks, rule 7 `CANCELLED` membership reactivation blocks, rule 8 slot time order/`maxCustomers > 0`, rule 11 subscription trainer match & `price == 0`, rule 12 payment XOR + customer match, and rule 18 `SessionStatus` transitions. `GymRulesHelper` (`com.gym.cli`) enforces cross-entity workflows (rules 1–19) interactively via `./gradlew runCli` / `run-cli.bat` and `TaShowcaseRunner`.
+- **Milestone 3 (Controller-to-DAO integration):** wires the 20 JavaFX controllers (`com.gym.controller`) to call the same concrete DAOs and `SerializationUtil` directly (note that legacy service/util names mentioned in the table below like `SchedulingService`, `AdminService`, `GuardService`, `DateUtils` represent where those checks execute once controllers connect).
 
 | # | Rule |
 |---|---|

@@ -13,6 +13,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,7 +22,7 @@ import java.util.List;
 public class PaymentDao {
 
     public Payment insert(Payment payment) throws DatabaseException, ValidationException {
-        validate(payment);
+        validate(payment, false);
         String sql = "INSERT INTO payments (customer_id, membership_id, subscription_id, session_id, "
                 + "amount, method, payment_date, receipt_no, voided, void_reason, voided_date, previous_amount) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -44,10 +46,10 @@ public class PaymentDao {
             } else {
                 ps.setNull(4, Types.INTEGER);
             }
-            ps.setBigDecimal(5, payment.getAmount() != null ? payment.getAmount() : BigDecimal.ZERO);
-            ps.setString(6, payment.getMethod() != null ? payment.getMethod().name() : PaymentMethod.CASH.name());
+            ps.setBigDecimal(5, payment.getAmount());
+            ps.setString(6, payment.getMethod().name());
             ps.setString(7, payment.getDate());
-            ps.setString(8, payment.getReceiptNo());
+            ps.setString(8, payment.getReceiptNo().trim());
             ps.setInt(9, payment.isVoided() ? 1 : 0);
             ps.setString(10, payment.getVoidReason());
             ps.setString(11, payment.getVoidedDate());
@@ -70,7 +72,7 @@ public class PaymentDao {
     }
 
     public void update(Payment payment) throws DatabaseException, ValidationException {
-        validate(payment);
+        validate(payment, true);
         String sql = "UPDATE payments SET customer_id = ?, membership_id = ?, subscription_id = ?, session_id = ?, "
                 + "amount = ?, method = ?, payment_date = ?, receipt_no = ?, voided = ?, "
                 + "void_reason = ?, voided_date = ?, previous_amount = ? WHERE id = ?";
@@ -94,10 +96,10 @@ public class PaymentDao {
             } else {
                 ps.setNull(4, Types.INTEGER);
             }
-            ps.setBigDecimal(5, payment.getAmount() != null ? payment.getAmount() : BigDecimal.ZERO);
-            ps.setString(6, payment.getMethod() != null ? payment.getMethod().name() : PaymentMethod.CASH.name());
+            ps.setBigDecimal(5, payment.getAmount());
+            ps.setString(6, payment.getMethod().name());
             ps.setString(7, payment.getDate());
-            ps.setString(8, payment.getReceiptNo());
+            ps.setString(8, payment.getReceiptNo().trim());
             ps.setInt(9, payment.isVoided() ? 1 : 0);
             ps.setString(10, payment.getVoidReason());
             ps.setString(11, payment.getVoidedDate());
@@ -217,18 +219,96 @@ public class PaymentDao {
         return p;
     }
 
-    private void validate(Payment p) throws ValidationException {
+    private void validate(Payment p, boolean isUpdate) throws ValidationException, DatabaseException {
         if (p == null) {
             throw new ValidationException("Payment cannot be null");
         }
-        if (p.getCustomerId() <= 0) {
-            throw new ValidationException("Valid customer id is required");
+        if (p.getCustomerId() <= 0 || !customerExists(p.getCustomerId())) {
+            throw new ValidationException("Customer does not exist with id: " + p.getCustomerId());
         }
         if (p.getAmount() == null || p.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new ValidationException("Payment amount must be greater than zero");
         }
+        if (p.getMethod() == null) {
+            throw new ValidationException("Payment method is required");
+        }
+        if (p.getDate() == null || !isValidDate(p.getDate())) {
+            throw new ValidationException("Payment date must be in yyyy-MM-dd format");
+        }
+        if (p.getVoidedDate() != null && !p.getVoidedDate().trim().isEmpty() && !isValidDate(p.getVoidedDate())) {
+            throw new ValidationException("Voided date must be in yyyy-MM-dd format");
+        }
         if (p.getReceiptNo() == null || p.getReceiptNo().trim().isEmpty()) {
             throw new ValidationException("Receipt number is required");
+        }
+
+        Payment duplicate = findByReceiptNo(p.getReceiptNo().trim());
+        if (duplicate != null && (!isUpdate || duplicate.getId() != p.getId())) {
+            throw new ValidationException("Duplicate receipt number: " + p.getReceiptNo().trim());
+        }
+
+        int links = 0;
+        if (p.getMembershipId() != null) {
+            links++;
+        }
+        if (p.getSubscriptionId() != null) {
+            links++;
+        }
+        if (p.getSessionId() != null) {
+            links++;
+        }
+        if (links != 1) {
+            throw new ValidationException("Rule 12: Payment must link to exactly one target (membership, subscription, or session)");
+        }
+
+        if (p.getMembershipId() != null) {
+            verifyLinkedOwner("memberships", p.getMembershipId().intValue(), p.getCustomerId());
+        } else if (p.getSubscriptionId() != null) {
+            verifyLinkedOwner("trainer_subscriptions", p.getSubscriptionId().intValue(), p.getCustomerId());
+        } else if (p.getSessionId() != null) {
+            verifyLinkedOwner("sessions", p.getSessionId().intValue(), p.getCustomerId());
+        }
+    }
+
+    private boolean customerExists(int customerId) throws DatabaseException {
+        String sql = "SELECT 1 FROM customers WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, customerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify customer id: " + customerId, e);
+        }
+    }
+
+    private void verifyLinkedOwner(String table, int targetId, int expectedCustomerId)
+            throws ValidationException, DatabaseException {
+        String sql = "SELECT customer_id FROM " + table + " WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, targetId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new ValidationException("Rule 12: Linked record does not exist in " + table + " with id " + targetId);
+                }
+                if (rs.getInt("customer_id") != expectedCustomerId) {
+                    throw new ValidationException("Rule 12: Payment customerId (" + expectedCustomerId
+                            + ") does not match linked record owner (" + rs.getInt("customer_id") + ")");
+                }
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify payment target ownership", e);
+        }
+    }
+
+    private boolean isValidDate(String value) {
+        try {
+            LocalDate.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
         }
     }
 }

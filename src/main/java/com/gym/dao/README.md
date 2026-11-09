@@ -1,10 +1,11 @@
 # `dao` — Data Access Layer (JavaFX branch)
 
-> **Status: SHIPPED (Milestone 2).** All **13 concrete Data Access Objects** in `com.gym.dao` are
+> **Status: SHIPPED (Milestone 2 + Decision 78 Validation Upgrade).** All **13 concrete Data Access Objects** in `com.gym.dao` are
 > implemented against SQLite (`gym.db`) using standard JDBC `PreparedStatement`, `ResultSet`, and
 > `try-with-resources` (`DatabaseConnection`). Per `docs/DECISIONS.md` 77, separate `XxxDao`
 > interfaces and `*DaoImpl` subclasses were consolidated into 13 direct concrete classes using
-> COMP 301 Lectures 1–6 Java syntax. Tracked in [`docs/COVERAGE.md`](../../../../docs/COVERAGE.md).
+> COMP 301 Lectures 1–6 Java syntax; per `docs/DECISIONS.md` 78, each DAO's `validate(...)` helper
+> enforces strict formats, foreign-key existence, uniqueness, and core `UML.md` business rules. Tracked in [`docs/COVERAGE.md`](../../../../docs/COVERAGE.md).
 
 ## 1. Purpose — the problem this layer solves
 
@@ -71,19 +72,19 @@ and `validate`:
 
 | DAO File | Table (`DatabaseConnection`) | Public Methods Beyond `insert`/`update`/`delete`/`findById`/`findAll` | Key `validate(...)` Checks |
 |---|---|---|---|
-| `CustomerDao.java` | `customers` | — | Non-null entity, non-blank `fullName` |
-| `TrainerDao.java` | `trainers` | — | Non-null entity, non-blank `fullName`, valid `hourlyRate` |
-| `AdministratorDao.java` | `administrators` | `findByUsername(String)` | Non-null entity, non-blank `username`, `role` present |
-| `EquipmentDao.java` | `equipment` | — | Non-null entity, non-blank `name` |
-| `MedicalProfileDao.java` | `medical_profiles` | `findByCustomerId(int)` | Non-null entity, valid `customerId` |
-| `MembershipDao.java` | `memberships` | `findByCustomerId(int)` | Non-null entity, valid `customerId`, non-null `plan`/`price` (`>= 0`) |
-| `WorkoutProgramDao.java` | `workout_programs` | `findByCustomerId(int)` | Non-null entity, valid IDs, non-blank `name` |
-| `TrainerAvailabilityDao.java` | `trainer_availability` | `findByTrainerId(int)` | Non-null entity, valid `trainerId`, `maxCustomers > 0` |
-| `TrainerSubscriptionDao.java` | `trainer_subscriptions` | `findByCustomerId(int)` | Non-null entity, valid IDs, non-negative `ratePerPeriod` |
-| `SessionDao.java` | `sessions` | `findByTrainerId(int)` | Non-null entity, valid IDs, positive `durationMin` |
-| `AttendanceDao.java` | `attendance` | `findByCustomerId(int)` | Non-null entity, valid `customerId` |
-| `ProgressRecordDao.java` | `progress_records` | `findByCustomerId(int)` | Non-null entity, valid `customerId`, positive `weightKg` |
-| `PaymentDao.java` | `payments` | `findByReceiptNo(String)`, `findByCustomerId(int)` | Non-null entity, valid `customerId`, `amount > 0`, non-blank `receiptNo`, XOR link check (rule 12) |
+| `CustomerDao.java` | `customers` | — | Non-null, non-blank `fullName`, `@`/`.` email, `>= 7` digits on phone/emergencyPhone, ISO `yyyy-MM-dd` DOB/joinDate, nullable `trainerId` FK check |
+| `TrainerDao.java` | `trainers` | — | Non-null, non-blank `fullName`, `@`/`.` email, `>= 7` digits phone, `experienceYears >= 0`, ISO `hireDate`, non-null `hourlyRate >= 0` |
+| `AdministratorDao.java` | `administrators` | `findByUsername(String)` | Non-null, `fullName`, `username` (`>= 3` chars, no spaces, unique), non-blank `passwordHash`, non-null `role`, email, ISO `createdDate` |
+| `EquipmentDao.java` | `equipment` | — | Non-null, non-blank `name`, ISO `purchaseDate`/`lastMaintenance` with `lastMaintenance >= purchaseDate` |
+| `MedicalProfileDao.java` | `medical_profiles` | `findByCustomerId(int)` | Non-null, existing `customerId`, ISO `updatedDate`, max one profile per customer (rule 3) |
+| `MembershipDao.java` | `memberships` | `findByCustomerId(int)` | Non-null, existing `customerId`, non-null `plan`/`price >= 0`, `frozenDays >= 0`, ISO `startDate <= endDate`, refuses reactivating/renewing `CANCELLED` (rule 7) |
+| `WorkoutProgramDao.java` | `workout_programs` | `findByCustomerId(int)` | Non-null, existing `customerId`/`creatorTrainerId`, `name`, `version >= 1`, unique `(customerId, version)`, ISO `createdDate` |
+| `TrainerAvailabilityDao.java` | `trainer_availability` | `findByTrainerId(int)` | Non-null, existing `trainerId`, ISO `date`, `HH:mm` `startTime < endTime` (rule 8), `maxCustomers > 0` (rule 8) |
+| `TrainerSubscriptionDao.java` | `trainer_subscriptions` | `findByCustomerId(int)` | Non-null, existing `customerId`/`trainerId`, `subscription.trainerId == customer.trainerId` (rule 11), ISO `startDate <= endDate`, `ratePerPeriod >= 0` |
+| `SessionDao.java` | `sessions` | `findByTrainerId(int)` | Non-null, existing `customerId`/`trainerId`, ISO `date` & `HH:mm` `startTime` (rule 9), `durationMin > 0`, `price >= 0`, rule 11 sub match & `price == 0`, rule 18 status transitions on `update` |
+| `AttendanceDao.java` | `attendance` | `findByCustomerId(int)` | Non-null, existing `customerId`, ISO `date`, `HH:mm` `checkIn`/`checkOut >= checkIn`, rule 5 (`ACTIVE` member + unexpired plan), blocks duplicate same-day insert |
+| `ProgressRecordDao.java` | `progress_records` | `findByCustomerId(int)` | Non-null, existing `customerId`, ISO `date`, `weightKg > 0`, `0 <= bodyFatPct <= 100`, nullable `targetWeightKg > 0` |
+| `PaymentDao.java` | `payments` | `findByReceiptNo(String)`, `findByCustomerId(int)` | Non-null, existing `customerId`, `amount > 0`, non-null `method`, ISO `date`/`voidedDate`, unique `receiptNo`, rule 12 strict XOR target link + owner `customerId` match |
 
 ### Representative Sketches (authoritative signatures in `docs/UML.md` §3)
 
@@ -134,7 +135,8 @@ private void validate(Payment p) throws ValidationException {
 | `com.gym.util.DatabaseConnection` | Supplies `getConnection()` and creates all 13 tables via `initializeDatabase()` |
 | `com.gym.model.*` | Supplied as parameters (`insert`, `update`) and returned by queries (`findById`, `findAll`) |
 | `com.gym.exception.*` | Every DAO throws `ValidationException` and `DatabaseException` (never raw `SQLException`) |
-| `com.gym.controller.*` | Today screens use demo data; **Milestone 3** connects controllers directly to these 13 DAOs |
+| `com.gym.cli.*` | Calls all 13 DAOs live today in CMD workflows and the 22-scenario TA verification suite (`DECISIONS.md` 78) |
+| `com.gym.controller.*` | Desktop JavaFX screens use demo data today; **Milestone 3** connects controllers directly to these 13 DAOs |
 
 ## 7. Common mistakes and review checklist
 

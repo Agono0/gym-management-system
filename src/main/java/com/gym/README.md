@@ -1,15 +1,16 @@
 # `com.gym` — application entry points (JavaFX branch)
 
-> **Status note.** This package is **shipped code** — three launcher classes plus the Java-built UI
-> runtime spine (`Screen`, `ScreenController`, `AppShellController`, `LaunchGateController`). The
-> Milestone 2 backend packages (`model/`, `dao/`, `util/`, `exception/`) are shipped with SQLite
+> **Status note.** This package hosts the three JavaFX launcher classes plus the Java-built UI
+> runtime spine (`Screen`, `ScreenController`, `AppShellController`, `LaunchGateController`), alongside
+> the companion **Terminal Workflow Console (`com.gym.cli`, `GymCliApp`)** added per `docs/DECISIONS.md` 78.
+> The Milestone 2 backend packages (`model/`, `dao/`, `util/`, `exception/`) are shipped with SQLite
 > persistence (`gym.db`) and binary serialization (`SerializationUtil`). The separate service layer
 > (`service/`) and app tests (`src/test/`) were removed per `docs/DECISIONS.md` 77 to fit COMP 301
-> Lectures 1–6 beginner scope. Wiring the UI controllers to the live DAOs is **Milestone 3**.
+> Lectures 1–6 beginner scope. Wiring the JavaFX UI controllers to the live DAOs is **Milestone 3**.
 >
 > **Signature authority:** `docs/UML.md` owns the domain model, DAOs, and runtime spine; the
 > launcher and shell details below match the shipped code (`GymApp.java`, `MainApp.java`,
-> `M3Samples.java`, `controller/Screen.java`, `controller/AppShellController.java`,
+> `M3Samples.java`, `cli/GymCliApp.java`, `controller/Screen.java`, `controller/AppShellController.java`,
 > `controller/LaunchGateController.java`).
 
 ## 1. Purpose — the problem this package solves
@@ -135,6 +136,7 @@ busy above 60% for 4 consecutive seconds (`DECISIONS.md` 70).
 | `MainApp` | m3fx gallery pages, `M3Stylesheets`, `M3Overlay`, `M3CommandPalette`, `Screen.values()`, `new GymApp()` | JVM (`main`), Gradle `run` task |
 | `GymApp` | `AppShellController`, `LaunchGateController`, `M3Stylesheets` | JVM (`main`), Gradle `runGym` task, `MainApp` shell launch button |
 | `M3Samples` | `MainApp.main` | JVM, Gradle `runSamples` task |
+| `cli.GymCliApp` | Interactive CMD menus (`com.gym.cli.*`), `GymRulesHelper`, `SampleDataSeeder`, all 13 `com.gym.dao.*`, `SerializationUtil` | JVM (`main`), Gradle `runCli` task, `run-cli.bat` (`cli/README.md`) |
 
 **Milestone 3 planned wiring:** At startup (or in `GymApp.start`), calling
 `DatabaseConnection.initializeDatabase()` prepares `gym.db`, and screen controllers instantiate and call

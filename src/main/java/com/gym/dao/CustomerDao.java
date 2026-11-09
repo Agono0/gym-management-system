@@ -12,6 +12,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,7 +29,7 @@ public class CustomerDao {
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-            ps.setString(1, customer.getFullName());
+            ps.setString(1, customer.getFullName().trim());
             ps.setString(2, customer.getPhone());
             ps.setString(3, customer.getEmail());
             ps.setString(4, customer.getAddress());
@@ -64,7 +66,7 @@ public class CustomerDao {
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setString(1, customer.getFullName());
+            ps.setString(1, customer.getFullName().trim());
             ps.setString(2, customer.getPhone());
             ps.setString(3, customer.getEmail());
             ps.setString(4, customer.getAddress());
@@ -154,12 +156,71 @@ public class CustomerDao {
         return c;
     }
 
-    private void validate(Customer c) throws ValidationException {
+    private void validate(Customer c) throws ValidationException, DatabaseException {
         if (c == null) {
             throw new ValidationException("Customer cannot be null");
         }
         if (c.getFullName() == null || c.getFullName().trim().isEmpty()) {
             throw new ValidationException("Customer name is required");
+        }
+        if (c.getEmail() != null && !c.getEmail().trim().isEmpty() && !isValidEmail(c.getEmail())) {
+            throw new ValidationException("Invalid customer email format: " + c.getEmail());
+        }
+        if (c.getPhone() != null && !c.getPhone().trim().isEmpty() && countDigits(c.getPhone()) < 7) {
+            throw new ValidationException("Customer phone must contain at least 7 digits");
+        }
+        if (c.getEmergencyPhone() != null && !c.getEmergencyPhone().trim().isEmpty() && countDigits(c.getEmergencyPhone()) < 7) {
+            throw new ValidationException("Emergency phone must contain at least 7 digits");
+        }
+        if (c.getDateOfBirth() != null && !c.getDateOfBirth().trim().isEmpty() && !isValidDate(c.getDateOfBirth())) {
+            throw new ValidationException("Date of birth must be in yyyy-MM-dd format");
+        }
+        if (c.getJoinDate() != null && !c.getJoinDate().trim().isEmpty() && !isValidDate(c.getJoinDate())) {
+            throw new ValidationException("Join date must be in yyyy-MM-dd format");
+        }
+        if (c.getTrainerId() != null) {
+            if (c.getTrainerId().intValue() <= 0 || !trainerExists(c.getTrainerId().intValue())) {
+                throw new ValidationException("Assigned trainer does not exist with id: " + c.getTrainerId());
+            }
+        }
+    }
+
+    private boolean trainerExists(int trainerId) throws DatabaseException {
+        String sql = "SELECT 1 FROM trainers WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, trainerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify trainer id: " + trainerId, e);
+        }
+    }
+
+    private boolean isValidEmail(String email) {
+        String trimmed = email.trim();
+        int atPos = trimmed.indexOf('@');
+        int dotPos = trimmed.lastIndexOf('.');
+        return atPos > 0 && dotPos > atPos + 1 && dotPos < trimmed.length() - 1 && !trimmed.contains(" ");
+    }
+
+    private int countDigits(String text) {
+        int digits = 0;
+        for (int i = 0; i < text.length(); i++) {
+            if (Character.isDigit(text.charAt(i))) {
+                digits++;
+            }
+        }
+        return digits;
+    }
+
+    private boolean isValidDate(String value) {
+        try {
+            LocalDate.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
         }
     }
 }

@@ -572,3 +572,34 @@
     (7) **App Test Suite Removal:** Removed `src/test/java/com/gym/screen/` (and the earlier FXML harness) per
     project preference so the gym app contains no test files, while keeping the JUnit 5 suites on `:m3fx-core`
     and `:m3fx-controls`.
+
+78. **Terminal UI Workflow Console (`com.gym.cli`) & Upgraded DAO Validation (Nov 2026).**
+    Added a complete Windows CMD interactive workflow console (`com.gym.cli`, 13 classes) and upgraded all
+    13 `com.gym.dao` classes to let Teaching Assistants and teammates test every app module, validation guard,
+    checked exception (`ValidationException` / `DatabaseException`), SQLite query, and `.ser` object snapshot
+    end-to-end in pure COMP 301 Lectures 1–6 Java without changing `com.gym.model` or restoring `src/test/`:
+    (1) **Interactive Menu Navigation + `[T]` TA Showcase (`GymCliApp`, `TaShowcaseRunner`):** Provides 80-column
+    pure 7-bit ASCII menus (`CliTheme`), EOF-safe `Scanner` input (`CliInput`), breadcrumb shortcuts (`[0] Back`,
+    `[H] Main Menu`, `[L] Logout`), all 10 domain workflow screens (`MemberCliMenu`, `TrainerCliMenu`,
+    `MembershipBillingCliMenu`, `ScheduleWorkoutCliMenu`, `FacilityAdminCliMenu`), and `[T]` TA Showcase
+    running both a 22-scenario automated report and an 11-category picker against an isolated sandbox database
+    (`gym_ta_showcase.db`) so live `gym.db` edits remain untouched.
+    (2) **Strict COMP 301 Syntax & Zero Non-ASCII CMD Glitches:** Kept all `com.gym.cli` and `com.gym.dao` code
+    free of streams, lambdas, `var`, `record`, generic `<T>` helpers, multi-catch blocks, and JavaFX imports;
+    restricted output and validation error messages to 7-bit ASCII (`-` instead of `—`) so Windows `cmd.exe`
+    codepages never garble characters.
+    (3) **Upgraded Concrete DAO `validate(...)` Helpers (Preserving `docs/UML.md` §3 Signatures):** Added email,
+    >=7-digit phone, ISO-8601 `yyyy-MM-dd` / `HH:mm` format checks, foreign-key existence lookups, duplicate
+    username/receipt/workout-version checks, rule 3 single medical profile guard, rule 5 active-member +
+    unexpired-membership check-in gating and duplicate same-day insert guard, rule 7 `CANCELLED` reactivation
+    block, rule 8 slot time order & `maxCustomers > 0`, rule 11 subscription trainer match & zero-price check,
+    rule 12 strict XOR target link + matching `customerId`, and rule 18 `SessionStatus` state transitions.
+    Lookup helpers close their own `try-with-resources` `Connection` before `insert`/`update` writes to avoid
+    SQLite `SQLITE_BUSY` file locks.
+    (4) **Login Gate, RBAC & `.ser` Backup Snapshots (`SampleDataSeeder`, `GymBackupSnapshot`):** Starts at
+    a SQLite `AdministratorDao` Login Gate (`admin`, `manager`, `staff`, and inactive `oldstaff` for rule 16)
+    seeded automatically when empty. `GymBackupSnapshot` uses concrete `ArrayList<...>` fields (avoiding
+    13 `-Xlint:serial` warnings from non-serializable `List` interfaces) to round-trip all 13 tables via
+    `SerializationUtil` alongside intentional `DatabaseException` trap demonstrations.
+    (5) **Launchers:** Added Gradle `runCli` (`standardInput = System.in`, `-Dfile.encoding=UTF-8`) in
+    `build.gradle` and `run-cli.bat` at the repository root.

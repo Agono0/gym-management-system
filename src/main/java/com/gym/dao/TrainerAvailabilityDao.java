@@ -11,6 +11,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -144,12 +147,60 @@ public class TrainerAvailabilityDao {
         return s;
     }
 
-    private void validate(TrainerAvailability s) throws ValidationException {
+    private void validate(TrainerAvailability s) throws ValidationException, DatabaseException {
         if (s == null) {
             throw new ValidationException("Trainer availability cannot be null");
         }
-        if (s.getTrainerId() <= 0) {
-            throw new ValidationException("Valid trainer id is required");
+        if (s.getTrainerId() <= 0 || !trainerExists(s.getTrainerId())) {
+            throw new ValidationException("Trainer does not exist with id: " + s.getTrainerId());
+        }
+        if (s.getDate() == null || s.getDate().trim().isEmpty() || !isValidDate(s.getDate())) {
+            throw new ValidationException("Slot date must be in yyyy-MM-dd format");
+        }
+        if (s.getStartTime() == null || !isValidTime(s.getStartTime())) {
+            throw new ValidationException("Slot start time must be in HH:mm format");
+        }
+        if (s.getEndTime() == null || !isValidTime(s.getEndTime())) {
+            throw new ValidationException("Slot end time must be in HH:mm format");
+        }
+        LocalTime start = LocalTime.parse(s.getStartTime().trim());
+        LocalTime end = LocalTime.parse(s.getEndTime().trim());
+        if (!start.isBefore(end)) {
+            throw new ValidationException("Rule 8: Slot start time must precede end time");
+        }
+        if (s.getMaxCustomers() <= 0) {
+            throw new ValidationException("Rule 8: Slot maxCustomers must be greater than zero");
+        }
+    }
+
+    private boolean trainerExists(int trainerId) throws DatabaseException {
+        String sql = "SELECT 1 FROM trainers WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, trainerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify trainer id: " + trainerId, e);
+        }
+    }
+
+    private boolean isValidDate(String value) {
+        try {
+            LocalDate.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    private boolean isValidTime(String value) {
+        try {
+            LocalTime.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
         }
     }
 }

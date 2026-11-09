@@ -3,6 +3,8 @@ package com.gym.dao;
 import com.gym.exception.DatabaseException;
 import com.gym.exception.ValidationException;
 import com.gym.model.Attendance;
+import com.gym.model.CustomerStatus;
+import com.gym.model.MembershipStatus;
 import com.gym.util.DatabaseConnection;
 
 import java.sql.Connection;
@@ -10,6 +12,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,7 +22,7 @@ import java.util.List;
 public class AttendanceDao {
 
     public Attendance insert(Attendance attendance) throws DatabaseException, ValidationException {
-        validate(attendance);
+        validate(attendance, false);
         String sql = "INSERT INTO attendance (customer_id, attendance_date, check_in, check_out) VALUES (?, ?, ?, ?)";
 
         try (Connection conn = DatabaseConnection.getConnection();
@@ -41,7 +46,7 @@ public class AttendanceDao {
     }
 
     public void update(Attendance attendance) throws DatabaseException, ValidationException {
-        validate(attendance);
+        validate(attendance, true);
         String sql = "UPDATE attendance SET customer_id = ?, attendance_date = ?, check_in = ?, check_out = ? WHERE id = ?";
 
         try (Connection conn = DatabaseConnection.getConnection();
@@ -128,12 +133,106 @@ public class AttendanceDao {
         return a;
     }
 
-    private void validate(Attendance a) throws ValidationException {
+    private void validate(Attendance a, boolean isUpdate) throws ValidationException, DatabaseException {
         if (a == null) {
             throw new ValidationException("Attendance record cannot be null");
         }
         if (a.getCustomerId() <= 0) {
             throw new ValidationException("Valid customer id is required");
+        }
+        if (a.getDate() == null || !isValidDate(a.getDate())) {
+            throw new ValidationException("Attendance date must be in yyyy-MM-dd format");
+        }
+        if (a.getCheckIn() == null || !isValidTime(a.getCheckIn())) {
+            throw new ValidationException("Check-in time must be in HH:mm format");
+        }
+        if (a.getCheckOut() != null && !a.getCheckOut().trim().isEmpty()) {
+            if (!isValidTime(a.getCheckOut())) {
+                throw new ValidationException("Check-out time must be in HH:mm format");
+            }
+            LocalTime inTime = LocalTime.parse(a.getCheckIn().trim());
+            LocalTime outTime = LocalTime.parse(a.getCheckOut().trim());
+            if (outTime.isBefore(inTime)) {
+                throw new ValidationException("Check-out time cannot precede check-in time");
+            }
+        }
+        if (!isUpdate) {
+            checkCustomerAndMembershipEligibility(a.getCustomerId(), a.getDate().trim());
+            if (sameDayRowExists(a.getCustomerId(), a.getDate().trim(), -1)) {
+                throw new ValidationException("Rule 5: Member already checked in on " + a.getDate() + " (reuse existing row)");
+            }
+        }
+    }
+
+    private void checkCustomerAndMembershipEligibility(int customerId, String date)
+            throws ValidationException, DatabaseException {
+        String custSql = "SELECT status FROM customers WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(custSql)) {
+            ps.setInt(1, customerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new ValidationException("Customer does not exist with id: " + customerId);
+                }
+                String status = rs.getString("status");
+                if (!CustomerStatus.ACTIVE.name().equals(status)) {
+                    throw new ValidationException("Rule 5: Check-in blocked - customer status is " + status);
+                }
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify customer status", e);
+        }
+
+        String memSql = "SELECT 1 FROM memberships WHERE customer_id = ? AND status = ? AND end_date >= ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(memSql)) {
+            ps.setInt(1, customerId);
+            ps.setString(2, MembershipStatus.ACTIVE.name());
+            ps.setString(3, date);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new ValidationException("Rule 5: Check-in blocked - no ACTIVE unexpired membership for " + date);
+                }
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify active membership", e);
+        }
+    }
+
+    private boolean sameDayRowExists(int customerId, String date, int excludeId) throws DatabaseException {
+        String sql = "SELECT id FROM attendance WHERE customer_id = ? AND attendance_date = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, customerId);
+            ps.setString(2, date);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    if (rs.getInt("id") != excludeId) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to check existing daily attendance", e);
+        }
+    }
+
+    private boolean isValidDate(String value) {
+        try {
+            LocalDate.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    private boolean isValidTime(String value) {
+        try {
+            LocalTime.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
         }
     }
 }

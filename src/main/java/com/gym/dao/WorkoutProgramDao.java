@@ -10,6 +10,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,7 +19,7 @@ import java.util.List;
 public class WorkoutProgramDao {
 
     public WorkoutProgram insert(WorkoutProgram program) throws DatabaseException, ValidationException {
-        validate(program);
+        validate(program, false);
         String sql = "INSERT INTO workout_programs (customer_id, creator_trainer_id, name, exercises, version, created_date) "
                 + "VALUES (?, ?, ?, ?, ?, ?)";
 
@@ -26,7 +28,7 @@ public class WorkoutProgramDao {
 
             ps.setInt(1, program.getCustomerId());
             ps.setInt(2, program.getCreatorTrainerId());
-            ps.setString(3, program.getName());
+            ps.setString(3, program.getName().trim());
             ps.setString(4, program.getExercises());
             ps.setInt(5, program.getVersion());
             ps.setString(6, program.getCreatedDate());
@@ -44,7 +46,7 @@ public class WorkoutProgramDao {
     }
 
     public void update(WorkoutProgram program) throws DatabaseException, ValidationException {
-        validate(program);
+        validate(program, true);
         String sql = "UPDATE workout_programs SET customer_id = ?, creator_trainer_id = ?, name = ?, "
                 + "exercises = ?, version = ?, created_date = ? WHERE id = ?";
 
@@ -53,7 +55,7 @@ public class WorkoutProgramDao {
 
             ps.setInt(1, program.getCustomerId());
             ps.setInt(2, program.getCreatorTrainerId());
-            ps.setString(3, program.getName());
+            ps.setString(3, program.getName().trim());
             ps.setString(4, program.getExercises());
             ps.setInt(5, program.getVersion());
             ps.setString(6, program.getCreatedDate());
@@ -136,12 +138,68 @@ public class WorkoutProgramDao {
         return p;
     }
 
-    private void validate(WorkoutProgram p) throws ValidationException {
+    private void validate(WorkoutProgram p, boolean isUpdate) throws ValidationException, DatabaseException {
         if (p == null) {
             throw new ValidationException("Workout program cannot be null");
         }
+        if (p.getCustomerId() <= 0 || !recordExists("customers", p.getCustomerId())) {
+            throw new ValidationException("Customer does not exist with id: " + p.getCustomerId());
+        }
+        if (p.getCreatorTrainerId() <= 0 || !recordExists("trainers", p.getCreatorTrainerId())) {
+            throw new ValidationException("Creator trainer does not exist with id: " + p.getCreatorTrainerId());
+        }
         if (p.getName() == null || p.getName().trim().isEmpty()) {
             throw new ValidationException("Program name is required");
+        }
+        if (p.getVersion() < 1) {
+            throw new ValidationException("Program version must be at least 1");
+        }
+        if (p.getCreatedDate() != null && !p.getCreatedDate().trim().isEmpty() && !isValidDate(p.getCreatedDate())) {
+            throw new ValidationException("Created date must be in yyyy-MM-dd format");
+        }
+        if (versionConflictExists(p.getCustomerId(), p.getVersion(), isUpdate ? p.getId() : -1)) {
+            throw new ValidationException("Program version " + p.getVersion() + " already exists for customer " + p.getCustomerId());
+        }
+    }
+
+    private boolean versionConflictExists(int customerId, int version, int excludeId) throws DatabaseException {
+        String sql = "SELECT id FROM workout_programs WHERE customer_id = ? AND version = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, customerId);
+            ps.setInt(2, version);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    if (rs.getInt("id") != excludeId) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify workout program version uniqueness", e);
+        }
+    }
+
+    private boolean recordExists(String table, int id) throws DatabaseException {
+        String sql = "SELECT 1 FROM " + table + " WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, id);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify record in " + table + " for id: " + id, e);
+        }
+    }
+
+    private boolean isValidDate(String value) {
+        try {
+            LocalDate.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
         }
     }
 }

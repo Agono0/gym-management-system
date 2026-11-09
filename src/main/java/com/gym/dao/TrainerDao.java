@@ -11,6 +11,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,14 +27,14 @@ public class TrainerDao {
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-            ps.setString(1, trainer.getFullName());
+            ps.setString(1, trainer.getFullName().trim());
             ps.setString(2, trainer.getPhone());
             ps.setString(3, trainer.getEmail());
             ps.setString(4, trainer.getSpecialization());
             ps.setInt(5, trainer.getExperienceYears());
             ps.setString(6, trainer.getCertifications());
             ps.setString(7, trainer.getHireDate());
-            ps.setBigDecimal(8, trainer.getHourlyRate() != null ? trainer.getHourlyRate() : BigDecimal.ZERO);
+            ps.setBigDecimal(8, trainer.getHourlyRate());
 
             ps.executeUpdate();
             try (ResultSet rs = ps.getGeneratedKeys()) {
@@ -54,14 +56,14 @@ public class TrainerDao {
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setString(1, trainer.getFullName());
+            ps.setString(1, trainer.getFullName().trim());
             ps.setString(2, trainer.getPhone());
             ps.setString(3, trainer.getEmail());
             ps.setString(4, trainer.getSpecialization());
             ps.setInt(5, trainer.getExperienceYears());
             ps.setString(6, trainer.getCertifications());
             ps.setString(7, trainer.getHireDate());
-            ps.setBigDecimal(8, trainer.getHourlyRate() != null ? trainer.getHourlyRate() : BigDecimal.ZERO);
+            ps.setBigDecimal(8, trainer.getHourlyRate());
             ps.setInt(9, trainer.getId());
 
             ps.executeUpdate();
@@ -132,6 +134,47 @@ public class TrainerDao {
         }
         if (t.getFullName() == null || t.getFullName().trim().isEmpty()) {
             throw new ValidationException("Trainer name is required");
+        }
+        if (t.getEmail() != null && !t.getEmail().trim().isEmpty() && !isValidEmail(t.getEmail())) {
+            throw new ValidationException("Invalid trainer email format: " + t.getEmail());
+        }
+        if (t.getPhone() != null && !t.getPhone().trim().isEmpty() && countDigits(t.getPhone()) < 7) {
+            throw new ValidationException("Trainer phone must contain at least 7 digits");
+        }
+        if (t.getExperienceYears() < 0) {
+            throw new ValidationException("Experience years cannot be negative");
+        }
+        if (t.getHireDate() != null && !t.getHireDate().trim().isEmpty() && !isValidDate(t.getHireDate())) {
+            throw new ValidationException("Hire date must be in yyyy-MM-dd format");
+        }
+        if (t.getHourlyRate() == null || t.getHourlyRate().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ValidationException("Hourly rate must be zero or positive");
+        }
+    }
+
+    private boolean isValidEmail(String email) {
+        String trimmed = email.trim();
+        int atPos = trimmed.indexOf('@');
+        int dotPos = trimmed.lastIndexOf('.');
+        return atPos > 0 && dotPos > atPos + 1 && dotPos < trimmed.length() - 1 && !trimmed.contains(" ");
+    }
+
+    private int countDigits(String text) {
+        int digits = 0;
+        for (int i = 0; i < text.length(); i++) {
+            if (Character.isDigit(text.charAt(i))) {
+                digits++;
+            }
+        }
+        return digits;
+    }
+
+    private boolean isValidDate(String value) {
+        try {
+            LocalDate.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
         }
     }
 }

@@ -13,15 +13,15 @@ it usable:
 |---|---|
 | What are we building, with what, and who owns it? | [`../README.md`](../README.md) |
 | What exactly does each class look like (fields, methods, types)? | [`UML.md`](UML.md) §1 (domain), §3 (DAOs), §4 (retired service note), §5 (controllers), §6 (utilities & exceptions) |
-| What are the rules the whole team must implement identically? | [`UML.md`](UML.md) → "Business rules" (19 rules, targeting Milestone 3 wiring) |
-| Why is it built this way? | [`DECISIONS.md`](DECISIONS.md) (77 numbered decisions, append-only) |
+| What are the rules the whole team must implement identically? | [`UML.md`](UML.md) → "Business rules" (19 rules: live in `com.gym.cli` + `com.gym.dao` today; targeting Milestone 3 GUI wiring) |
+| Why is it built this way? | [`DECISIONS.md`](DECISIONS.md) (78 numbered decisions, append-only) |
 | How do I learn this project / prepare the defence? | [`LEARNING_GUIDE.md`](LEARNING_GUIDE.md) |
 | How do I write or extend these docs without breaking them? | [`DOCS_STANDARD.md`](DOCS_STANDARD.md) |
-| How do I build, run and debug it? | [`BUILD_AND_RUN.md`](BUILD_AND_RUN.md) |
+| How do I build, run and debug it? | [`BUILD_AND_RUN.md`](BUILD_AND_RUN.md) (`runGym`, `run`, `runCli` / `run-cli.bat`) |
 | What is actually finished? | [`COVERAGE.md`](COVERAGE.md) |
 | Who does what, and what is the status? | [`UML_TEAM.md`](UML_TEAM.md) |
-| How do I write *this layer*? | the folder README: [`model`](../src/main/java/com/gym/model/README.md) · [`dao`](../src/main/java/com/gym/dao/README.md) · [`service`](../src/main/java/com/gym/service/README.md) (retired) · [`controller`](../src/main/java/com/gym/controller/README.md) · [`util`](../src/main/java/com/gym/util/README.md) (+ `com.gym.exception`) · [`resources`](../src/main/resources/README.md) — sub-docs: [`fxml/`](../src/main/resources/fxml/README.md) · [`db/`](../src/main/resources/db/README.md) · [`theme/`](../src/main/resources/theme/README.md) · [`images/`](../src/main/resources/images/README.md) |
-| What is the entry point, and what happens at startup and shutdown? | [`../src/main/java/com/gym/README.md`](../src/main/java/com/gym/README.md) (`MainApp` gallery, `GymApp` launcher, `Screen`/`ScreenController`, `AppShellController`, `LaunchGateController`) |
+| How do I write *this layer*? | the folder README: [`model`](../src/main/java/com/gym/model/README.md) · [`dao`](../src/main/java/com/gym/dao/README.md) · [`cli`](../src/main/java/com/gym/cli/README.md) · [`service`](../src/main/java/com/gym/service/README.md) (retired) · [`controller`](../src/main/java/com/gym/controller/README.md) · [`util`](../src/main/java/com/gym/util/README.md) (+ `com.gym.exception`) · [`resources`](../src/main/resources/README.md) — sub-docs: [`fxml/`](../src/main/resources/fxml/README.md) · [`db/`](../src/main/resources/db/README.md) · [`theme/`](../src/main/resources/theme/README.md) · [`images/`](../src/main/resources/images/README.md) |
+| What is the entry point, and what happens at startup and shutdown? | [`../src/main/java/com/gym/README.md`](../src/main/java/com/gym/README.md) (`MainApp` gallery, `GymApp` launcher, `cli.GymCliApp` terminal console) |
 | How do the m3fx library modules work? (not the gym app) | [`../PLAN.md`](../PLAN.md), [`../AGENTS.md`](../AGENTS.md), [`COVERAGE.md`](COVERAGE.md), [`SPEC_NOTES/`](SPEC_NOTES) |
 
 ## 2. Authority when two documents disagree

@@ -13,6 +13,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,7 +22,7 @@ import java.util.List;
 public class MembershipDao {
 
     public Membership insert(Membership membership) throws DatabaseException, ValidationException {
-        validate(membership);
+        validate(membership, false);
         String sql = "INSERT INTO memberships (customer_id, plan, price, start_date, end_date, status, frozen_days) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?)";
 
@@ -28,8 +30,8 @@ public class MembershipDao {
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
             ps.setInt(1, membership.getCustomerId());
-            ps.setString(2, membership.getPlan() != null ? membership.getPlan().name() : PlanType.MONTHLY.name());
-            ps.setBigDecimal(3, membership.getPrice() != null ? membership.getPrice() : BigDecimal.ZERO);
+            ps.setString(2, membership.getPlan().name());
+            ps.setBigDecimal(3, membership.getPrice());
             ps.setString(4, membership.getStartDate());
             ps.setString(5, membership.getEndDate());
             ps.setString(6, membership.getStatus() != null ? membership.getStatus().name() : MembershipStatus.ACTIVE.name());
@@ -48,7 +50,7 @@ public class MembershipDao {
     }
 
     public void update(Membership membership) throws DatabaseException, ValidationException {
-        validate(membership);
+        validate(membership, true);
         String sql = "UPDATE memberships SET customer_id = ?, plan = ?, price = ?, start_date = ?, "
                 + "end_date = ?, status = ?, frozen_days = ? WHERE id = ?";
 
@@ -56,8 +58,8 @@ public class MembershipDao {
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setInt(1, membership.getCustomerId());
-            ps.setString(2, membership.getPlan() != null ? membership.getPlan().name() : PlanType.MONTHLY.name());
-            ps.setBigDecimal(3, membership.getPrice() != null ? membership.getPrice() : BigDecimal.ZERO);
+            ps.setString(2, membership.getPlan().name());
+            ps.setBigDecimal(3, membership.getPrice());
             ps.setString(4, membership.getStartDate());
             ps.setString(5, membership.getEndDate());
             ps.setString(6, membership.getStatus() != null ? membership.getStatus().name() : MembershipStatus.ACTIVE.name());
@@ -156,15 +158,61 @@ public class MembershipDao {
         return m;
     }
 
-    private void validate(Membership m) throws ValidationException {
+    private void validate(Membership m, boolean isUpdate) throws ValidationException, DatabaseException {
         if (m == null) {
             throw new ValidationException("Membership cannot be null");
         }
-        if (m.getCustomerId() <= 0) {
-            throw new ValidationException("Valid customer id is required");
+        if (m.getCustomerId() <= 0 || !customerExists(m.getCustomerId())) {
+            throw new ValidationException("Customer does not exist with id: " + m.getCustomerId());
         }
-        if (m.getPrice() != null && m.getPrice().compareTo(BigDecimal.ZERO) < 0) {
-            throw new ValidationException("Price cannot be negative");
+        if (m.getPlan() == null) {
+            throw new ValidationException("Membership plan type is required");
+        }
+        if (m.getPrice() == null || m.getPrice().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ValidationException("Membership price cannot be negative");
+        }
+        if (m.getStartDate() == null || m.getStartDate().trim().isEmpty() || !isValidDate(m.getStartDate())) {
+            throw new ValidationException("Start date must be in yyyy-MM-dd format");
+        }
+        if (m.getEndDate() == null || m.getEndDate().trim().isEmpty() || !isValidDate(m.getEndDate())) {
+            throw new ValidationException("End date must be in yyyy-MM-dd format");
+        }
+        LocalDate start = LocalDate.parse(m.getStartDate().trim());
+        LocalDate end = LocalDate.parse(m.getEndDate().trim());
+        if (end.isBefore(start)) {
+            throw new ValidationException("Membership end date cannot precede start date");
+        }
+        if (m.getFrozenDays() < 0) {
+            throw new ValidationException("Frozen days cannot be negative");
+        }
+        if (isUpdate) {
+            Membership existing = findById(m.getId());
+            if (existing != null && existing.getStatus() == MembershipStatus.CANCELLED
+                    && m.getStatus() != MembershipStatus.CANCELLED) {
+                throw new ValidationException("Rule 7: Cancelled membership cannot be renewed or reactivated");
+            }
+        }
+    }
+
+    private boolean customerExists(int customerId) throws DatabaseException {
+        String sql = "SELECT 1 FROM customers WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, customerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify customer id: " + customerId, e);
+        }
+    }
+
+    private boolean isValidDate(String value) {
+        try {
+            LocalDate.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
         }
     }
 }

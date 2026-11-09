@@ -11,6 +11,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -149,15 +151,46 @@ public class ProgressRecordDao {
         return r;
     }
 
-    private void validate(ProgressRecord r) throws ValidationException {
+    private void validate(ProgressRecord r) throws ValidationException, DatabaseException {
         if (r == null) {
             throw new ValidationException("Progress record cannot be null");
         }
-        if (r.getCustomerId() <= 0) {
-            throw new ValidationException("Valid customer id is required");
+        if (r.getCustomerId() <= 0 || !customerExists(r.getCustomerId())) {
+            throw new ValidationException("Customer does not exist with id: " + r.getCustomerId());
+        }
+        if (r.getDate() == null || r.getDate().trim().isEmpty() || !isValidDate(r.getDate())) {
+            throw new ValidationException("Progress date must be in yyyy-MM-dd format");
         }
         if (r.getWeightKg() <= 0) {
             throw new ValidationException("Weight must be greater than zero");
+        }
+        if (r.getBodyFatPct() < 0 || r.getBodyFatPct() > 100) {
+            throw new ValidationException("Body fat percentage must be between 0 and 100");
+        }
+        if (r.getTargetWeightKg() != null && r.getTargetWeightKg().doubleValue() <= 0) {
+            throw new ValidationException("Target weight must be greater than zero");
+        }
+    }
+
+    private boolean customerExists(int customerId) throws DatabaseException {
+        String sql = "SELECT 1 FROM customers WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, customerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify customer id: " + customerId, e);
+        }
+    }
+
+    private boolean isValidDate(String value) {
+        try {
+            LocalDate.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
         }
     }
 }

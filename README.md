@@ -144,7 +144,8 @@ src/main/java/com/gym/
   controller/        Screen enum, ScreenController interface, AppShellController, LaunchGateController,
                      and 18 Java-built screen controllers (demo data today; Milestone 3 connects DAOs)
   model/             shipped — 13 Serializable domain entities + 11 enums (docs/UML.md §1, §1b)
-  dao/               shipped — 13 concrete SQLite DAOs using JDBC PreparedStatement (docs/UML.md §3)
+  dao/               shipped — 13 concrete SQLite DAOs with Decision 78 validation guards (docs/UML.md §3)
+  cli/               shipped — COMP 301 Terminal Workflow Console + 22-scenario TA suite (`GymCliApp`)
   util/              shipped — DatabaseConnection (13-table DDL) + SerializationUtil (binary I/O)
   exception/         shipped — GymException, ValidationException, DatabaseException
   service/           retired per docs/DECISIONS.md 77 (README only — explains removal)
@@ -174,9 +175,10 @@ setup and troubleshooting: [`docs/BUILD_AND_RUN.md`](docs/BUILD_AND_RUN.md).
 git clone https://github.com/Agono0/gym-management-system.git
 cd gym-management-system
 git checkout main
-.\gradlew.bat build    # POSIX: ./gradlew build  (compiles all modules + runs m3fx JUnit suites)
-.\gradlew.bat run      # opens the m3fx component gallery (MainApp)
-.\gradlew.bat runGym   # opens the full Java-built app shell (GymApp → AppShellController, all 19 screens)
+.\gradlew.bat build                        # POSIX: ./gradlew build  (compiles all modules + runs m3fx JUnit suites)
+.\gradlew.bat runCli -q --console=plain    # opens interactive CMD workflow + [T] TA suite (or run-cli.bat)
+.\gradlew.bat run                          # opens the m3fx component gallery (MainApp)
+.\gradlew.bat runGym                       # opens the full Java-built app shell (GymApp → AppShellController, all 19 screens)
 ```
 
 When the backend persistence layer runs (`DatabaseConnection.initializeDatabase()`), SQLite creates
@@ -251,8 +253,8 @@ states which document wins when two disagree.
 |----------|------------|
 | [`docs/UML.md`](docs/UML.md) | **The design** — shipped runtime spine (§2), domain model (§1, §1b — 13 entities, 11 enums), 13 concrete DAOs (§3), retired services note (§4), controllers (§5), utilities & exceptions (§6), 19 business rules |
 | [`docs/LEARNING_GUIDE.md`](docs/LEARNING_GUIDE.md) | Study path anchored to COMP 301 Lectures 1–6, OOP concept index, glossary, 20 defence questions |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why each non-obvious choice was made (77 numbered entries, append-only) |
-| [`docs/BUILD_AND_RUN.md`](docs/BUILD_AND_RUN.md) | `build.gradle`/`settings.gradle` explained, commands, `sqlite-jdbc` + `slf4j-api` classpath note, database paths, troubleshooting |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Why each non-obvious choice was made (78 numbered entries, append-only) |
+| [`docs/BUILD_AND_RUN.md`](docs/BUILD_AND_RUN.md) | `build.gradle`/`settings.gradle` explained, `runCli`/`runGym`/`run` commands, `sqlite-jdbc` + `slf4j-api` classpath note, database paths, troubleshooting |
 | [`docs/DOCS_STANDARD.md`](docs/DOCS_STANDARD.md) | The template and authority rules every folder README follows |
 | [`docs/UML_TEAM.md`](docs/UML_TEAM.md) · [`docs/COVERAGE.md`](docs/COVERAGE.md) | Ownership + Milestone 2/3 status; honest built-vs-planned checklist |
 
@@ -263,7 +265,8 @@ patterns, rules, per-file explanations, review checklist, and learning exercises
 |--------|-----|--------|
 | `com.gym` | [`README`](src/main/java/com/gym/README.md) | Entry points: `MainApp` gallery, `GymApp` shell launcher (+ freeze watchdog, launch gates), `Screen`/`ScreenController`, `AppShellController` |
 | `model/` | [`README`](src/main/java/com/gym/model/README.md) | **Shipped (Milestone 2).** 13 `Serializable` entities + 11 enums: encapsulation, `equals`/`hashCode`, enums |
-| `dao/` | [`README`](src/main/java/com/gym/dao/README.md) | **Shipped (Milestone 2).** 13 concrete SQLite DAOs: JDBC `PreparedStatement`, `try-with-resources`, `DatabaseException`, `ValidationException` |
+| `dao/` | [`README`](src/main/java/com/gym/dao/README.md) | **Shipped (Milestone 2 + Decision 78).** 13 concrete SQLite DAOs: JDBC `PreparedStatement`, `try-with-resources`, strict validation, `DatabaseException`, `ValidationException` |
+| `cli/` | [`README`](src/main/java/com/gym/cli/README.md) | **Shipped (Decision 78).** Interactive CMD Terminal Workflow Console + `[T]` 22-scenario TA verification suite (`runCli` / `run-cli.bat`) |
 | `service/` | [`README`](src/main/java/com/gym/service/README.md) | **Retired (`DECISIONS.md` 77).** Explains why the 11-service layer was removed for beginner scope |
 | `controller/` | [`README`](src/main/java/com/gym/controller/README.md) | The 20 Java-built screen/shell controllers + `Screen`/`ScreenController`: event handling, demo data today, Milestone 3 DAO wiring |
 | `util/` + `exception/` | [`README`](src/main/java/com/gym/util/README.md) | **Shipped (Milestone 2).** `DatabaseConnection` (13-table DDL), `SerializationUtil` (binary I/O), and `GymException` → `ValidationException` / `DatabaseException` |

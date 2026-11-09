@@ -11,6 +11,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,17 +20,17 @@ import java.util.List;
 public class AdministratorDao {
 
     public Administrator insert(Administrator admin) throws DatabaseException, ValidationException {
-        validate(admin);
+        validate(admin, false);
         String sql = "INSERT INTO administrators (full_name, username, password_hash, role, phone, email, active, created_date) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
 
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-            ps.setString(1, admin.getFullName());
-            ps.setString(2, admin.getUsername());
+            ps.setString(1, admin.getFullName().trim());
+            ps.setString(2, admin.getUsername().trim());
             ps.setString(3, admin.getPasswordHash());
-            ps.setString(4, admin.getRole() != null ? admin.getRole().name() : StaffRole.STAFF.name());
+            ps.setString(4, admin.getRole().name());
             ps.setString(5, admin.getPhone());
             ps.setString(6, admin.getEmail());
             ps.setInt(7, admin.isActive() ? 1 : 0);
@@ -47,17 +49,17 @@ public class AdministratorDao {
     }
 
     public void update(Administrator admin) throws DatabaseException, ValidationException {
-        validate(admin);
+        validate(admin, true);
         String sql = "UPDATE administrators SET full_name = ?, username = ?, password_hash = ?, role = ?, "
                 + "phone = ?, email = ?, active = ?, created_date = ? WHERE id = ?";
 
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setString(1, admin.getFullName());
-            ps.setString(2, admin.getUsername());
+            ps.setString(1, admin.getFullName().trim());
+            ps.setString(2, admin.getUsername().trim());
             ps.setString(3, admin.getPasswordHash());
-            ps.setString(4, admin.getRole() != null ? admin.getRole().name() : StaffRole.STAFF.name());
+            ps.setString(4, admin.getRole().name());
             ps.setString(5, admin.getPhone());
             ps.setString(6, admin.getEmail());
             ps.setInt(7, admin.isActive() ? 1 : 0);
@@ -149,12 +151,47 @@ public class AdministratorDao {
         return a;
     }
 
-    private void validate(Administrator a) throws ValidationException {
+    private void validate(Administrator a, boolean isUpdate) throws ValidationException, DatabaseException {
         if (a == null) {
             throw new ValidationException("Administrator cannot be null");
         }
-        if (a.getUsername() == null || a.getUsername().trim().isEmpty()) {
-            throw new ValidationException("Username is required");
+        if (a.getFullName() == null || a.getFullName().trim().isEmpty()) {
+            throw new ValidationException("Staff full name is required");
+        }
+        if (a.getUsername() == null || a.getUsername().trim().length() < 3 || a.getUsername().trim().contains(" ")) {
+            throw new ValidationException("Username must be at least 3 characters with no spaces");
+        }
+        if (a.getPasswordHash() == null || a.getPasswordHash().trim().isEmpty()) {
+            throw new ValidationException("Password is required");
+        }
+        if (a.getRole() == null) {
+            throw new ValidationException("Staff role is required");
+        }
+        if (a.getEmail() != null && !a.getEmail().trim().isEmpty() && !isValidEmail(a.getEmail())) {
+            throw new ValidationException("Invalid staff email format: " + a.getEmail());
+        }
+        if (a.getCreatedDate() != null && !a.getCreatedDate().trim().isEmpty() && !isValidDate(a.getCreatedDate())) {
+            throw new ValidationException("Created date must be in yyyy-MM-dd format");
+        }
+        Administrator existing = findByUsername(a.getUsername().trim());
+        if (existing != null && (!isUpdate || existing.getId() != a.getId())) {
+            throw new ValidationException("Username already exists: " + a.getUsername().trim());
+        }
+    }
+
+    private boolean isValidEmail(String email) {
+        String trimmed = email.trim();
+        int atPos = trimmed.indexOf('@');
+        int dotPos = trimmed.lastIndexOf('.');
+        return atPos > 0 && dotPos > atPos + 1 && dotPos < trimmed.length() - 1 && !trimmed.contains(" ");
+    }
+
+    private boolean isValidDate(String value) {
+        try {
+            LocalDate.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
         }
     }
 }

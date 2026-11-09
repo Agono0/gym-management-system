@@ -129,15 +129,17 @@ Milestone 3 DAO wiring.
 - [x] Wired UI demo flows across screens (trainer list → trainer profile, customer list → customer profile, dashboard end-shift → login gate, payment record, attendance check-in)
 - [x] Responsive Viewport & Side Menu Scrolling: `ScrollPane` integration for `M3NavigationRail` and `M3NavigationDrawer`
 - [x] Strict compile — `-Xlint:all,-processing` enabled everywhere with no truncation (`-Xmaxwarns 10000`), UTF-8 forced, and the build is warning-clean
-- [x] Backend domain model, concrete SQLite DAOs, and exceptions (`13` `Serializable` entities, `11` enums, `13` concrete DAOs, `DatabaseConnection`, `SerializationUtil`, `GymException`/`ValidationException`/`DatabaseException`) — **shipped (Milestone 2)**; abstract service tier retired for beginner simplicity (`DECISIONS.md` 77)
+- [x] Backend domain model, concrete SQLite DAOs, and exceptions (`13` `Serializable` entities, `11` enums, `13` concrete DAOs with `UML.md` format/FK/uniqueness/rule validation guards, `DatabaseConnection`, `SerializationUtil`, `GymException`/`ValidationException`/`DatabaseException`) — **shipped (Milestone 2 + Decision 78)**; abstract service tier retired for beginner simplicity (`DECISIONS.md` 77)
 - [x] SQLite auto-bootstrapping schema (`DatabaseConnection.initializeDatabase()` DDL creating all 13 tables) + binary serialization (`SerializationUtil.saveToFile` / `loadFromFile`) — **shipped (Milestone 2)**
+- [x] Terminal UI Workflow Console (`com.gym.cli`, `runCli` / `run-cli.bat`, `DECISIONS.md` 78): SQLite Login Gate (`Rule 16` active/RBAC checks), interactive Modules `[1]`–`[10]` (Member 360, Coaches/Slots/Subs, Memberships Freeze/Unfreeze/Renew, Schedule/State Machine, Live Workout HUD, Attendance Rule 5, Payments XOR/Void/Balance, Equipment Floor Map, Staff RBAC, `.ser` Export/Load + `DatabaseException` Traps), and `[T]` TA Showcase (22/22 automated sandbox suite + category picker) — **shipped**
 - [ ] Milestone 3: Connect the 20 UI controllers from demo data to the shipped SQLite DAOs and `SerializationUtil`
 - Note on tests (`DECISIONS.md` 77): `src/test/` was removed from the gym app root module (`./gradlew test` on root reports `NO-SOURCE`), while the JUnit 5 suites for `:m3fx-core` and `:m3fx-controls` remain active.
 
 ### Documentation for the app
 
-- [x] **Design spec** — `docs/UML.md`: §1 and §1b (13 domain entities and 11 enums) preserved unchanged; §2, §3, §4, §5, §6, §7, and descriptions updated for Milestone 2 (concrete DAOs, retired service tier, Java-built UI spine).
-- [x] **Entry-point doc** — `src/main/java/com/gym/README.md`: launcher classes and Milestone 2 backend overview.
+- [x] **Design spec** — `docs/UML.md`: §1 and §1b (13 domain entities and 11 enums) preserved unchanged; §2, §3, §4, §5, §6, §7, `com.gym.cli` descriptions, and business-rule enforcement updated (`DECISIONS.md` 77, 78).
+- [x] **Entry-point doc** — `src/main/java/com/gym/README.md`: launcher classes (`MainApp`, `GymApp`, `M3Samples`, `cli.GymCliApp`) and Milestone 2 backend overview.
+- [x] **Terminal workflow doc** — `src/main/java/com/gym/cli/README.md`: 13 pure-ASCII COMP 301 terminal classes and TA verification suite.
 - [x] **Controller-layer doc** — `src/main/java/com/gym/controller/README.md`: the 20 Java-built controllers (`Screen` / `ScreenController`).
 - [x] **Backend-layer & resource docs** — `model/`, `dao/`, `service/`, `util/`, `resources/db/`, `resources/fxml/` READMEs synced with Milestone 2 shipped files and `fb3486d`.
 - [x] **Project docs** — `docs/README.md` (index), `docs/DOCS_STANDARD.md`, `docs/LEARNING_GUIDE.md`,

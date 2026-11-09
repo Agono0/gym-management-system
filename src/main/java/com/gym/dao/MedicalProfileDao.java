@@ -10,6 +10,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,7 +19,7 @@ import java.util.List;
 public class MedicalProfileDao {
 
     public MedicalProfile insert(MedicalProfile profile) throws DatabaseException, ValidationException {
-        validate(profile);
+        validate(profile, false);
         String sql = "INSERT INTO medical_profiles (customer_id, blood_type, conditions, allergies, "
                 + "medications, injuries, doctor_name, doctor_phone, notes, updated_date) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -49,7 +51,7 @@ public class MedicalProfileDao {
     }
 
     public void update(MedicalProfile profile) throws DatabaseException, ValidationException {
-        validate(profile);
+        validate(profile, true);
         String sql = "UPDATE medical_profiles SET customer_id = ?, blood_type = ?, conditions = ?, allergies = ?, "
                 + "medications = ?, injuries = ?, doctor_name = ?, doctor_phone = ?, notes = ?, updated_date = ? "
                 + "WHERE id = ?";
@@ -149,12 +151,41 @@ public class MedicalProfileDao {
         return mp;
     }
 
-    private void validate(MedicalProfile mp) throws ValidationException {
+    private void validate(MedicalProfile mp, boolean isUpdate) throws ValidationException, DatabaseException {
         if (mp == null) {
             throw new ValidationException("Medical profile cannot be null");
         }
-        if (mp.getCustomerId() <= 0) {
-            throw new ValidationException("Valid customer id is required");
+        if (mp.getCustomerId() <= 0 || !customerExists(mp.getCustomerId())) {
+            throw new ValidationException("Customer does not exist with id: " + mp.getCustomerId());
+        }
+        if (mp.getUpdatedDate() != null && !mp.getUpdatedDate().trim().isEmpty() && !isValidDate(mp.getUpdatedDate())) {
+            throw new ValidationException("Updated date must be in yyyy-MM-dd format");
+        }
+        MedicalProfile existing = findByCustomerId(mp.getCustomerId());
+        if (existing != null && (!isUpdate || existing.getId() != mp.getId())) {
+            throw new ValidationException("Rule 3: Customer " + mp.getCustomerId() + " already has a medical profile");
+        }
+    }
+
+    private boolean customerExists(int customerId) throws DatabaseException {
+        String sql = "SELECT 1 FROM customers WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, customerId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to verify customer id: " + customerId, e);
+        }
+    }
+
+    private boolean isValidDate(String value) {
+        try {
+            LocalDate.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
         }
     }
 }

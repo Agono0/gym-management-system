@@ -12,19 +12,21 @@ This guide takes a fresh clone to a running window, and tells you how to check t
 
 | Path | Command | What it uses |
 |---|---|---|
-| Terminal (recommended) | `.\gradlew.bat runGym` (app) or `.\gradlew.bat run` (gallery) | the committed Gradle wrapper, which pins Gradle 9.8.0 |
-| IntelliJ IDEA | Gradle tool window → Tasks → application → `runGym` / `run` | the same wrapper IntelliJ imported |
+| Terminal GUI (recommended) | `.\gradlew.bat runGym` (app) or `.\gradlew.bat run` (gallery) | the committed Gradle wrapper, which pins Gradle 9.8.0 |
+| Terminal CMD UI / TA Suite | `.\gradlew.bat runCli -q --console=plain` (or `run-cli.bat`) | runs `com.gym.cli.GymCliApp` in interactive 80-col ASCII CMD mode |
+| IntelliJ IDEA | Gradle tool window → Tasks → application → `runGym` / `run` / `runCli` | the same wrapper IntelliJ imported |
 
-`run` compiles the app and starts `com.gym.MainApp` (`build.gradle` line 57), the m3fx component showcase gallery with a 19-screen interactive viewer. `runGym` starts `com.gym.GymApp` (`build.gradle` lines 75–85), the standalone Gym Management System application shell built from Java `ScreenController` views.
+`run` compiles the app and starts `com.gym.MainApp` (`build.gradle` line 57), the m3fx component showcase gallery with a 19-screen interactive viewer. `runGym` starts `com.gym.GymApp` (`build.gradle` lines 75–85), the standalone Gym Management System application shell built from Java `ScreenController` views. `runCli` starts `com.gym.cli.GymCliApp` (`build.gradle` lines 89–102; wrapped on Windows by `run-cli.bat`), the interactive CMD Terminal UI + `[T]` 22-scenario TA Verification Suite (`DECISIONS.md` 78).
 
 **Quick start:**
 
 ```text
 git clone https://github.com/Agono0/gym-management-system.git
 cd gym-management-system
-.\gradlew.bat build        # POSIX: ./gradlew build
-.\gradlew.bat runGym       # POSIX: ./gradlew runGym  (full Gym-OS shell)
-.\gradlew.bat run          # POSIX: ./gradlew run     (m3fx gallery showcase)
+.\gradlew.bat build                        # POSIX: ./gradlew build
+.\gradlew.bat runCli -q --console=plain    # POSIX: ./gradlew runCli -q --console=plain (or double-click run-cli.bat)
+.\gradlew.bat runGym                       # POSIX: ./gradlew runGym  (full Gym-OS JavaFX shell)
+.\gradlew.bat run                          # POSIX: ./gradlew run     (m3fx gallery showcase)
 ```
 
 Out of scope here: the app's layers (each folder has its own `README.md`) and `m3fx` internals — `m3fx-core` and `m3fx-controls` are dependencies of the app, and that is all this guide needs to say.
@@ -114,7 +116,7 @@ Verified: `gradlew projects` prints root project `gym-management-system-javafx` 
 
 ## 4. `build.gradle` line by line
 
-The root build file is 86 lines. Read it in blocks:
+The root build file is 102 lines. Read it in blocks:
 
 | Lines | Block | What it gives you |
 |---|---|---|
@@ -128,7 +130,8 @@ The root build file is 86 lines. Read it in blocks:
 | 48–54 | `tasks.withType(JavaCompile)` | forces UTF-8, `--release 21` bytecode, `-Xlint:all,-processing`, `-Xmaxwarns 10000` |
 | 56–58 | `application { mainClass = … }` | `com.gym.MainApp` (`gradlew run`) (§4.5) |
 | 61–72 | `tasks.register('runSamples', JavaExec)` | local-only window (`com.gym.M3Samples`) (§4.6) |
-| 75–85 | `tasks.register('runGym', JavaExec)` | full Gym-OS application shell (`com.gym.GymApp`) |
+| 75–86 | `tasks.register('runGym', JavaExec)` | full Gym-OS JavaFX application shell (`com.gym.GymApp`) |
+| 89–102 | `tasks.register('runCli', JavaExec)` | interactive CMD Terminal UI (`com.gym.cli.GymCliApp`, `standardInput = System.in`, `-Dfile.encoding=UTF-8`) |
 
 ### 4.1 The three plugins
 
@@ -193,10 +196,11 @@ Error: JavaFX runtime components are missing, and the JavaFX modules are require
 
 The plugin adds the platform-specific JavaFX jars and passes `--module-path` and `--add-modules javafx.controls` to `run`, `runGym`, `runSamples`, and `test`. ⚠️ The wiring covers *Gradle* tasks only: a bare `java -cp build/classes/java/main com.gym.GymApp` command hits that error unless module options are supplied (§7).
 
-### 4.5 Entry-point tasks (`run` and `runGym`)
+### 4.5 Entry-point tasks (`run`, `runGym`, and `runCli`)
 
 - `application { mainClass = 'com.gym.MainApp' }` → `.\gradlew.bat run` starts the m3fx showcase gallery and 19-screen previewer.
 - `runGym` → `.\gradlew.bat runGym` starts `com.gym.GymApp` (the full Gym Management System window with splash/login gates and navigation rail).
+- `runCli` (plus `run-cli.bat` at repo root) → `.\gradlew.bat runCli -q --console=plain` starts `com.gym.cli.GymCliApp` with `standardInput = System.in` for CMD workflow navigation and the `[T]` 22-scenario TA verification showcase (`DECISIONS.md` 78).
 
 ### 4.6 The `runSamples` task
 
@@ -211,6 +215,7 @@ Run everything from the **repository root** (the folder with `gradlew.bat`). In 
 | What you want | Windows (PowerShell) | POSIX | What it does |
 |---|---|---|---|
 | Run the Gym-OS shell | `.\gradlew.bat runGym` | `./gradlew runGym` | compiles, then starts `com.gym.GymApp` (all 19 screens) |
+| Run the CMD Terminal UI | `.\gradlew.bat runCli -q --console=plain` (or `run-cli.bat`) | `./gradlew runCli -q --console=plain` | starts `com.gym.cli.GymCliApp` interactive CMD workflow + `[T]` TA Suite |
 | Run the m3fx gallery | `.\gradlew.bat run` | `./gradlew run` | compiles, then starts `com.gym.MainApp` (component gallery + screen viewer) |
 | Build everything | `.\gradlew.bat build` | `./gradlew build` | assemble + check for all three projects |
 | Build one library | `.\gradlew.bat :m3fx-core:build` | `./gradlew :m3fx-core:build` | only core and its tests (`:m3fx-controls:build` is the mirror image) |
@@ -360,15 +365,15 @@ Use this when you want an IntelliJ-native config with program arguments or a cus
 
 | # | Check | How | Passes when |
 |---|---|---|---|
-| 1 | build green on all three projects | `.\gradlew.bat build` | `BUILD SUCCESSFUL` (root compiles warning-free; `:m3fx-core:test` and `:m3fx-controls:test` pass; root `:test` is `NO-SOURCE`) |
+| 1 | build green on all three projects | `.\gradlew.bat build` | `BUILD SUCCESSFUL` (root compiles warning-free in `cli/` and `dao/`; `:m3fx-core:test` and `:m3fx-controls:test` pass; root `:test` is `NO-SOURCE`) |
 | 2 | app window & gallery open cleanly | `.\gradlew.bat runGym` and `.\gradlew.bat run` | windows appear themed in dark/light with zero console exceptions |
-| 3 | backend schema + DAOs + serialization | verify `DatabaseConnection.initializeDatabase()` + concrete DAO CRUD + `SerializationUtil` | SQLite creates all 13 tables in `gym.db`; `.ser` files round-trip entities via `Object` cast |
-| 4 | nothing unwanted reached Git | `git status --short` | no `build/`, no `gym.db`, no `.ser`, no log files |
+| 3 | CMD Terminal UI & 22-scenario suite | `.\gradlew.bat runCli -q --console=plain` (or `run-cli.bat`) → `[T]` → `[1]` | interactive menus work in CMD (`gym.db`), `.ser` snapshots export/load, and `[T]` sandbox suite prints `SCOREBOARD: 22 / 22 verification checks PASSED.` |
+| 4 | nothing unwanted reached Git | `git status --short` | no `build/`, no `gym.db`, no `gym_ta_showcase.db`, no `.ser`, no log files |
 
 **Honest status today:**
 - **Shipped (UI demo mode):** `MainApp`, `GymApp`, and all 20 Java-built controllers run cleanly (`Screen` registry, no runtime FXML loading).
-- **Shipped (Milestone 2 backend):** All 13 `Serializable` entities, 11 enums, `GymException`/`ValidationException`/`DatabaseException`, `DatabaseConnection` (13 SQLite tables), `SerializationUtil`, and 13 concrete DAOs compile cleanly under Java 21 target with zero warnings.
-- **Pending (Milestone 3):** Controllers currently show demo data and are ready to be wired directly to the shipped DAOs and `SerializationUtil` in the next milestone.
+- **Shipped (Milestone 2 backend + Decision 78 CMD Terminal UI):** All 13 `Serializable` entities, 11 enums, `GymException`/`ValidationException`/`DatabaseException`, `DatabaseConnection` (13 SQLite tables), `SerializationUtil`, 13 validation-enforced concrete DAOs, and the 13-class `com.gym.cli` CMD console + 22-scenario TA suite (`runCli` / `run-cli.bat`) run live cleanly.
+- **Pending (Milestone 3):** JavaFX controllers (`com.gym.controller`) currently show demo data and are ready to wire directly to the shipped DAOs and `SerializationUtil`.
 
 ### Open details
 

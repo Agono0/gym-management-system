@@ -12,6 +12,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,7 +28,7 @@ public class EquipmentDao {
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
 
-            ps.setString(1, equipment.getName());
+            ps.setString(1, equipment.getName().trim());
             ps.setString(2, equipment.getCategory());
             ps.setString(3, equipment.getPurchaseDate());
             ps.setString(4, equipment.getCondition() != null ? equipment.getCondition().name() : EquipmentCondition.NEW.name());
@@ -53,7 +55,7 @@ public class EquipmentDao {
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            ps.setString(1, equipment.getName());
+            ps.setString(1, equipment.getName().trim());
             ps.setString(2, equipment.getCategory());
             ps.setString(3, equipment.getPurchaseDate());
             ps.setString(4, equipment.getCondition() != null ? equipment.getCondition().name() : EquipmentCondition.NEW.name());
@@ -141,6 +143,30 @@ public class EquipmentDao {
         }
         if (eq.getName() == null || eq.getName().trim().isEmpty()) {
             throw new ValidationException("Equipment name is required");
+        }
+        boolean hasPurchase = eq.getPurchaseDate() != null && !eq.getPurchaseDate().trim().isEmpty();
+        boolean hasMaint = eq.getLastMaintenance() != null && !eq.getLastMaintenance().trim().isEmpty();
+        if (hasPurchase && !isValidDate(eq.getPurchaseDate())) {
+            throw new ValidationException("Purchase date must be in yyyy-MM-dd format");
+        }
+        if (hasMaint && !isValidDate(eq.getLastMaintenance())) {
+            throw new ValidationException("Last maintenance date must be in yyyy-MM-dd format");
+        }
+        if (hasPurchase && hasMaint) {
+            LocalDate pDate = LocalDate.parse(eq.getPurchaseDate().trim());
+            LocalDate mDate = LocalDate.parse(eq.getLastMaintenance().trim());
+            if (mDate.isBefore(pDate)) {
+                throw new ValidationException("Last maintenance date cannot be earlier than purchase date");
+            }
+        }
+    }
+
+    private boolean isValidDate(String value) {
+        try {
+            LocalDate.parse(value.trim());
+            return true;
+        } catch (DateTimeParseException e) {
+            return false;
         }
     }
 }
