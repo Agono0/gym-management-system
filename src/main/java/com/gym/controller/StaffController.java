@@ -1,19 +1,29 @@
 package com.gym.controller;
 
+import io.m3fx.controls.appbar.M3TopAppBar;
+import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
 import io.m3fx.controls.data.M3DataTable;
 import io.m3fx.controls.data.M3Timeline;
 import io.m3fx.controls.dialog.M3Dialog;
+import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.search.M3SearchBar;
 import io.m3fx.controls.sheet.M3SideSheet;
 import io.m3fx.controls.textfield.M3TextField;
-import javafx.event.ActionEvent;
 import javafx.application.Platform;
-import javafx.fxml.FXML;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.control.Label;
+import javafx.scene.control.SplitPane;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
@@ -25,21 +35,26 @@ import java.util.Locale;
  * UI-contract only (no backend, domain or service dependencies): owns the demo roster, its
  * search filtering, the audit timeline, the override side sheet forms and the destructive
  * confirmations (delete, execute override).
+ *
+ * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
+ * former staff.fxml: top app bar, roster/workspace split, override side sheet.
  */
-public class StaffController {
+public class StaffController implements ScreenController {
 
-    @FXML private M3TextField txtSearchStaff;
-    @FXML private M3DataTable<String> staffDataTable;
-    @FXML private M3Timeline auditTimeline;
-    @FXML private M3SideSheet overrideSideSheet;
-    @FXML private Label lblSideSheetTitle;
-    @FXML private VBox sideSheetFormContainer;
-    @FXML private M3Button btnTopAddStaff;
-    @FXML private M3Button btnEditStaffAction;
-    @FXML private M3Button btnResetPasswordAction;
-    @FXML private M3Button btnDeleteStaffAction;
-    @FXML private M3Button btnReassignAction;
-    @FXML private M3Button btnAdjustPaymentAction;
+    // ---- View fields (the former fx:id injections, now built by buildView) ----
+    private StackPane viewRoot;
+    private M3TextField txtSearchStaff;
+    private M3DataTable<String> staffDataTable;
+    private M3Timeline auditTimeline;
+    private M3SideSheet overrideSideSheet;
+    private Label lblSideSheetTitle;
+    private VBox sideSheetFormContainer;
+    private M3Button btnTopAddStaff;
+    private M3Button btnEditStaffAction;
+    private M3Button btnResetPasswordAction;
+    private M3Button btnDeleteStaffAction;
+    private M3Button btnReassignAction;
+    private M3Button btnAdjustPaymentAction;
 
     /** Hosts M3 snackbars and dialogs for this screen (attached to the scene root at runtime). */
     private final M3Overlay feedback = new M3Overlay();
@@ -60,16 +75,186 @@ public class StaffController {
     /** What the open override sheet is for (add / edit / reassign / payment). */
     private String pendingOverride;
 
+    /**
+     * Builds the complete Staff &amp; Access Governance view and initializes all behavior. Same
+     * ordering semantics the FXMLLoader used to provide: the node tree exists and every field is
+     * assigned before the former {@code initialize()} work runs.
+     */
     public StaffController() {
-        // Public no-arg constructor required by FXMLLoader
-    }
+        viewRoot = buildView();
 
-    @FXML
-    public void initialize() {
         installFeedbackLayer(txtSearchStaff);
         populateStaffTable();
         wireSearch();
+
+    // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
+    // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
+    // (findById("navCustomers") and friends) and the interaction tests keep working unchanged.
+        txtSearchStaff.setId("txtSearchStaff");
+        staffDataTable.setId("staffDataTable");
+        auditTimeline.setId("auditTimeline");
+        overrideSideSheet.setId("overrideSideSheet");
+        lblSideSheetTitle.setId("lblSideSheetTitle");
+        sideSheetFormContainer.setId("sideSheetFormContainer");
+        btnTopAddStaff.setId("btnTopAddStaff");
+        btnEditStaffAction.setId("btnEditStaffAction");
+        btnResetPasswordAction.setId("btnResetPasswordAction");
+        btnDeleteStaffAction.setId("btnDeleteStaffAction");
+        btnReassignAction.setId("btnReassignAction");
+        btnAdjustPaymentAction.setId("btnAdjustPaymentAction");
         populateAuditTimeline();
+    }
+
+    /**
+     * Constructs the whole node tree (the programmatic replacement for staff.fxml) and wires
+     * every handler.
+     */
+    private StackPane buildView() {
+        // Primary base layout.
+        BorderPane basePane = new BorderPane();
+        basePane.getStyleClass().add("staff-base-pane");
+
+        // Top app bar block.
+        VBox topBarContainer = new VBox(8);
+        topBarContainer.getStyleClass().add("top-bar-container");
+
+        M3TopAppBar topAppBar = new M3TopAppBar("Staff & Access Governance",
+                io.m3fx.controls.appbar.TopAppBarVariant.SMALL);
+        topAppBar.setNavigationIcon(M3Icon.symbol("arrow_back"));
+
+        HBox topRow = new HBox(16);
+        topRow.setAlignment(Pos.CENTER_LEFT);
+        topRow.setPadding(new Insets(4, 24, 12, 24));
+        Label topCaption = new Label("Role-based access, audit trail and administrative overrides");
+        topCaption.getStyleClass().add("body-medium");
+        Region topSpacer = new Region();
+        HBox.setHgrow(topSpacer, Priority.ALWAYS);
+        Label roleBadge = new Label("ROLE: ADMIN (Alex Vance)");
+        roleBadge.getStyleClass().add("badge-admin");
+        btnTopAddStaff = new M3Button("+ Add Staff Member", ButtonVariant.FILLED);
+        btnTopAddStaff.getStyleClass().add("m3-button-filled");
+        btnTopAddStaff.setOnAction(e -> onAddStaff());
+        topRow.getChildren().addAll(topCaption, topSpacer, roleBadge, btnTopAddStaff);
+        topBarContainer.getChildren().addAll(topAppBar, topRow);
+        basePane.setTop(topBarContainer);
+
+        // Main workspace split: left roster pane, right overrides & audit feed pane.
+        VBox rosterPane = new VBox(16);
+        rosterPane.setPadding(new Insets(16, 16, 64, 16));
+
+        HBox searchRow = new HBox(12);
+        searchRow.setAlignment(Pos.CENTER_LEFT);
+        txtSearchStaff = new M3TextField("Search staff members...", io.m3fx.controls.textfield.TextFieldVariant.FILLED);
+        HBox.setHgrow(txtSearchStaff, Priority.ALWAYS);
+        searchRow.getChildren().add(txtSearchStaff);
+
+        staffDataTable = new M3DataTable<>();
+        VBox.setVgrow(staffDataTable, Priority.ALWAYS);
+
+        HBox rosterToolbar = new HBox(10);
+        rosterToolbar.setAlignment(Pos.CENTER_RIGHT);
+        btnEditStaffAction = new M3Button("Edit Profile", ButtonVariant.TONAL);
+        btnEditStaffAction.getStyleClass().add("m3-button-tonal");
+        btnEditStaffAction.setOnAction(e -> onEditStaffClick());
+        btnResetPasswordAction = new M3Button("Reset Password", ButtonVariant.OUTLINED);
+        btnResetPasswordAction.getStyleClass().add("m3-button-outlined");
+        btnResetPasswordAction.setOnAction(e -> onResetPasswordClick());
+        btnDeleteStaffAction = new M3Button("Delete Staff", ButtonVariant.TEXT);
+        btnDeleteStaffAction.getStyleClass().add("m3-button-text-danger");
+        btnDeleteStaffAction.setOnAction(e -> onDeleteStaffClick());
+        rosterToolbar.getChildren().addAll(btnEditStaffAction, btnResetPasswordAction, btnDeleteStaffAction);
+        rosterPane.getChildren().addAll(searchRow, staffDataTable, rosterToolbar);
+
+        VBox feedPane = new VBox(16);
+        feedPane.setPadding(new Insets(16, 16, 64, 16));
+
+        VBox overrideCommandCard = new VBox(12);
+        overrideCommandCard.getStyleClass().add("override-command-card");
+        overrideCommandCard.getChildren().add(
+                styledLabel("ADMINISTRATIVE OVERRIDE COMMANDS", "title-medium"));
+        HBox overrideButtons = new HBox(10);
+        btnReassignAction = new M3Button("Reassign Athlete Coach", ButtonVariant.TONAL);
+        btnReassignAction.getStyleClass().add("m3-button-tonal");
+        btnReassignAction.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(btnReassignAction, Priority.ALWAYS);
+        btnReassignAction.setOnAction(e -> onReassign());
+        btnAdjustPaymentAction = new M3Button("Adjust Payment Record", ButtonVariant.OUTLINED);
+        btnAdjustPaymentAction.getStyleClass().add("m3-button-outlined");
+        btnAdjustPaymentAction.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(btnAdjustPaymentAction, Priority.ALWAYS);
+        btnAdjustPaymentAction.setOnAction(e -> onAdjustPaymentClick());
+        overrideButtons.getChildren().addAll(btnReassignAction, btnAdjustPaymentAction);
+        overrideCommandCard.getChildren().add(overrideButtons);
+
+        VBox auditFeed = new VBox(8);
+        auditFeed.getChildren().add(
+                styledLabel("CHRONOLOGICAL AUDIT & SECURITY TIMELINE", "label-small"));
+        auditTimeline = new M3Timeline();
+        VBox.setVgrow(auditTimeline, Priority.ALWAYS);
+        auditFeed.getChildren().add(auditTimeline);
+        VBox.setVgrow(auditFeed, Priority.ALWAYS);
+
+        feedPane.getChildren().addAll(overrideCommandCard, auditFeed);
+
+        SplitPane workspaceSplit = new SplitPane(rosterPane, feedPane);
+        workspaceSplit.setDividerPositions(0.55);
+        basePane.setCenter(workspaceSplit);
+
+        // Contextual override side sheet.
+        overrideSideSheet = new M3SideSheet();
+        overrideSideSheet.setVisible(false);
+        overrideSideSheet.setPrefWidth(380);
+        StackPane.setAlignment(overrideSideSheet, Pos.CENTER_RIGHT);
+
+        VBox sheetContent = new VBox(16);
+        sheetContent.setPadding(new Insets(20));
+
+        HBox sheetHeader = new HBox();
+        sheetHeader.setAlignment(Pos.CENTER_LEFT);
+        lblSideSheetTitle = new Label("Administrative Override");
+        lblSideSheetTitle.getStyleClass().add("headline-small");
+        Region headerSpacer = new Region();
+        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+        M3Button closeBtn = new M3Button("Close", ButtonVariant.TEXT);
+        closeBtn.setOnAction(e -> onCloseSideSheetClick());
+        sheetHeader.getChildren().addAll(lblSideSheetTitle, headerSpacer, closeBtn);
+
+        sideSheetFormContainer = new VBox(12);
+        VBox.setVgrow(sideSheetFormContainer, Priority.ALWAYS);
+
+        HBox sheetActions = new HBox(10);
+        sheetActions.setAlignment(Pos.CENTER_RIGHT);
+        M3Button cancelBtn = new M3Button("Cancel", ButtonVariant.OUTLINED);
+        cancelBtn.getStyleClass().add("m3-button-outlined");
+        cancelBtn.setOnAction(e -> onCloseSideSheetClick());
+        M3Button executeBtn = new M3Button("Execute Override", ButtonVariant.FILLED);
+        executeBtn.getStyleClass().add("m3-button-filled");
+        executeBtn.setOnAction(e -> onExecuteOverride());
+        sheetActions.getChildren().addAll(cancelBtn, executeBtn);
+
+        sheetContent.getChildren().addAll(
+                sheetHeader,
+                styledLabel("Configure entity parameters and review audit implications.", "body-small"),
+                sideSheetFormContainer,
+                sheetActions);
+        overrideSideSheet.setContent(sheetContent);
+
+        StackPane root = new StackPane();
+        root.getStyleClass().add("staff-root");
+        root.getChildren().addAll(basePane, overrideSideSheet);
+        return root;
+    }
+
+    /** Small label with one style class. */
+    private static Label styledLabel(String text, String styleClass) {
+        Label label = new Label(text);
+        label.getStyleClass().add(styleClass);
+        return label;
+    }
+
+    @Override
+    public Parent getRoot() {
+        return viewRoot;
     }
 
     /**
@@ -77,7 +262,7 @@ public class StaffController {
      * the screen is not blank, and wires the per-row edit action.
      */
     private void populateStaffTable() {
-        if (staffDataTable == null || !staffDataTable.getColumns().isEmpty()) {
+        if (!staffDataTable.getColumns().isEmpty()) {
             return;
         }
         staffDataTable.getColumns().addAll(List.of(
@@ -91,31 +276,23 @@ public class StaffController {
 
     /** Wires the labeled search field to filter the visible roster live. */
     private void wireSearch() {
-        if (staffDataTable == null) {
-            return;
-        }
         // txtSearchStaff is this screen's labeled search affordance; the table's built-in
         // unlabeled search bar would duplicate it, so it is not shown here.
         staffDataTable.getChildren().removeIf(n -> n instanceof M3SearchBar);
-        if (txtSearchStaff != null) {
-            txtSearchStaff.getInput().textProperty().addListener((obs, o, query) -> {
-                String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
-                List<String> visible = new ArrayList<>();
-                for (String row : demoStaff) {
-                    if (q.isEmpty() || row.toLowerCase(Locale.ROOT).contains(q)) {
-                        visible.add(row);
-                    }
+        txtSearchStaff.getInput().textProperty().addListener((obs, o, query) -> {
+            String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+            List<String> visible = new ArrayList<>();
+            for (String row : demoStaff) {
+                if (q.isEmpty() || row.toLowerCase(Locale.ROOT).contains(q)) {
+                    visible.add(row);
                 }
-                staffDataTable.getItems().setAll(visible);
-            });
-        }
+            }
+            staffDataTable.getItems().setAll(visible);
+        });
     }
 
     /** Fills the audit timeline so the right pane is not an empty feed. */
     private void populateAuditTimeline() {
-        if (auditTimeline == null) {
-            return;
-        }
         auditTimeline.addItem("07:58", "Gate check-in scanned", "Sofia Reyes opened the front desk terminal", M3Timeline.Status.COMPLETED);
         auditTimeline.addItem("07:55", "Role session started", "Alex Vance authenticated as ADMIN", M3Timeline.Status.COMPLETED);
         auditTimeline.addItem("06:30", "Schedule override", "Marcus Vance swapped two PT slots (Rule 13)", M3Timeline.Status.ACTIVE);
@@ -158,51 +335,32 @@ public class StaffController {
     private void showOverrideForm(String title, String fieldALabel, String fieldAValue,
                                   String fieldBLabel, String fieldBValue, String kind) {
         pendingOverride = kind;
-        if (lblSideSheetTitle != null) {
-            lblSideSheetTitle.setText(title);
-        }
-        if (sideSheetFormContainer != null) {
-            overrideFieldA = new M3TextField();
-            overrideFieldA.setLabelText(fieldALabel);
-            overrideFieldA.setText(fieldAValue);
-            overrideFieldB = new M3TextField();
-            overrideFieldB.setLabelText(fieldBLabel);
-            overrideFieldB.setText(fieldBValue);
-            Label hint = new Label("Committing runs a confirmation dialog and logs an audit entry.");
-            hint.getStyleClass().add("body-small");
-            hint.setWrapText(true);
-            sideSheetFormContainer.getChildren().setAll(overrideFieldA, overrideFieldB, hint);
-        }
-        if (overrideSideSheet != null) {
-            overrideSideSheet.setVisible(true);
-        }
+        lblSideSheetTitle.setText(title);
+        overrideFieldA = new M3TextField();
+        overrideFieldA.setLabelText(fieldALabel);
+        overrideFieldA.setText(fieldAValue);
+        overrideFieldB = new M3TextField();
+        overrideFieldB.setLabelText(fieldBLabel);
+        overrideFieldB.setText(fieldBValue);
+        Label hint = new Label("Committing runs a confirmation dialog and logs an audit entry.");
+        hint.getStyleClass().add("body-small");
+        hint.setWrapText(true);
+        sideSheetFormContainer.getChildren().setAll(overrideFieldA, overrideFieldB, hint);
+        overrideSideSheet.setVisible(true);
     }
 
-    @FXML
     public void onAddStaff() {
         showOverrideForm("Add Staff Member", "Full name", "", "Role (ADMIN, TRAINER, RECEPTION)",
                 "TRAINER", "add");
     }
 
-    @FXML
-    public void onAddStaff(ActionEvent event) {
-        onAddStaff();
-    }
-
-    @FXML
     public void onEditStaffClick() {
         String current = selectedStaff();
         showOverrideForm("Edit Staff Profile", "Full name", field(current, 1),
                 "Status (Active, Suspended)", field(current, 3), "edit");
     }
 
-    @FXML
-    public void onEditStaffClick(ActionEvent event) {
-        onEditStaffClick();
-    }
-
     /** Destructive: confirms the delete in an M3Dialog, then answers with an Undo snackbar. */
-    @FXML
     public void onDeleteStaffClick() {
         String current = selectedStaff();
         if (current.isEmpty()) {
@@ -229,13 +387,7 @@ public class StaffController {
         feedback.showDialog(dialog);
     }
 
-    @FXML
-    public void onDeleteStaffClick(ActionEvent event) {
-        onDeleteStaffClick();
-    }
-
     /** Answers the password reset with a visible, non-blocking confirmation. */
-    @FXML
     public void onResetPasswordClick() {
         String current = selectedStaff();
         if (current.isEmpty()) {
@@ -244,41 +396,20 @@ public class StaffController {
         feedback.showSnackbar("Temporary password issued to " + field(current, 1) + " (demo)");
     }
 
-    @FXML
-    public void onResetPasswordClick(ActionEvent event) {
-        onResetPasswordClick();
-    }
-
-    @FXML
     public void onReassign() {
         showOverrideForm("Reassign Athlete Coach (Rule 15)", "Athlete ID", "", "New coach ID", "", "reassign");
     }
 
-    @FXML
-    public void onReassign(ActionEvent event) {
-        onReassign();
-    }
-
-    @FXML
     public void onAdjustPaymentClick() {
         showOverrideForm("Adjust Payment Record (Rule 19)", "Payment ID", "", "New amount (USD)", "", "payment");
     }
 
-    @FXML
-    public void onAdjustPaymentClick(ActionEvent event) {
-        onAdjustPaymentClick();
-    }
-
-    @FXML
     public void onCloseSideSheetClick() {
-        if (overrideSideSheet != null) {
-            overrideSideSheet.setVisible(false);
-        }
+        overrideSideSheet.setVisible(false);
         pendingOverride = null;
     }
 
     /** Destructive override: confirms in an M3Dialog, closes the sheet and answers visibly. */
-    @FXML
     public void onExecuteOverride() {
         if (overrideFieldA != null && (overrideFieldA.getText() == null
                 || overrideFieldA.getText().isBlank())) {
@@ -322,9 +453,7 @@ public class StaffController {
                     refreshRoster();
                 }
             }
-            if (auditTimeline != null) {
-                auditTimeline.addItem("just now", "Override executed", who + " — " + kindLabel, M3Timeline.Status.ACTIVE);
-            }
+            auditTimeline.addItem("just now", "Override executed", who + " — " + kindLabel, M3Timeline.Status.ACTIVE);
             onCloseSideSheetClick();
             feedback.showSnackbar("Override executed: " + who + " " + kindLabel + " (demo)");
         });
@@ -333,10 +462,7 @@ public class StaffController {
 
     /** Re-applies the current search query after the roster data changed. */
     private void refreshRoster() {
-        if (staffDataTable == null) {
-            return;
-        }
-        String q = txtSearchStaff != null && txtSearchStaff.getText() != null
+        String q = txtSearchStaff.getText() != null
                 ? txtSearchStaff.getText().trim().toLowerCase(Locale.ROOT)
                 : "";
         List<String> visible = new ArrayList<>();
@@ -346,16 +472,6 @@ public class StaffController {
             }
         }
         staffDataTable.getItems().setAll(visible);
-    }
-
-    @FXML
-    public void onExecuteOverride(ActionEvent event) {
-        onExecuteOverride();
-    }
-
-    @FXML
-    public void onCloseSideSheetClick(ActionEvent event) {
-        onCloseSideSheetClick();
     }
 
     public void onEditStaff(int adminId) {

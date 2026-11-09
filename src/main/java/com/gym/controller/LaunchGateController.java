@@ -45,11 +45,10 @@ import javafx.util.Duration;
  * The Apple-style launch experience for GYM-OS: splash screen → login gate → fluid morph into
  * the shell, plus the sign-out flow back to the gate.
  *
- * <p>This is deliberately NOT an FXML controller: every node is built in code with plain private
- * fields, so the pinned FXML contract counts in {@code ControllerBindingContractTest} (444
- * injected @FXML fields / 448 fx:ids) are untouched. {@link AppShellController} creates exactly
- * one instance and delegates to it; overlays are added as children of the shell's scene root
- * (the {@code app-shell-root} StackPane) and removed again when the morph completes.
+ * <p>Every node is built in code with plain private fields (no FXML anywhere in the app):
+ * {@link AppShellController} creates exactly one instance and delegates to it; overlays are
+ * added as children of the shell's scene root (the {@code app-shell-root} StackPane) and
+ * removed again when the morph completes.
  *
  * <p>Motion comes exclusively from the shared helpers ({@link MotionUtil#splashIn},
  * {@link MotionUtil#splashOut}, {@link MotionUtil#shake}, {@link MotionUtil#morphFromBounds},
@@ -100,7 +99,7 @@ public class LaunchGateController {
             + " 1.71 0 3.1 1.39 3.1 3.1v2z";
 
     /** The shell that owns this gate (created once by {@link AppShellController#initialize} flow). */
-    private final AppShellController shell;
+    private AppShellController shell;
 
     // ---- overlay state (all FX-thread-only, guarded by gateShowing) ----
     private StackPane gateOverlay;      // full-window child of the shell's scene root
@@ -558,7 +557,7 @@ public class LaunchGateController {
     /** Prewarms the shell's first screen so the post-morph shell paints instantly. */
     private void prewarmDashboard() {
         try {
-            shell.loadScreen("dashboard.fxml");
+            shell.loadScreen(Screen.DASHBOARD);
         } catch (Throwable t) {
             System.err.println("Launch gates: dashboard prewarm skipped (" + t + ")");
         }

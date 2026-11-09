@@ -19,7 +19,7 @@ repositories {
 
 javafx {
     version = '21.0.4'
-    modules = ['javafx.controls', 'javafx.fxml']
+    modules = ['javafx.controls']
 }
 
 dependencies {
@@ -70,7 +70,7 @@ tasks.register('runSamples', JavaExec) {
     ]
 }
 
-// Runs the full Gym Management System application shell with all 19 FXML screens
+// Runs the full Gym Management System application shell with all 19 Java-built screens
 tasks.register('runGym', JavaExec) {
     group = 'application'
     description = 'Runs the Gym Management System full app shell.'

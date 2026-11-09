@@ -1,4 +1,4 @@
-package com.gym.fxml;
+package com.gym.screen;
 
 import com.gym.GymApp;
 import javafx.application.Platform;

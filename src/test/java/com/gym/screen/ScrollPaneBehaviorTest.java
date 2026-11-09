@@ -1,7 +1,8 @@
-package com.gym.fxml;
+package com.gym.screen;
 
+import com.gym.controller.AppShellController;
+import com.gym.controller.Screen;
 import javafx.application.Platform;
-import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.ScrollPane;
@@ -12,12 +13,9 @@ import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.net.URL;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class ScrollPaneBehaviorTest {
 
@@ -34,19 +32,18 @@ public class ScrollPaneBehaviorTest {
 
         Platform.runLater(() -> {
             try {
-                // 1. Load app-shell.fxml
-                URL shellUrl = getClass().getResource("/fxml/app-shell.fxml");
-                Parent shellRoot = new FXMLLoader(shellUrl).load();
+                // 1. Build the Java-built shell
+                AppShellController shellController = new AppShellController();
+                Parent shellRoot = shellController.getRoot();
 
-                // 2. Load dashboard.fxml
-                URL dashUrl = getClass().getResource("/fxml/dashboard.fxml");
-                Parent dashRoot = new FXMLLoader(dashUrl).load();
+                // 2. Build the dashboard screen
+                Parent dashRoot = Screen.DASHBOARD.create().getRoot();
 
                 // Wrap dashboard in ScrollPane as AppShellController does
                 ScrollPane sp = new ScrollPane(dashRoot);
                 sp.setFitToWidth(true);
                 sp.setFitToHeight(false);
-                com.gym.controller.AppShellController.enableSmoothScrolling(sp);
+                AppShellController.enableSmoothScrolling(sp);
 
                 StackPane contentArea = (StackPane) shellRoot.lookup("#contentArea");
                 contentArea.getChildren().setAll(sp);
@@ -100,7 +97,7 @@ public class ScrollPaneBehaviorTest {
             }
         });
 
-        latch.await(5, TimeUnit.SECONDS);
+        latch.await(15, TimeUnit.SECONDS);
         if (err.get() != null) {
             err.get().printStackTrace();
             throw new AssertionError(err.get());

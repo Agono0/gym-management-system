@@ -1,7 +1,11 @@
 package com.gym.controller;
 
+import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
 import io.m3fx.controls.button.M3SplitButton;
+import io.m3fx.controls.card.CardVariant;
+import io.m3fx.controls.card.M3Card;
+import io.m3fx.controls.chip.ChipVariant;
 import io.m3fx.controls.chip.M3Chip;
 import io.m3fx.controls.data.M3DataTable;
 import io.m3fx.controls.data.M3StatCard;
@@ -13,15 +17,23 @@ import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.sheet.M3BottomSheet;
 import io.m3fx.controls.textfield.M3TextField;
 import javafx.application.Platform;
-import javafx.event.ActionEvent;
-import javafx.fxml.FXML;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.control.Label;
 import javafx.scene.control.RadioButton;
+import javafx.scene.control.SplitPane;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Toggle;
+import javafx.scene.control.ToggleGroup;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
-import javafx.scene.layout.StackPane;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -35,11 +47,15 @@ import java.util.Map;
  * demo — recording validates the amount and appends a Paid row, the receipt lookup opens the
  * demo receipts sheet, the balance lookup reads unpaid rows from the register, Void confirms
  * through an {@link M3Dialog} and then visibly updates the table row and the revenue KPI, and
- * every answer surfaces through an {@link io.m3fx.controls.snackbar.M3Snackbar}.
+ * every answer surfaces through an {@link M3Overlay} snackbar.
+ *
+ * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
+ * former payment.fxml: register pane (lookup, charge item, tender pads), financial ledger,
+ * digital receipt drawer on liquid glass.
  */
-public class PaymentController {
+public class PaymentController implements ScreenController {
 
-    /** Demo dues per charge item; the FXML default amount (499.00) anchors the membership fee. */
+    /** Demo dues per charge item; the default amount (499.00) anchors the membership fee. */
     private static final double MEMBERSHIP_DUE = 499.00;
     private static final double SUBSCRIPTION_DUE = 240.00;
     private static final double SESSION_DUE = 45.00;
@@ -50,35 +66,37 @@ public class PaymentController {
      */
     private static final double SHEET_GLASS_RADIUS = 28;
 
-    @FXML private TextField txtSearchReceipt;
-    @FXML private M3TextField txtCustomerLookup;
-    @FXML private Label lblCustomerName;
-    @FXML private Label lblCustomerBalance;
-    @FXML private RadioButton rbMembership;
-    @FXML private RadioButton rbSubscription;
-    @FXML private RadioButton rbSession;
-    @FXML private M3Chip chipMethodCard;
-    @FXML private M3Chip chipMethodCash;
-    @FXML private M3Chip chipMethodTransfer;
-    @FXML private M3TextField txtPaymentAmount;
-    @FXML private M3SplitButton actionSplitButton;
-    @FXML private M3DataTable<String> paymentDataTable;
-    @FXML private M3StatCard statRevenueCard;
-    @FXML private M3StatCard statUnpaidCard;
-    @FXML private M3Button btnShowReceipt;
-    @FXML private M3Button btnVoidPayment;
-    @FXML private M3BottomSheet receiptBottomSheet;
-    @FXML private Label lblReceiptDetails;
+    // ---- View fields (the former fx:id injections, now built by buildView) ----
+    private StackPane viewRoot;
+    private TextField txtSearchReceipt;
+    private M3TextField txtCustomerLookup;
+    private Label lblCustomerName;
+    private Label lblCustomerBalance;
+    private RadioButton rbMembership;
+    private RadioButton rbSubscription;
+    private RadioButton rbSession;
+    private M3Chip chipMethodCard;
+    private M3Chip chipMethodCash;
+    private M3Chip chipMethodTransfer;
+    private M3TextField txtPaymentAmount;
+    private M3SplitButton actionSplitButton;
+    private M3DataTable<String> paymentDataTable;
+    private M3StatCard statRevenueCard;
+    private M3StatCard statUnpaidCard;
+    private M3Button btnShowReceipt;
+    private M3Button btnVoidPayment;
+    private M3BottomSheet receiptBottomSheet;
+    private Label lblReceiptDetails;
 
     /** Hosts M3 snackbars and dialogs for this screen (attached to the scene root at runtime). */
     private final M3Overlay feedback = new M3Overlay();
 
     /** Exclusive single-selection group behind the three tender-method chips. */
-    private javafx.scene.control.ToggleGroup methodGroup;
+    private ToggleGroup methodGroup;
 
-    /** Today's revenue behind the KPI card, seeded from the FXML value ($4,850.00). */
+    /** Today's revenue behind the KPI card, seeded from the register value ($4,850.00). */
     private double todayRevenue = 4850.00;
-    /** Outstanding balance behind the KPI card, seeded from the FXML value ($320.00). */
+    /** Outstanding balance behind the KPI card, seeded from the register value ($320.00). */
     private double todayUnpaid = 320.00;
 
     /** Demo receipt register: R-8801… map to the rows shown in the register table. */
@@ -88,20 +106,242 @@ public class PaymentController {
     /** Most recent register row activated by a click — the Void button's first target. */
     private String selectedPaymentRow;
 
+    /**
+     * Builds the complete Cashless POS &amp; Billing view and initializes all behavior. Same
+     * ordering semantics the FXMLLoader used to provide: the node tree exists and every field
+     * is assigned before the former {@code initialize()} work runs.
+     */
     public PaymentController() {
-        // Public no-arg constructor required by FXMLLoader
-    }
+        viewRoot = buildView();
 
-    @FXML
-    public void initialize() {
         keepPaymentMethodsExclusive();
         populateRecentTransactions();
         applyReceiptSheetGlass();
         installFeedbackLayer(paymentDataTable);
-        if (paymentDataTable != null) {
-            // Row activation marks the payment as the Void button's target (hand cursor affordance).
-            paymentDataTable.setOnRowAction(this::selectPaymentRow);
-        }
+        // Row activation marks the payment as the Void button's target (hand cursor affordance).
+
+    // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
+    // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
+    // (findById("navCustomers") and friends) and the interaction tests keep working unchanged.
+        txtSearchReceipt.setId("txtSearchReceipt");
+        txtCustomerLookup.setId("txtCustomerLookup");
+        lblCustomerName.setId("lblCustomerName");
+        lblCustomerBalance.setId("lblCustomerBalance");
+        rbMembership.setId("rbMembership");
+        rbSubscription.setId("rbSubscription");
+        rbSession.setId("rbSession");
+        chipMethodCard.setId("chipMethodCard");
+        chipMethodCash.setId("chipMethodCash");
+        chipMethodTransfer.setId("chipMethodTransfer");
+        txtPaymentAmount.setId("txtPaymentAmount");
+        actionSplitButton.setId("actionSplitButton");
+        paymentDataTable.setId("paymentDataTable");
+        statRevenueCard.setId("statRevenueCard");
+        statUnpaidCard.setId("statUnpaidCard");
+        btnShowReceipt.setId("btnShowReceipt");
+        btnVoidPayment.setId("btnVoidPayment");
+        receiptBottomSheet.setId("receiptBottomSheet");
+        lblReceiptDetails.setId("lblReceiptDetails");
+        paymentDataTable.setOnRowAction(this::selectPaymentRow);
+    }
+
+    /**
+     * Constructs the whole node tree (the programmatic replacement for payment.fxml) and wires
+     * every handler.
+     */
+    private StackPane buildView() {
+        BorderPane layout = new BorderPane();
+        layout.getStyleClass().add("billing-base-pane");
+
+        // Top app bar.
+        VBox topBarContainer = new VBox(8);
+        topBarContainer.getStyleClass().add("top-bar-container");
+        HBox topRow = new HBox(16);
+        topRow.setAlignment(Pos.CENTER_LEFT);
+        topRow.setPadding(new Insets(16, 24, 16, 24));
+        txtSearchReceipt = new TextField();
+        txtSearchReceipt.setPromptText("Search Receipt # (e.g. R-8801)");
+        txtSearchReceipt.setPrefWidth(250);
+        M3Button lookupBtn = new M3Button("Lookup Receipt", ButtonVariant.TONAL);
+        lookupBtn.getStyleClass().add("m3-button-tonal");
+        lookupBtn.setOnAction(e -> onReceiptLookupClick());
+        Region topSpacer = new Region();
+        HBox.setHgrow(topSpacer, Priority.ALWAYS);
+        topRow.getChildren().addAll(
+                styledLabel("CASHLESS POS REGISTER & BILLING", "title-large"),
+                topSpacer,
+                txtSearchReceipt,
+                lookupBtn);
+        topBarContainer.getChildren().add(topRow);
+        layout.setTop(topBarContainer);
+
+        // Left half: cash register & tender engine.
+        VBox registerPane = new VBox(16);
+        registerPane.getStyleClass().add("register-pane");
+        registerPane.setPadding(new Insets(16, 16, 64, 16));
+
+        // Member lookup & balance card.
+        M3Card balanceCard = new M3Card(CardVariant.OUTLINED);
+        balanceCard.getStyleClass().add("customer-balance-card");
+        balanceCard.setPadding(new Insets(12));
+        VBox balanceContent = new VBox(8);
+        balanceContent.getChildren().add(styledLabel("CUSTOMER LOOKUP", "label-small"));
+        HBox lookupRow = new HBox(8);
+        txtCustomerLookup = new M3TextField("Enter Customer ID or Phone",
+                io.m3fx.controls.textfield.TextFieldVariant.FILLED);
+        HBox.setHgrow(txtCustomerLookup, Priority.ALWAYS);
+        M3Button balanceBtn = new M3Button("Check Balance", ButtonVariant.OUTLINED);
+        balanceBtn.getStyleClass().add("m3-button-outlined");
+        balanceBtn.setOnAction(e -> onCheckBalanceClick());
+        lookupRow.getChildren().addAll(txtCustomerLookup, balanceBtn);
+        HBox balanceRow = new HBox();
+        balanceRow.setAlignment(Pos.CENTER_LEFT);
+        lblCustomerName = new Label("Athlete: Not Selected");
+        lblCustomerName.getStyleClass().add("title-medium");
+        lblCustomerBalance = new Label("Unpaid Balance: $0.00");
+        lblCustomerBalance.getStyleClass().add("headline-small");
+        Region balanceSpacer = new Region();
+        HBox.setHgrow(balanceSpacer, Priority.ALWAYS);
+        balanceRow.getChildren().addAll(lblCustomerName, balanceSpacer, lblCustomerBalance);
+        balanceContent.getChildren().addAll(lookupRow, balanceRow);
+        balanceCard.setContent(balanceContent);
+
+        // Single item link selector (Rule 12).
+        VBox itemSelector = new VBox(8);
+        itemSelector.getChildren().add(styledLabel("SELECT ITEM TO SETTLE (EXACTLY ONE)", "label-small"));
+        ToggleGroup itemGroup = new ToggleGroup();
+        rbMembership = radio("Membership Agreement Due", itemGroup, true);
+        rbSubscription = radio("Trainer Subscription Due", itemGroup, false);
+        rbSession = radio("Single Ad-hoc Session Fee", itemGroup, false);
+        itemSelector.getChildren().addAll(rbMembership, rbSubscription, rbSession);
+
+        // Payment method selector.
+        VBox methodSelector = new VBox(8);
+        methodSelector.getChildren().add(styledLabel("PAYMENT METHOD", "label-small"));
+        HBox methodRow = new HBox(8);
+        chipMethodCard = new M3Chip("Card / NFC", ChipVariant.ASSIST);
+        chipMethodCard.setSelected(true);
+        chipMethodCash = new M3Chip("Cash", ChipVariant.ASSIST);
+        chipMethodCash.setSelected(false);
+        chipMethodTransfer = new M3Chip("Wire Transfer", ChipVariant.ASSIST);
+        chipMethodTransfer.setSelected(false);
+        methodRow.getChildren().addAll(chipMethodCard, chipMethodCash, chipMethodTransfer);
+        methodSelector.getChildren().add(methodRow);
+
+        // Amount field & tender pads.
+        VBox amountSection = new VBox(10);
+        amountSection.getChildren().add(styledLabel("CHARGE AMOUNT (BIGDECIMAL)", "label-small"));
+        txtPaymentAmount = new M3TextField();
+        txtPaymentAmount.setText("499.00");
+        txtPaymentAmount.getStyleClass().add("currency-hero-field");
+        HBox tenderPads = new HBox(8);
+        M3Button tender20 = new M3Button("$20", ButtonVariant.TONAL);
+        tender20.getStyleClass().add("m3-button-tonal");
+        tender20.setOnAction(e -> onTender20());
+        M3Button tender50 = new M3Button("$50", ButtonVariant.TONAL);
+        tender50.getStyleClass().add("m3-button-tonal");
+        tender50.setOnAction(e -> onTender50());
+        M3Button tender100 = new M3Button("$100", ButtonVariant.TONAL);
+        tender100.getStyleClass().add("m3-button-tonal");
+        tender100.setOnAction(e -> onTender100());
+        M3Button tenderExact = new M3Button("Exact Amount", ButtonVariant.OUTLINED);
+        tenderExact.getStyleClass().add("m3-button-outlined");
+        tenderExact.setOnAction(e -> onTenderExact());
+        tenderPads.getChildren().addAll(tender20, tender50, tender100, tenderExact);
+        amountSection.getChildren().addAll(txtPaymentAmount, tenderPads);
+
+        Region registerSpacer = new Region();
+        VBox.setVgrow(registerSpacer, Priority.ALWAYS);
+
+        // Primary record split button.
+        actionSplitButton = new M3SplitButton("RECORD PAYMENT (ENTER)", ButtonVariant.FILLED, null);
+        actionSplitButton.getStyleClass().add("m3-split-button-filled");
+        actionSplitButton.setMaxWidth(Double.MAX_VALUE);
+        actionSplitButton.setOnAction(e -> onRecord());
+
+        registerPane.getChildren().addAll(balanceCard, itemSelector, methodSelector,
+                amountSection, registerSpacer, actionSplitButton);
+
+        // Right half: financial ledger table.
+        VBox ledgerPane = new VBox(16);
+        ledgerPane.setPadding(new Insets(16, 16, 64, 16));
+
+        // Telemetry row.
+        HBox telemetryRow = new HBox(16);
+        statRevenueCard = new M3StatCard("Today's Revenue", "$4,850.00", "Voided excluded");
+        statUnpaidCard = new M3StatCard("Accounts Receivable", "$320.00", "Pending settlement");
+        HBox.setHgrow(statRevenueCard, Priority.ALWAYS);
+        HBox.setHgrow(statUnpaidCard, Priority.ALWAYS);
+        telemetryRow.getChildren().addAll(statRevenueCard, statUnpaidCard);
+
+        // Ledger data table.
+        paymentDataTable = new M3DataTable<>();
+        VBox.setVgrow(paymentDataTable, Priority.ALWAYS);
+
+        // Action toolbar.
+        HBox ledgerToolbar = new HBox(12);
+        ledgerToolbar.setAlignment(Pos.CENTER_RIGHT);
+        btnShowReceipt = new M3Button("View / Print Receipt", ButtonVariant.TONAL);
+        btnShowReceipt.getStyleClass().add("m3-button-tonal");
+        btnShowReceipt.setOnAction(e -> onShowReceiptClick());
+        btnVoidPayment = new M3Button("Void Payment", ButtonVariant.TEXT);
+        btnVoidPayment.getStyleClass().add("m3-button-text-danger");
+        btnVoidPayment.setOnAction(e -> onVoidClick());
+        ledgerToolbar.getChildren().addAll(btnShowReceipt, btnVoidPayment);
+
+        ledgerPane.getChildren().addAll(telemetryRow, paymentDataTable, ledgerToolbar);
+
+        SplitPane workspaceSplit = new SplitPane(registerPane, ledgerPane);
+        workspaceSplit.setDividerPositions(0.44);
+        layout.setCenter(workspaceSplit);
+
+        // Bottom digital receipt drawer (M3BottomSheet).
+        receiptBottomSheet = new M3BottomSheet();
+        receiptBottomSheet.setVisible(false);
+        StackPane.setAlignment(receiptBottomSheet, Pos.BOTTOM_CENTER);
+        VBox receiptContent = new VBox(12);
+        receiptContent.getStyleClass().add("receipt-paper-surface");
+        receiptContent.setPadding(new Insets(20, 24, 20, 24));
+        lblReceiptDetails = new Label("Receipt Details...");
+        lblReceiptDetails.getStyleClass().add("body-medium");
+        HBox receiptActions = new HBox(12);
+        receiptActions.setAlignment(Pos.CENTER_RIGHT);
+        M3Button printBtn = new M3Button("Print Thermal Copy", ButtonVariant.FILLED);
+        printBtn.getStyleClass().add("m3-button-filled");
+        M3Button closeBtn = new M3Button("Close", ButtonVariant.OUTLINED);
+        closeBtn.getStyleClass().add("m3-button-outlined");
+        closeBtn.setOnAction(e -> onCloseReceiptClick());
+        receiptActions.getChildren().addAll(printBtn, closeBtn);
+        receiptContent.getChildren().addAll(
+                styledLabel("DIGITAL FISCAL RECEIPT", "title-large"),
+                lblReceiptDetails,
+                receiptActions);
+        receiptBottomSheet.setContent(receiptContent);
+
+        viewRoot = new StackPane();
+        viewRoot.getStyleClass().add("billing-root");
+        viewRoot.getChildren().addAll(layout, receiptBottomSheet);
+        return viewRoot;
+    }
+
+    /** Builds one radio button inside the given group. */
+    private static RadioButton radio(String text, ToggleGroup group, boolean selected) {
+        RadioButton button = new RadioButton(text);
+        button.setToggleGroup(group);
+        button.setSelected(selected);
+        return button;
+    }
+
+    /** Small label with one style class. */
+    private static Label styledLabel(String text, String styleClass) {
+        Label label = new Label(text);
+        label.getStyleClass().add(styleClass);
+        return label;
+    }
+
+    @Override
+    public Parent getRoot() {
+        return viewRoot;
     }
 
     /**
@@ -119,16 +359,16 @@ public class PaymentController {
     }
 
     /**
-     * Re-parents an FXML-declared sheet into a REGULAR interactive liquid glass pane that takes
+     * Re-parents the receipt sheet into a REGULAR interactive liquid glass pane that takes
      * over the sheet's position, constraints and visibility. Defensive by construction: any
      * failure leaves the plain sheet in place, because glass chrome must never break a screen.
      *
-     * @param sheet the sheet node shown/hidden by the FXML action handlers
+     * @param sheet the sheet node shown/hidden by the action handlers
      * @param errorPrefix stderr prefix identifying the caller in the log
      */
     private static void wrapSheetInGlass(Region sheet, String errorPrefix) {
         try {
-            if (sheet == null || !(sheet.getParent() instanceof Pane parent)) {
+            if (!(sheet.getParent() instanceof Pane parent)) {
                 return;
             }
             int index = parent.getChildren().indexOf(sheet);
@@ -145,10 +385,10 @@ public class PaymentController {
             // The sheet's own paint moves onto the glass (inline style outranks the
             // .m3-bottom-sheet / .m3-side-sheet stylesheet fill).
             sheet.setStyle("-fx-background-color: transparent;");
-            // The FXML flow toggles the sheet node directly; the glass chrome mirrors it so the
+            // The view flow toggles the sheet node directly; the glass chrome mirrors it so the
             // existing show/hide handlers keep working unchanged.
             glass.visibleProperty().bind(sheet.visibleProperty());
-            // Preserve the FXML placement constraints (they live on the child node).
+            // Preserve the placement constraints (they live on the child node).
             if (StackPane.getAlignment(sheet) != null) {
                 StackPane.setAlignment(glass, StackPane.getAlignment(sheet));
             }
@@ -163,7 +403,7 @@ public class PaymentController {
 
     /** Fills the recent-transactions register with demo rows and issues their receipt numbers. */
     private void populateRecentTransactions() {
-        if (paymentDataTable == null || !paymentDataTable.getColumns().isEmpty()) {
+        if (!paymentDataTable.getColumns().isEmpty()) {
             return;
         }
         paymentDataTable.getColumns().addAll(List.of(
@@ -186,10 +426,7 @@ public class PaymentController {
 
     /** Puts the three payment-method chips in one ToggleGroup so exactly one tender type is active. */
     private void keepPaymentMethodsExclusive() {
-        if (chipMethodCard == null) {
-            return;
-        }
-        methodGroup = new javafx.scene.control.ToggleGroup();
+        methodGroup = new ToggleGroup();
         methodGroup.getToggles().addAll(chipMethodCard, chipMethodCash, chipMethodTransfer);
     }
 
@@ -198,11 +435,7 @@ public class PaymentController {
      * active tender chip and charge item, appends a Paid row to the register, advances the
      * revenue KPI and confirms with a snackbar carrying the new receipt number.
      */
-    @FXML
     public void onRecord() {
-        if (txtPaymentAmount == null || paymentDataTable == null) {
-            return;
-        }
         double amount = parseAmount(txtPaymentAmount.getText());
         if (amount <= 0) {
             txtPaymentAmount.setError(true);
@@ -227,20 +460,11 @@ public class PaymentController {
                 + " via " + method + " for " + member + " (receipt " + receiptNo + ", demo).");
     }
 
-    @FXML
-    public void onRecord(ActionEvent event) {
-        onRecord();
-    }
-
     /**
      * Receipt lookup: validates the receipt number, answers the demo register R-8801… and opens
      * the receipt sheet with the stored row; unknown numbers say so instead of failing silently.
      */
-    @FXML
     public void onReceiptLookupClick() {
-        if (txtSearchReceipt == null) {
-            return;
-        }
         String query = txtSearchReceipt.getText() == null ? "" : txtSearchReceipt.getText().trim();
         if (query.isEmpty()) {
             feedback.showSnackbar("Enter a receipt number first, for example R-8801 (demo).");
@@ -256,20 +480,11 @@ public class PaymentController {
         feedback.showSnackbar("Receipt " + receiptNo + " opened (demo).");
     }
 
-    @FXML
-    public void onReceiptLookupClick(ActionEvent event) {
-        onReceiptLookupClick();
-    }
-
     /**
      * Balance lookup: validates the input inline (M3TextField error), finds the member in the
      * visible register and sums their Pending rows into the balance readout.
      */
-    @FXML
     public void onCheckBalanceClick() {
-        if (txtCustomerLookup == null || lblCustomerName == null || lblCustomerBalance == null) {
-            return;
-        }
         String query = txtCustomerLookup.getText() == null ? "" : txtCustomerLookup.getText().trim();
         if (query.isEmpty()) {
             txtCustomerLookup.setError(true);
@@ -283,16 +498,14 @@ public class PaymentController {
         String lower = query.toLowerCase(Locale.ROOT);
         String match = null;
         double unpaid = 0;
-        if (paymentDataTable != null) {
-            for (String row : paymentDataTable.getItems()) {
-                String[] parts = row.split("\\|");
-                if (parts.length > 4 && (parts[0] + " " + parts[1]).toLowerCase(Locale.ROOT).contains(lower)) {
-                    if (match == null) {
-                        match = parts[1];
-                    }
-                    if ("Pending".equals(parts[4])) {
-                        unpaid += parseAmount(parts[3]);
-                    }
+        for (String row : paymentDataTable.getItems()) {
+            String[] parts = row.split("\\|");
+            if (parts.length > 4 && (parts[0] + " " + parts[1]).toLowerCase(Locale.ROOT).contains(lower)) {
+                if (match == null) {
+                    match = parts[1];
+                }
+                if ("Pending".equals(parts[4])) {
+                    unpaid += parseAmount(parts[3]);
                 }
             }
         }
@@ -308,16 +521,10 @@ public class PaymentController {
                 + " outstanding (demo).");
     }
 
-    @FXML
-    public void onCheckBalanceClick(ActionEvent event) {
-        onCheckBalanceClick();
-    }
-
     /**
      * Two-step void (destructive action): an M3Dialog confirms first, then the target row
      * visibly flips to Voided, the revenue/unpaid KPIs adjust and a snackbar confirms.
      */
-    @FXML
     public void onVoidClick() {
         String row = voidTargetRow();
         if (row == null) {
@@ -340,91 +547,35 @@ public class PaymentController {
         feedback.showDialog(dialog);
     }
 
-    @FXML
-    public void onVoidClick(ActionEvent event) {
-        onVoidClick();
-    }
-
-    @FXML
     public void onShowReceiptClick() {
-        if (receiptBottomSheet != null) {
-            receiptBottomSheet.setVisible(true);
-        }
+        receiptBottomSheet.setVisible(true);
     }
 
-    @FXML
-    public void onShowReceiptClick(ActionEvent event) {
-        onShowReceiptClick();
-    }
-
-    @FXML
     public void onCloseReceiptClick() {
-        if (receiptBottomSheet != null) {
-            receiptBottomSheet.setVisible(false);
-        }
+        receiptBottomSheet.setVisible(false);
     }
 
-    @FXML
-    public void onCloseReceiptClick(ActionEvent event) {
-        onCloseReceiptClick();
-    }
-
-    @FXML
     public void onTender20() {
-        if (txtPaymentAmount != null) {
-            txtPaymentAmount.setText("20.00");
-        }
+        txtPaymentAmount.setText("20.00");
     }
 
-    @FXML
-    public void onTender20(ActionEvent event) {
-        onTender20();
-    }
-
-    @FXML
     public void onTender50() {
-        if (txtPaymentAmount != null) {
-            txtPaymentAmount.setText("50.00");
-        }
+        txtPaymentAmount.setText("50.00");
     }
 
-    @FXML
-    public void onTender50(ActionEvent event) {
-        onTender50();
-    }
-
-    @FXML
     public void onTender100() {
-        if (txtPaymentAmount != null) {
-            txtPaymentAmount.setText("100.00");
-        }
-    }
-
-    @FXML
-    public void onTender100(ActionEvent event) {
-        onTender100();
+        txtPaymentAmount.setText("100.00");
     }
 
     /** Loads the exact due amount of the currently selected charge item into the amount field. */
-    @FXML
     public void onTenderExact() {
-        if (txtPaymentAmount != null) {
-            txtPaymentAmount.setText(String.format(Locale.ROOT, "%.2f", selectedChargeDue()));
-            txtPaymentAmount.setError(false);
-        }
+        txtPaymentAmount.setText(String.format(Locale.ROOT, "%.2f", selectedChargeDue()));
+        txtPaymentAmount.setError(false);
         feedback.showSnackbar("Exact due amount loaded for " + selectedChargeItem() + " (demo).");
-    }
-
-    @FXML
-    public void onTenderExact(ActionEvent event) {
-        onTenderExact();
     }
 
     /** Voids the payment row of the given member id (demo register lookup), if present. */
     public void onVoid(int paymentId) {
-        if (paymentDataTable == null) {
-            return;
-        }
         String row = paymentDataTable.getItems().stream()
                 .filter(r -> r.contains("#" + paymentId + ")") && !r.endsWith("Voided"))
                 .findFirst().orElse(null);
@@ -440,13 +591,9 @@ public class PaymentController {
      * the number is not in the demo register, the sheet shows the bare number instead.
      */
     public void showReceipt(String receiptNo) {
-        if (lblReceiptDetails != null) {
-            String row = demoReceipts.get(receiptNo);
-            lblReceiptDetails.setText(row == null ? "Receipt: " + receiptNo : receiptText(receiptNo, row));
-        }
-        if (receiptBottomSheet != null) {
-            receiptBottomSheet.setVisible(true);
-        }
+        String row = demoReceipts.get(receiptNo);
+        lblReceiptDetails.setText(row == null ? "Receipt: " + receiptNo : receiptText(receiptNo, row));
+        receiptBottomSheet.setVisible(true);
     }
 
     // ------------------------------------------------------------------
@@ -455,7 +602,7 @@ public class PaymentController {
 
     /** Marks the register row Voided, adjusts the revenue/unpaid KPIs and confirms. */
     private void voidRow(String row) {
-        if (paymentDataTable == null || !paymentDataTable.getItems().contains(row)) {
+        if (!paymentDataTable.getItems().contains(row)) {
             return;
         }
         String[] parts = row.split("\\|");
@@ -478,9 +625,6 @@ public class PaymentController {
 
     /** The Void target: the activated register row, else the most recent voidable row. */
     private String voidTargetRow() {
-        if (paymentDataTable == null) {
-            return null;
-        }
         if (selectedPaymentRow != null && paymentDataTable.getItems().contains(selectedPaymentRow)
                 && !selectedPaymentRow.endsWith("Voided")) {
             return selectedPaymentRow;
@@ -497,7 +641,7 @@ public class PaymentController {
     /** Tender chip selection mapped to the register's method vocabulary; Card is the default. */
     private String selectedMethod() {
         if (methodGroup != null) {
-            javafx.scene.control.Toggle selected = methodGroup.getSelectedToggle();
+            Toggle selected = methodGroup.getSelectedToggle();
             if (selected == chipMethodCash) {
                 return "Cash";
             }
@@ -510,10 +654,10 @@ public class PaymentController {
 
     /** Charge radio selection mapped to a human label; Membership is the default. */
     private String selectedChargeItem() {
-        if (rbSubscription != null && rbSubscription.isSelected()) {
+        if (rbSubscription.isSelected()) {
             return "trainer subscription";
         }
-        if (rbSession != null && rbSession.isSelected()) {
+        if (rbSession.isSelected()) {
             return "single session";
         }
         return "membership";
@@ -521,10 +665,10 @@ public class PaymentController {
 
     /** Demo dues for the selected charge item (see the constants above for the anchors). */
     private double selectedChargeDue() {
-        if (rbSubscription != null && rbSubscription.isSelected()) {
+        if (rbSubscription.isSelected()) {
             return SUBSCRIPTION_DUE;
         }
-        if (rbSession != null && rbSession.isSelected()) {
+        if (rbSession.isSelected()) {
             return SESSION_DUE;
         }
         return MEMBERSHIP_DUE;
@@ -535,8 +679,7 @@ public class PaymentController {
      * no lookup answered yet.
      */
     private String currentCustomerLabel() {
-        String label = lblCustomerName == null || lblCustomerName.getText() == null
-                ? "" : lblCustomerName.getText().trim();
+        String label = lblCustomerName.getText() == null ? "" : lblCustomerName.getText().trim();
         if (label.startsWith("Athlete: ") && !label.equals("Athlete: Not Selected")
                 && !label.startsWith("Athlete: Not found")) {
             return label.substring("Athlete: ".length());
@@ -545,15 +688,11 @@ public class PaymentController {
     }
 
     private void updateRevenueKpi() {
-        if (statRevenueCard != null) {
-            statRevenueCard.setValue(String.format(Locale.ROOT, "$%,.2f", todayRevenue));
-        }
+        statRevenueCard.setValue(String.format(Locale.ROOT, "$%,.2f", todayRevenue));
     }
 
     private void updateUnpaidKpi() {
-        if (statUnpaidCard != null) {
-            statUnpaidCard.setValue(String.format(Locale.ROOT, "$%,.2f", todayUnpaid));
-        }
+        statUnpaidCard.setValue(String.format(Locale.ROOT, "$%,.2f", todayUnpaid));
     }
 
     /** Multi-line receipt text rendered into the sheet from a register row. */

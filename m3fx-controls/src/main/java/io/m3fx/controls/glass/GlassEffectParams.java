@@ -5,8 +5,8 @@ import javafx.scene.paint.Color;
 /**
  * Immutable bundle of liquid glass configuration, mirroring the SwiftUI
  * {@code glassEffect(...)} modifier surface plus the reference-engine physics knobs
- * (liquidGL's {@code refraction/bevelDepth/bevelWidth/frost/aberration/magnify/interaction} and
- * nikdelvin's {@code depth/strength}). Apply a bundle to a pane with
+ * (liquidGL's {@code refraction/bevelDepth/bevelWidth/frost/aberration/magnify/interaction/tilt/draggable} and
+ * nikdelvin's {@code depth/strength/button}). Apply a bundle to a pane with
  * {@link M3GlassPane#of(GlassEffectParams)} or {@link M3GlassPane#setEffect(GlassEffectParams)}.
  *
  * <p>Instances are immutable; the fluent methods return new bundles. Identity semantics (no
@@ -14,8 +14,9 @@ import javafx.scene.paint.Color;
  * {@code setEffect} time, so later property changes on the pane do not rewrite the bundle.
  *
  * <p>Defaults are the reference engines' verbatim: liquidGL {@code refraction 0.01},
- * {@code bevelDepth 0.08}, {@code bevelWidth 0.15}, {@code magnify 1}; nikdelvin
- * {@code depth 10}, {@code strength 100}. See {@code docs/SPEC_NOTES/liquid-glass.md}.
+ * {@code bevelDepth 0.08}, {@code bevelWidth 0.15}, {@code magnify 1}, {@code tiltFactor 5},
+ * {@code tiltEase 400}, {@code interactionStrength 0.5}, {@code interactionViscosity 0.65};
+ * nikdelvin {@code depth 10}, {@code strength 100}. See {@code docs/SPEC_NOTES/liquid-glass.md}.
  */
 public final class GlassEffectParams {
 
@@ -43,6 +44,13 @@ public final class GlassEffectParams {
     private final double nikdelvinStrength;
     private final boolean fluidInteraction;
     private final double interactionRadius;
+    private final double interactionStrength;
+    private final double interactionViscosity;
+    private final boolean tilt;
+    private final double tiltFactor;
+    private final double tiltEase;
+    private final boolean draggable;
+    private final boolean buttonMode;
 
     /** Creates the default bundle: regular variant, reference-engine defaults, capsule, radius 16. */
     public GlassEffectParams() {
@@ -51,7 +59,7 @@ public final class GlassEffectParams {
                 GlassRefraction.DEFAULT_BEVEL_DEPTH, GlassRefraction.DEFAULT_BEVEL_WIDTH,
                 0.0, 0.0, GlassRefraction.DEFAULT_MAGNIFY,
                 GlassRefraction.DEFAULT_NIKDELVIN_DEPTH, GlassRefraction.DEFAULT_NIKDELVIN_STRENGTH,
-                false, 0.35);
+                false, 0.35, 0.5, 0.65, false, 5.0, 400.0, false, false);
     }
 
     @SuppressWarnings("this-escape")
@@ -60,7 +68,8 @@ public final class GlassEffectParams {
             double cornerRadius, MapStyle mapStyle, double refraction, double bevelDepth,
             double bevelWidth, double frost, double aberration, double magnify,
             double nikdelvinDepth, double nikdelvinStrength, boolean fluidInteraction,
-            double interactionRadius) {
+            double interactionRadius, double interactionStrength, double interactionViscosity,
+            boolean tilt, double tiltFactor, double tiltEase, boolean draggable, boolean buttonMode) {
         this.variant = variant == null ? GlassVariant.REGULAR : variant;
         this.tint = tint;
         this.interactive = interactive;
@@ -77,6 +86,13 @@ public final class GlassEffectParams {
         this.nikdelvinStrength = nikdelvinStrength;
         this.fluidInteraction = fluidInteraction;
         this.interactionRadius = interactionRadius;
+        this.interactionStrength = interactionStrength;
+        this.interactionViscosity = interactionViscosity;
+        this.tilt = tilt;
+        this.tiltFactor = tiltFactor;
+        this.tiltEase = tiltEase;
+        this.draggable = draggable;
+        this.buttonMode = buttonMode;
     }
 
     /** Returns the glass variant (never {@code null}). */
@@ -159,6 +175,41 @@ public final class GlassEffectParams {
         return interactionRadius;
     }
 
+    /** Returns the fluid-interaction displacement strength multiplier (default 0.5). */
+    public double interactionStrength() {
+        return interactionStrength;
+    }
+
+    /** Returns the fluid-interaction viscosity rate (default 0.65). */
+    public double interactionViscosity() {
+        return interactionViscosity;
+    }
+
+    /** Returns whether interactive 3D perspective tilt is enabled. */
+    public boolean isTilt() {
+        return tilt;
+    }
+
+    /** Returns the maximum 3D tilt angle in degrees (default 5.0). */
+    public double tiltFactor() {
+        return tiltFactor;
+    }
+
+    /** Returns the 3D tilt settle duration in milliseconds (default 400.0). */
+    public double tiltEase() {
+        return tiltEase;
+    }
+
+    /** Returns whether the lens can be dragged across its container. */
+    public boolean isDraggable() {
+        return draggable;
+    }
+
+    /** Returns whether Apple liquid glass button styling/mechanics are active. */
+    public boolean isButtonMode() {
+        return buttonMode;
+    }
+
     /**
      * Returns a copy with the given variant.
      *
@@ -172,26 +223,8 @@ public final class GlassEffectParams {
     private GlassEffectParams copy(GlassVariant newVariant, GlassShape newShape, double radius) {
         return new GlassEffectParams(newVariant, tint, interactive, newShape, radius, mapStyle,
                 refraction, bevelDepth, bevelWidth, frost, aberration, magnify, nikdelvinDepth,
-                nikdelvinStrength, fluidInteraction, interactionRadius);
-    }
-
-    private GlassEffectParams copyAll(MapStyle newMapStyle, Double newRefraction,
-                                      Double newBevelDepth, Double newBevelWidth, Double newFrost,
-                                      Double newAberration, Double newMagnify,
-                                      Double newNikdelvinDepth, Double newNikdelvinStrength,
-                                      Boolean newFluidInteraction, Double newInteractionRadius) {
-        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
-                newMapStyle == null ? mapStyle : newMapStyle,
-                newRefraction == null ? refraction : newRefraction,
-                newBevelDepth == null ? bevelDepth : newBevelDepth,
-                newBevelWidth == null ? bevelWidth : newBevelWidth,
-                newFrost == null ? frost : newFrost,
-                newAberration == null ? aberration : newAberration,
-                newMagnify == null ? magnify : newMagnify,
-                newNikdelvinDepth == null ? nikdelvinDepth : newNikdelvinDepth,
-                newNikdelvinStrength == null ? nikdelvinStrength : newNikdelvinStrength,
-                newFluidInteraction == null ? fluidInteraction : newFluidInteraction,
-                newInteractionRadius == null ? interactionRadius : newInteractionRadius);
+                nikdelvinStrength, fluidInteraction, interactionRadius, interactionStrength,
+                interactionViscosity, tilt, tiltFactor, tiltEase, draggable, buttonMode);
     }
 
     /**
@@ -203,7 +236,9 @@ public final class GlassEffectParams {
     public GlassEffectParams tint(Color tintColor) {
         return new GlassEffectParams(variant, tintColor, interactive, shape, cornerRadius,
                 mapStyle, refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
-                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius);
+                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, draggable,
+                buttonMode);
     }
 
     /**
@@ -215,7 +250,9 @@ public final class GlassEffectParams {
     public GlassEffectParams interactive() {
         return new GlassEffectParams(variant, tint, true, shape, cornerRadius, mapStyle,
                 refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
-                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius);
+                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, draggable,
+                buttonMode);
     }
 
     /**
@@ -236,7 +273,11 @@ public final class GlassEffectParams {
      * @return a new immutable bundle
      */
     public GlassEffectParams mapStyle(MapStyle newMapStyle) {
-        return copyAll(newMapStyle, null, null, null, null, null, null, null, null, null, null);
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                newMapStyle == null ? mapStyle : newMapStyle, refraction, bevelDepth, bevelWidth,
+                frost, aberration, magnify, nikdelvinDepth, nikdelvinStrength, fluidInteraction,
+                interactionRadius, interactionStrength, interactionViscosity, tilt, tiltFactor,
+                tiltEase, draggable, buttonMode);
     }
 
     /**
@@ -246,7 +287,11 @@ public final class GlassEffectParams {
      * @return a new immutable bundle
      */
     public GlassEffectParams refraction(double value) {
-        return copyAll(null, value, null, null, null, null, null, null, null, null, null);
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, value, bevelDepth, bevelWidth, frost, aberration, magnify,
+                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, draggable,
+                buttonMode);
     }
 
     /**
@@ -256,7 +301,11 @@ public final class GlassEffectParams {
      * @return a new immutable bundle
      */
     public GlassEffectParams bevelDepth(double value) {
-        return copyAll(null, null, value, null, null, null, null, null, null, null, null);
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, refraction, value, bevelWidth, frost, aberration, magnify,
+                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, draggable,
+                buttonMode);
     }
 
     /**
@@ -266,7 +315,11 @@ public final class GlassEffectParams {
      * @return a new immutable bundle
      */
     public GlassEffectParams bevelWidth(double value) {
-        return copyAll(null, null, null, value, null, null, null, null, null, null, null);
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, refraction, bevelDepth, value, frost, aberration, magnify,
+                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, draggable,
+                buttonMode);
     }
 
     /**
@@ -276,7 +329,11 @@ public final class GlassEffectParams {
      * @return a new immutable bundle
      */
     public GlassEffectParams frost(double value) {
-        return copyAll(null, null, null, null, value, null, null, null, null, null, null);
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, refraction, bevelDepth, bevelWidth, value, aberration, magnify,
+                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, draggable,
+                buttonMode);
     }
 
     /**
@@ -286,7 +343,11 @@ public final class GlassEffectParams {
      * @return a new immutable bundle
      */
     public GlassEffectParams aberration(double value) {
-        return copyAll(null, null, null, null, null, value, null, null, null, null, null);
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, refraction, bevelDepth, bevelWidth, frost, value, magnify,
+                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, draggable,
+                buttonMode);
     }
 
     /**
@@ -296,7 +357,11 @@ public final class GlassEffectParams {
      * @return a new immutable bundle
      */
     public GlassEffectParams magnify(double value) {
-        return copyAll(null, null, null, null, null, null, value, null, null, null, null);
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, refraction, bevelDepth, bevelWidth, frost, aberration, value,
+                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, draggable,
+                buttonMode);
     }
 
     /**
@@ -306,7 +371,11 @@ public final class GlassEffectParams {
      * @return a new immutable bundle
      */
     public GlassEffectParams nikdelvinDepth(double value) {
-        return copyAll(null, null, null, null, null, null, null, value, null, null, null);
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
+                value, nikdelvinStrength, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, draggable,
+                buttonMode);
     }
 
     /**
@@ -316,7 +385,11 @@ public final class GlassEffectParams {
      * @return a new immutable bundle
      */
     public GlassEffectParams nikdelvinStrength(double value) {
-        return copyAll(null, null, null, null, null, null, null, null, value, null, null);
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
+                nikdelvinDepth, value, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, draggable,
+                buttonMode);
     }
 
     /**
@@ -327,7 +400,26 @@ public final class GlassEffectParams {
      * @return a new immutable bundle
      */
     public GlassEffectParams fluidInteraction(boolean enabled) {
-        return copyAll(null, null, null, null, null, null, null, null, null, enabled, null);
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
+                nikdelvinDepth, nikdelvinStrength, enabled, interactionRadius,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, draggable,
+                buttonMode);
+    }
+
+    /**
+     * Returns a copy with fluid interaction configured with reach, strength and viscosity.
+     *
+     * @param reach radius reach fraction
+     * @param strength displacement strength multiplier
+     * @param viscosity settling viscosity
+     * @return a new immutable bundle
+     */
+    public GlassEffectParams fluidInteraction(double reach, double strength, double viscosity) {
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
+                nikdelvinDepth, nikdelvinStrength, true, reach, strength, viscosity,
+                tilt, tiltFactor, tiltEase, draggable, buttonMode);
     }
 
     /**
@@ -337,6 +429,66 @@ public final class GlassEffectParams {
      * @return a new immutable bundle
      */
     public GlassEffectParams interactionRadius(double value) {
-        return copyAll(null, null, null, null, null, null, null, null, null, null, value);
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
+                nikdelvinDepth, nikdelvinStrength, fluidInteraction, value,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, draggable,
+                buttonMode);
+    }
+
+    /**
+     * Returns a copy with interactive 3D perspective tilt enabled or disabled.
+     *
+     * @param enabled {@code true} to enable 3D tilt
+     * @return a new immutable bundle
+     */
+    public GlassEffectParams tilt(boolean enabled) {
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
+                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, enabled, tiltFactor, tiltEase, draggable,
+                buttonMode);
+    }
+
+    /**
+     * Returns a copy with interactive 3D perspective tilt configured.
+     *
+     * @param factor maximum tilt angle in degrees
+     * @param ease settle duration in ms
+     * @return a new immutable bundle
+     */
+    public GlassEffectParams tilt(double factor, double ease) {
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
+                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, true, factor, ease, draggable,
+                buttonMode);
+    }
+
+    /**
+     * Returns a copy with draggable lens capability enabled or disabled.
+     *
+     * @param enabled {@code true} to enable drag
+     * @return a new immutable bundle
+     */
+    public GlassEffectParams draggable(boolean enabled) {
+        return new GlassEffectParams(variant, tint, interactive, shape, cornerRadius,
+                mapStyle, refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
+                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, enabled,
+                buttonMode);
+    }
+
+    /**
+     * Returns a copy configured as an Apple Liquid Glass button.
+     *
+     * @return a new immutable bundle
+     */
+    public GlassEffectParams asButton() {
+        return new GlassEffectParams(variant, tint, true, shape, cornerRadius,
+                mapStyle, refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
+                nikdelvinDepth, nikdelvinStrength, fluidInteraction, interactionRadius,
+                interactionStrength, interactionViscosity, tilt, tiltFactor, tiltEase, draggable,
+                true);
     }
 }

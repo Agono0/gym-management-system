@@ -123,3 +123,16 @@
   /* Liquid Glass shadow defaults: 0.30 alpha (shadow-a25 token) / 10 radius / +1 offsetY. */
   -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a25, 10, 0, 0, 1);
 }
+
+
+/* ============ Liquid Glass Button (M3GlassPane in buttonMode) ============ */
+.liquid-glass-button {
+  -fx-cursor: hand;
+  -fx-background-color: transparent;
+}
+.liquid-glass-button:hover {
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a38, 14, 0, 0, 2);
+}
+.liquid-glass-button:pressed {
+  -fx-effect: dropshadow(gaussian, -md-sys-color-shadow-a38, 16, 0, 0, 3);
+}

@@ -1,23 +1,35 @@
 package com.gym.controller;
 
+import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
+import io.m3fx.controls.card.CardVariant;
 import io.m3fx.controls.card.M3Card;
 import io.m3fx.controls.chart.M3GaugeChart;
 import io.m3fx.controls.chart.M3Heatmap;
 import io.m3fx.controls.data.M3DataTable;
 import io.m3fx.controls.data.M3StatCard;
 import io.m3fx.controls.dialog.M3Dialog;
+import io.m3fx.controls.effect.M3GlassPane;
 import io.m3fx.controls.effect.M3Scanline;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.textfield.M3TextField;
 import io.m3fx.controls.textfield.TextFieldVariant;
 import javafx.application.Platform;
-import javafx.event.ActionEvent;
-import javafx.fxml.FXML;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.RowConstraints;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import java.time.LocalDate;
@@ -35,78 +47,264 @@ import java.util.Set;
  * manual and programmatic check-in/out append or update the visible stream rows (never toast
  * only), the occupancy KPI and gauge move with them, the daily report dialog is computed from
  * the visible stream, and record corrections rewrite the row time with a confirm dialog.
+ *
+ * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
+ * former attendance.fxml: top bar, bento command grid (gauge HUD, peak-hours heatmap, scanner
+ * viewport, member dossier, live check-in stream).
  */
-public class AttendanceController {
+public class AttendanceController implements ScreenController {
 
     /** Matches the time format the stream rows use ("07:02"), so corrections stay uniform. */
     private static final String TIME_PATTERN = "^([01]\\d|2[0-3]):[0-5]\\d$";
     /** Plan recorded for a manual check-in whose member is not in the demo stream yet. */
     private static final String WALK_IN_PLAN = "Day Pass";
 
-    @FXML private Label lblCurrentDate;
-    @FXML private M3StatCard cardInsideCount;
-    @FXML private M3GaugeChart occupancyGauge;
-    @FXML private M3Heatmap peakHoursHeatmap;
-    @FXML private M3Card memberDossierCard;
-    @FXML private Label lblScanResult;
-    @FXML private Label lblScanTimestamp;
-    @FXML private Label lblScannedMemberName;
-    @FXML private Label lblScannedPlanInfo;
-    @FXML private Label lblAssignedTrainer;
-    @FXML private M3TextField txtMemberLookup;
-    @FXML private M3DataTable<String> attendanceDataTable;
-
-    @FXML private M3Button btnDailyReportAction;
-    @FXML private M3Scanline turnstileScanline;
-    @FXML private M3Button btnManualCheckIn;
-    @FXML private M3Button btnManualCheckOut;
-    @FXML private TextField txtTableSearch;
+    // ---- View fields (the former fx:id injections, now built by buildView) ----
+    private StackPane viewRoot;
+    private Label lblCurrentDate;
+    private M3StatCard cardInsideCount;
+    private M3GaugeChart occupancyGauge;
+    private M3Heatmap peakHoursHeatmap;
+    private M3Card memberDossierCard;
+    private Label lblScanResult;
+    private Label lblScanTimestamp;
+    private Label lblScannedMemberName;
+    private Label lblScannedPlanInfo;
+    private Label lblAssignedTrainer;
+    private M3TextField txtMemberLookup;
+    private M3DataTable<String> attendanceDataTable;
+    private M3Button btnDailyReportAction;
+    private M3Scanline turnstileScanline;
+    private M3Button btnManualCheckIn;
+    private M3Button btnManualCheckOut;
+    private TextField txtTableSearch;
 
     /** Hosts M3 snackbars and dialogs for this screen (attached to the scene root at runtime). */
     private final M3Overlay feedback = new M3Overlay();
 
     /** Master stream (newest first for manual entries); the table shows the search-filtered view. */
     private final List<String> streamRows = new ArrayList<>();
-    /** Athletes currently inside, seeded from the FXML KPI value (142) and moved by check-ins. */
+    /** Athletes currently inside, seeded from the occupancy KPI value (142) and moved by check-ins. */
     private int insideCount = 142;
 
+    /**
+     * Builds the complete Fast-Lane Attendance view and initializes all behavior. Same ordering
+     * semantics the FXMLLoader used to provide: the node tree exists and every field is assigned
+     * before the former {@code initialize()} work runs.
+     */
     public AttendanceController() {
-        // Public no-arg constructor required by FXMLLoader
-    }
+        viewRoot = buildView();
 
-    @FXML
-    public void initialize() {
-        // Show today's date instead of the stale hard-coded value from the FXML
-        if (lblCurrentDate != null) {
-            lblCurrentDate.setText(LocalDate.now().toString());
-        }
+        // Show today's date instead of the stale hard-coded seed value
+        lblCurrentDate.setText(LocalDate.now().toString());
         installFeedbackLayer(attendanceDataTable);
         seedOccupancyKpis();
         populateAttendanceStream();
-        if (txtTableSearch != null) {
-            txtTableSearch.textProperty().addListener((obs, ov, nv) -> refreshStream());
-        }
+
+    // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
+    // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
+    // (findById("navCustomers") and friends) and the interaction tests keep working unchanged.
+        lblCurrentDate.setId("lblCurrentDate");
+        cardInsideCount.setId("cardInsideCount");
+        occupancyGauge.setId("occupancyGauge");
+        peakHoursHeatmap.setId("peakHoursHeatmap");
+        memberDossierCard.setId("memberDossierCard");
+        lblScanResult.setId("lblScanResult");
+        lblScanTimestamp.setId("lblScanTimestamp");
+        lblScannedMemberName.setId("lblScannedMemberName");
+        lblScannedPlanInfo.setId("lblScannedPlanInfo");
+        lblAssignedTrainer.setId("lblAssignedTrainer");
+        txtMemberLookup.setId("txtMemberLookup");
+        attendanceDataTable.setId("attendanceDataTable");
+        btnDailyReportAction.setId("btnDailyReportAction");
+        turnstileScanline.setId("turnstileScanline");
+        btnManualCheckIn.setId("btnManualCheckIn");
+        btnManualCheckOut.setId("btnManualCheckOut");
+        txtTableSearch.setId("txtTableSearch");
+        txtTableSearch.textProperty().addListener((obs, ov, nv) -> refreshStream());
     }
 
-    /** Reads the occupancy KPI seed from the FXML value and bounds the gauge to the safety cap. */
+    /**
+     * Constructs the whole node tree (the programmatic replacement for attendance.fxml) and
+     * wires every handler.
+     */
+    private StackPane buildView() {
+        BorderPane layout = new BorderPane();
+        layout.getStyleClass().add("attendance-layout");
+
+        // Top app bar & turnstile status.
+        VBox topBarContainer = new VBox(8);
+        topBarContainer.getStyleClass().add("top-bar-container");
+        HBox topRow = new HBox(16);
+        topRow.setAlignment(Pos.CENTER_LEFT);
+        topRow.setPadding(new Insets(14, 24, 12, 24));
+        lblCurrentDate = new Label("2026-10-28");
+        lblCurrentDate.getStyleClass().add("title-medium");
+        btnDailyReportAction = new M3Button("Daily Report", ButtonVariant.TONAL);
+        btnDailyReportAction.getStyleClass().add("m3-button-tonal");
+        btnDailyReportAction.setOnAction(e -> onDailyReportClick());
+        Region topSpacer = new Region();
+        HBox.setHgrow(topSpacer, Priority.ALWAYS);
+        topRow.getChildren().addAll(
+                styledLabel("FAST-LANE ATTENDANCE & TURNSTILE GATEWAY", "title-large"),
+                topSpacer,
+                lblCurrentDate,
+                btnDailyReportAction);
+        topBarContainer.getChildren().add(topRow);
+        layout.setTop(topBarContainer);
+
+        // Center bento command grid.
+        GridPane bentoGrid = new GridPane();
+        bentoGrid.setHgap(16);
+        bentoGrid.setVgap(16);
+        bentoGrid.getStyleClass().add("bento-command-grid");
+        bentoGrid.setPadding(new Insets(8, 24, 64, 24));
+        ColumnConstraints leftColumn = new ColumnConstraints();
+        leftColumn.setPercentWidth(42);
+        ColumnConstraints rightColumn = new ColumnConstraints();
+        rightColumn.setPercentWidth(58);
+        RowConstraints topRowConstraint = new RowConstraints();
+        topRowConstraint.setPercentHeight(26);
+        RowConstraints bottomRowConstraint = new RowConstraints();
+        bottomRowConstraint.setPercentHeight(74);
+        bentoGrid.getColumnConstraints().addAll(leftColumn, rightColumn);
+        bentoGrid.getRowConstraints().addAll(topRowConstraint, bottomRowConstraint);
+
+        // Top left: occupancy gauge HUD.
+        HBox occupancyHud = new HBox(16);
+        occupancyHud.setAlignment(Pos.CENTER_LEFT);
+        cardInsideCount = new M3StatCard("Currently Inside", "142", "Safety Cap: 200");
+        HBox.setHgrow(cardInsideCount, Priority.ALWAYS);
+        occupancyGauge = new M3GaugeChart();
+        occupancyGauge.setPrefSize(120, 120);
+        occupancyHud.getChildren().addAll(cardInsideCount, occupancyGauge);
+        bentoGrid.add(occupancyHud, 0, 0);
+
+        // Top right: peak hours density heatmap.
+        VBox heatmapCard = new VBox(8);
+        heatmapCard.getStyleClass().add("heatmap-container-card");
+        heatmapCard.setPadding(new Insets(10, 14, 10, 14));
+        peakHoursHeatmap = new M3Heatmap();
+        VBox.setVgrow(peakHoursHeatmap, Priority.ALWAYS);
+        heatmapCard.getChildren().addAll(
+                styledLabel("HOURLY ATTENDANCE DENSITY (PEAK HOURS)", "label-small"),
+                peakHoursHeatmap);
+        bentoGrid.add(heatmapCard, 1, 0);
+
+        // Bottom left: fast-lane scanner & member dossier.
+        VBox scannerColumn = new VBox(14);
+
+        // Laser scanner viewport.
+        StackPane scanViewport = new StackPane();
+        scanViewport.setPrefHeight(200);
+        scanViewport.getStyleClass().add("scan-viewport-pane");
+        M3GlassPane scannerGlass = new M3GlassPane();
+        scannerGlass.setOpacity(0.8);
+        turnstileScanline = new M3Scanline();
+        VBox scanPrompt = new VBox(8);
+        scanPrompt.setAlignment(Pos.CENTER);
+        scanPrompt.getChildren().addAll(
+                styledLabel("PRESENT RFID BADGE / QR CODE", "label-large"),
+                styledLabel("Align barcode within illuminated sensor zone", "body-small"));
+        scanViewport.getChildren().addAll(scannerGlass, turnstileScanline, scanPrompt);
+
+        // Last scanned member dossier.
+        memberDossierCard = new M3Card(CardVariant.ELEVATED);
+        memberDossierCard.getStyleClass().add("dossier-pass-granted");
+        VBox.setVgrow(memberDossierCard, Priority.ALWAYS);
+        VBox dossierContent = new VBox(10);
+        dossierContent.setPadding(new Insets(16));
+        HBox dossierHeader = new HBox();
+        dossierHeader.setAlignment(Pos.CENTER_LEFT);
+        lblScanResult = new Label("ACCESS GRANTED");
+        lblScanResult.getStyleClass().add("title-medium");
+        Region dossierSpacer = new Region();
+        HBox.setHgrow(dossierSpacer, Priority.ALWAYS);
+        lblScanTimestamp = new Label("07:02 AM");
+        lblScanTimestamp.getStyleClass().add("body-small");
+        dossierHeader.getChildren().addAll(lblScanResult, dossierSpacer, lblScanTimestamp);
+        lblScannedMemberName = new Label("Sarah Connor (ID #1042)");
+        lblScannedMemberName.getStyleClass().add("headline-small");
+        lblScannedPlanInfo = new Label("Plan: Yearly VIP · Valid until 2027-04-12");
+        lblScannedPlanInfo.getStyleClass().add("body-medium");
+        lblAssignedTrainer = new Label("Assigned Coach: Marcus Vance");
+        lblAssignedTrainer.getStyleClass().add("body-small");
+        dossierContent.getChildren().addAll(dossierHeader,
+                lblScannedMemberName, lblScannedPlanInfo, lblAssignedTrainer);
+        memberDossierCard.setContent(dossierContent);
+
+        // Manual fast check-in row.
+        HBox manualRow = new HBox(10);
+        manualRow.setAlignment(Pos.CENTER_LEFT);
+        txtMemberLookup = new M3TextField("Enter Member ID or Phone", TextFieldVariant.FILLED);
+        HBox.setHgrow(txtMemberLookup, Priority.ALWAYS);
+        btnManualCheckIn = new M3Button("Check-In", ButtonVariant.FILLED);
+        btnManualCheckIn.getStyleClass().add("m3-button-filled");
+        btnManualCheckIn.setOnAction(e -> onManualCheckInClick());
+        btnManualCheckOut = new M3Button("Check-Out", ButtonVariant.OUTLINED);
+        btnManualCheckOut.getStyleClass().add("m3-button-outlined");
+        btnManualCheckOut.setOnAction(e -> onManualCheckOutClick());
+        manualRow.getChildren().addAll(txtMemberLookup, btnManualCheckIn, btnManualCheckOut);
+
+        scannerColumn.getChildren().addAll(scanViewport, memberDossierCard, manualRow);
+        bentoGrid.add(scannerColumn, 0, 1);
+
+        // Bottom right: live check-in stream table.
+        VBox streamCard = new VBox(10);
+        streamCard.getStyleClass().add("table-container-card");
+        HBox streamHeader = new HBox(12);
+        streamHeader.setAlignment(Pos.CENTER_LEFT);
+        txtTableSearch = new TextField();
+        txtTableSearch.setPromptText("Filter attendees...");
+        txtTableSearch.setPrefWidth(220);
+        Region streamSpacer = new Region();
+        HBox.setHgrow(streamSpacer, Priority.ALWAYS);
+        streamHeader.getChildren().addAll(
+                styledLabel("TODAY'S ATTENDANCE STREAM", "title-medium"),
+                streamSpacer,
+                txtTableSearch);
+        attendanceDataTable = new M3DataTable<>();
+        VBox.setVgrow(attendanceDataTable, Priority.ALWAYS);
+        streamCard.getChildren().addAll(streamHeader, attendanceDataTable);
+        bentoGrid.add(streamCard, 1, 1);
+
+        layout.setCenter(bentoGrid);
+
+        StackPane root = new StackPane();
+        root.getStyleClass().add("attendance-root");
+        root.getChildren().add(layout);
+        return root;
+    }
+
+    /** Small label with one style class. */
+    private static Label styledLabel(String text, String styleClass) {
+        Label label = new Label(text);
+        label.getStyleClass().add(styleClass);
+        return label;
+    }
+
+    @Override
+    public Parent getRoot() {
+        return viewRoot;
+    }
+
+    /** Reads the occupancy KPI seed from the card value and bounds the gauge to the safety cap. */
     private void seedOccupancyKpis() {
-        if (cardInsideCount != null && cardInsideCount.getValue() != null) {
+        if (cardInsideCount.getValue() != null) {
             try {
                 insideCount = Integer.parseInt(cardInsideCount.getValue().trim());
             } catch (NumberFormatException ignored) {
                 // keep the 142 demo seed
             }
         }
-        if (occupancyGauge != null) {
-            occupancyGauge.setTitle("OCCUPANCY");
-            occupancyGauge.setMaxValue(200); // the KPI's "Safety Cap: 200"
-            occupancyGauge.setValue(insideCount);
-        }
+        occupancyGauge.setTitle("OCCUPANCY");
+        occupancyGauge.setMaxValue(200); // the KPI's "Safety Cap: 200"
+        occupancyGauge.setValue(insideCount);
     }
 
     /** Fills the check-in stream with today's demo rows so the screen is not blank. */
     private void populateAttendanceStream() {
-        if (attendanceDataTable == null || !attendanceDataTable.getColumns().isEmpty()) {
+        if (!attendanceDataTable.getColumns().isEmpty()) {
             return;
         }
         attendanceDataTable.getColumns().addAll(List.of(
@@ -130,9 +328,6 @@ public class AttendanceController {
 
     /** Applies the stream table filter box to the visible rows (every visible control answers). */
     private void refreshStream() {
-        if (attendanceDataTable == null) {
-            return;
-        }
         String query = txtTableSearch.getText() == null ? "" : txtTableSearch.getText().trim().toLowerCase(Locale.ROOT);
         if (query.isEmpty()) {
             attendanceDataTable.getItems().setAll(streamRows);
@@ -152,36 +347,18 @@ public class AttendanceController {
     // ------------------------------------------------------------------
 
     /** Opens the daily report dialog computed from the visible stream. */
-    @FXML
     public void onDailyReportClick() {
         showDailyReport();
     }
 
-    @FXML
-    public void onDailyReportClick(ActionEvent event) {
-        onDailyReportClick();
-    }
-
     /** Manual check-in through the member lookup field (validation inline + snackbar). */
-    @FXML
     public void onManualCheckInClick() {
         performCheckIn(lookupQuery());
     }
 
-    @FXML
-    public void onManualCheckInClick(ActionEvent event) {
-        onManualCheckInClick();
-    }
-
     /** Manual check-out through the member lookup field (validation inline + snackbar). */
-    @FXML
     public void onManualCheckOutClick() {
         performCheckOut(lookupQuery());
-    }
-
-    @FXML
-    public void onManualCheckOutClick(ActionEvent event) {
-        onManualCheckOutClick();
     }
 
     // ------------------------------------------------------------------
@@ -353,10 +530,8 @@ public class AttendanceController {
     /** Validates the lookup query inline and reports it; true when the input was rejected. */
     private boolean requireLookup(String query) {
         boolean ok = query != null && !query.isBlank();
-        if (txtMemberLookup != null) {
-            txtMemberLookup.setError(!ok);
-            txtMemberLookup.setSupportingText(ok ? "" : "Enter the member ID, phone or name to continue.");
-        }
+        txtMemberLookup.setError(!ok);
+        txtMemberLookup.setSupportingText(ok ? "" : "Enter the member ID, phone or name to continue.");
         if (ok) {
             return false;
         }
@@ -366,8 +541,7 @@ public class AttendanceController {
 
     /** The lookup field's current query (never null). */
     private String lookupQuery() {
-        return txtMemberLookup == null || txtMemberLookup.getText() == null
-                ? "" : txtMemberLookup.getText().trim();
+        return txtMemberLookup.getText() == null ? "" : txtMemberLookup.getText().trim();
     }
 
     /**
@@ -409,12 +583,8 @@ public class AttendanceController {
 
     /** Moves the inside-count KPI and the occupancy gauge with every check-in/out. */
     private void updateOccupancyKpis() {
-        if (cardInsideCount != null) {
-            cardInsideCount.setValue(String.valueOf(insideCount));
-        }
-        if (occupancyGauge != null) {
-            occupancyGauge.setValue(insideCount);
-        }
+        cardInsideCount.setValue(String.valueOf(insideCount));
+        occupancyGauge.setValue(insideCount);
     }
 
     private static String clockText() {

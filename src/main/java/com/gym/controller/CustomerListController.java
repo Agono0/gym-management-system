@@ -1,7 +1,9 @@
 package com.gym.controller;
 
 import io.m3fx.controls.appbar.M3TopAppBar;
+import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
+import io.m3fx.controls.chip.ChipVariant;
 import io.m3fx.controls.chip.M3Chip;
 import io.m3fx.controls.data.M3DataTable;
 import io.m3fx.controls.data.M3SpeedDial;
@@ -18,14 +20,21 @@ import io.m3fx.controls.search.M3SearchBar;
 import io.m3fx.controls.sheet.M3SideSheet;
 import io.m3fx.controls.textfield.M3TextField;
 import io.m3fx.controls.textfield.TextFieldVariant;
-import javafx.fxml.FXML;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.Toggle;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.DataFormat;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
@@ -35,16 +44,20 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Controller for the Customer List Roster & Athlete Directory (customer-list.fxml).
+ * Controller for the Customer List Roster & Athlete Directory.
  * Conforms to docs/ui/members/CUSTOMER_LIST_UI.md Section 7 contract.
  * Pure UI: strictly no backend service, DAO, or database logic.
  *
  * <p>UX contract: the roster is a working demo data set — the search bar and filter chips
  * actually filter it (so the table's empty states are reachable), Add Member opens a real
  * entry dialog, export copies a CSV to the clipboard, delete confirms first and offers
- * Undo, and every answer surfaces through an {@link M3Snackbar}.
+ * Undo, and every answer surfaces through an {@link M3Overlay} snackbar.
+ *
+ * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
+ * former customer-list.fxml: app bar, KPI cards, search + filter chips, master table,
+ * quick-peek side sheet, floating speed dial.
  */
-public class CustomerListController {
+public class CustomerListController implements ScreenController {
 
     /** Row layout: id, name, phone, email, status, trainer, 8-wk activity %, joined. */
     private static final int COL_ID = 0;
@@ -56,45 +69,41 @@ public class CustomerListController {
     private static final int COL_ACTIVITY = 6;
     private static final int COL_JOINED = 7;
 
-    @FXML private StackPane rootContainer;
-    @FXML private BorderPane mainLayout;
-    @FXML private M3TopAppBar topAppBar;
-    @FXML private M3IconButton btnNavMenu;
-    @FXML private M3IconButton btnExport;
-    @FXML private M3IconButton btnHelp;
-    @FXML private M3LinearProgress loadingBar;
-
-    @FXML private M3StatCard cardTotalActive;
-    @FXML private M3StatCard cardExpiringSoon;
-    @FXML private M3StatCard cardSuspended;
-    @FXML private M3StatCard cardNewThisMonth;
-
-    @FXML private M3SearchBar searchBar;
-    @FXML private M3Button btnAddMember;
-
-    @FXML private M3Chip chipFilterAll;
-    @FXML private M3Chip chipFilterActive;
-    @FXML private M3Chip chipFilterSuspended;
-    @FXML private M3Chip chipFilterInactive;
-    @FXML private M3Chip chipFilterExpiring;
-
-    @FXML private M3DataTable<?> customerTable;
-    @FXML private TableColumn<?, ?> colId;
-    @FXML private TableColumn<?, ?> colFullName;
-    @FXML private TableColumn<?, ?> colPhone;
-    @FXML private TableColumn<?, ?> colEmail;
-    @FXML private TableColumn<?, ?> colStatus;
-    @FXML private TableColumn<?, ?> colTrainer;
-    @FXML private TableColumn<?, ?> colAttendanceSpark;
-    @FXML private TableColumn<?, ?> colActions;
-
-    @FXML private M3SideSheet sideSheetQuickPeek;
-    @FXML private M3IconButton btnCloseSideSheet;
-    @FXML private M3TiltCard3D holographicPassCard;
-    @FXML private VBox biometricHudBox;
-    @FXML private M3Button btnOpenFullProfile;
-    @FXML private M3IconButton btnDeleteCustomer;
-    @FXML private M3SpeedDial speedDial;
+    // ---- View fields (the former fx:id injections, now built by buildView) ----
+    private StackPane rootContainer;
+    private BorderPane mainLayout;
+    private M3TopAppBar topAppBar;
+    private M3IconButton btnNavMenu;
+    private M3IconButton btnExport;
+    private M3IconButton btnHelp;
+    private M3LinearProgress loadingBar;
+    private M3StatCard cardTotalActive;
+    private M3StatCard cardExpiringSoon;
+    private M3StatCard cardSuspended;
+    private M3StatCard cardNewThisMonth;
+    private M3SearchBar searchBar;
+    private M3Button btnAddMember;
+    private M3Chip chipFilterAll;
+    private M3Chip chipFilterActive;
+    private M3Chip chipFilterSuspended;
+    private M3Chip chipFilterInactive;
+    private M3Chip chipFilterExpiring;
+    private M3DataTable<Object[]> customerTable;
+    private TableColumn<Object[], ?> colId;
+    private TableColumn<Object[], ?> colFullName;
+    private TableColumn<Object[], ?> colPhone;
+    private TableColumn<Object[], ?> colEmail;
+    private TableColumn<Object[], ?> colStatus;
+    private TableColumn<Object[], ?> colTrainer;
+    private TableColumn<Object[], ?> colAttendanceSpark;
+    private TableColumn<Object[], ?> colActions;
+    private M3SideSheet sideSheetQuickPeek;
+    private M3IconButton btnCloseSideSheet;
+    private M3TiltCard3D holographicPassCard;
+    private VBox biometricHudBox;
+    private M3Button btnOpenFullProfile;
+    private M3IconButton btnDeleteCustomer;
+    private M3SpeedDial speedDial;
 
     /** Overlay host for snackbars and dialogs, added to the screen root in code (no fx:id). */
     private M3Overlay overlay;
@@ -107,13 +116,62 @@ public class CustomerListController {
     /** Row currently shown in the quick-peek side sheet, or {@code null}. */
     private Object[] selectedRow;
 
+    /**
+     * Builds the complete Member Roster view and initializes all behavior. Same ordering
+     * semantics the FXMLLoader used to provide: the node tree exists and every field is
+     * assigned before the former {@code initialize()} work runs.
+     */
     public CustomerListController() {
-        // Public no-arg constructor for FXMLLoader
-    }
+        // Column declarations wired onto the M3DataTable in wireRosterColumns()
+        // (M3DataTable.Column is not declarable in markup).
+        colId = column("ID", 70);
+        colFullName = column("Athlete Full Name", 220);
+        colPhone = column("Phone Number", 140);
+        colEmail = column("Email Address", 200);
+        colStatus = column("Status", 120);
+        colTrainer = column("Assigned Coach", 160);
+        colAttendanceSpark = column("8-Wk Activity", 110);
+        colActions = column("Actions", 120);
 
-    @FXML
-    public void initialize() {
-        overlay = new M3Overlay();
+        buildView();
+
+    // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
+    // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
+    // (findById("navCustomers") and friends) and the interaction tests keep working unchanged.
+        rootContainer.setId("rootContainer");
+        mainLayout.setId("mainLayout");
+        topAppBar.setId("topAppBar");
+        btnNavMenu.setId("btnNavMenu");
+        btnExport.setId("btnExport");
+        btnHelp.setId("btnHelp");
+        loadingBar.setId("loadingBar");
+        cardTotalActive.setId("cardTotalActive");
+        cardExpiringSoon.setId("cardExpiringSoon");
+        cardSuspended.setId("cardSuspended");
+        cardNewThisMonth.setId("cardNewThisMonth");
+        searchBar.setId("searchBar");
+        btnAddMember.setId("btnAddMember");
+        chipFilterAll.setId("chipFilterAll");
+        chipFilterActive.setId("chipFilterActive");
+        chipFilterSuspended.setId("chipFilterSuspended");
+        chipFilterInactive.setId("chipFilterInactive");
+        chipFilterExpiring.setId("chipFilterExpiring");
+        customerTable.setId("customerTable");
+        colId.setId("colId");
+        colFullName.setId("colFullName");
+        colPhone.setId("colPhone");
+        colEmail.setId("colEmail");
+        colStatus.setId("colStatus");
+        colTrainer.setId("colTrainer");
+        colAttendanceSpark.setId("colAttendanceSpark");
+        colActions.setId("colActions");
+        sideSheetQuickPeek.setId("sideSheetQuickPeek");
+        btnCloseSideSheet.setId("btnCloseSideSheet");
+        holographicPassCard.setId("holographicPassCard");
+        biometricHudBox.setId("biometricHudBox");
+        btnOpenFullProfile.setId("btnOpenFullProfile");
+        btnDeleteCustomer.setId("btnDeleteCustomer");
+        speedDial.setId("speedDial");
         rootContainer.getChildren().add(overlay);
 
         loadDemoRoster();
@@ -126,12 +184,175 @@ public class CustomerListController {
         wireSpeedDial();
     }
 
+    /** One roster table column definition (header text + preferred width). */
+    private static TableColumn<Object[], ?> column(String text, double prefWidth) {
+        TableColumn<Object[], ?> col = new TableColumn<>(text);
+        col.setPrefWidth(prefWidth);
+        return col;
+    }
+
+    /**
+     * Constructs the whole node tree (the programmatic replacement for customer-list.fxml) and
+     * wires every handler.
+     */
+    private StackPane buildView() {
+        mainLayout = new BorderPane();
+
+        // Top app bar.
+        topAppBar = new M3TopAppBar("ATHLETE & MEMBER ROSTER",
+                io.m3fx.controls.appbar.TopAppBarVariant.CENTER_ALIGNED);
+        HBox.setHgrow(topAppBar, Priority.ALWAYS);
+
+        btnNavMenu = new M3IconButton(M3Icon.symbol("menu"), io.m3fx.controls.iconbutton.IconButtonVariant.STANDARD);
+        btnNavMenu.setOnAction(e -> onToggleNavRail());
+        btnNavMenu.setAccessibleText("Roster menu: focus search or clear filters");
+        topAppBar.setNavigationIcon(btnNavMenu);
+
+        HBox appActions = new HBox(8);
+        appActions.setAlignment(Pos.CENTER_RIGHT);
+        appActions.setPadding(new Insets(0, 16, 0, 0));
+        btnExport = new M3IconButton(M3Icon.symbol("arrow_drop_down"), io.m3fx.controls.iconbutton.IconButtonVariant.STANDARD);
+        btnExport.setOnAction(e -> onExportData());
+        btnExport.setAccessibleText("Export visible athletes as CSV to clipboard");
+        btnHelp = new M3IconButton(M3Icon.symbol("info"), io.m3fx.controls.iconbutton.IconButtonVariant.STANDARD);
+        btnHelp.setOnAction(e -> onShowHelp());
+        btnHelp.setAccessibleText("How the roster works");
+        appActions.getChildren().addAll(btnExport, btnHelp);
+
+        HBox appBarRow = new HBox();
+        appBarRow.setAlignment(Pos.CENTER_LEFT);
+        appBarRow.getStyleClass().add("app-bar-container");
+        appBarRow.getChildren().addAll(topAppBar, appActions);
+
+        loadingBar = new M3LinearProgress();
+        loadingBar.setVisible(false);
+        loadingBar.setManaged(false);
+
+        VBox topBlock = new VBox(appBarRow, loadingBar);
+        mainLayout.setTop(topBlock);
+
+        // Main bento workspace.
+        VBox workspace = new VBox(16);
+        workspace.setPadding(new Insets(16, 24, 64, 24));
+
+        // Bento KPI summary cards.
+        HBox kpiRow = new HBox(16);
+        kpiRow.setFillHeight(true);
+        cardTotalActive = new M3StatCard("TOTAL ACTIVE", "1,428", "84% Operating Capacity");
+        cardExpiringSoon = new M3StatCard("EXPIRING (< 7 DAYS)", "38", "Requires Follow-Up");
+        cardSuspended = new M3StatCard("SUSPENDED / HOLD", "14", "Memberships Frozen");
+        cardNewThisMonth = new M3StatCard("NEW THIS MONTH", "+86", "+12% vs Previous Month");
+        for (M3StatCard card : List.of(cardTotalActive, cardExpiringSoon, cardSuspended, cardNewThisMonth)) {
+            HBox.setHgrow(card, Priority.ALWAYS);
+        }
+        kpiRow.getChildren().addAll(cardTotalActive, cardExpiringSoon, cardSuspended, cardNewThisMonth);
+
+        // Search and filter bar.
+        HBox searchRow = new HBox(12);
+        searchRow.setAlignment(Pos.CENTER_LEFT);
+        searchBar = new M3SearchBar();
+        HBox.setHgrow(searchBar, Priority.ALWAYS);
+        searchBar.setOnKeyReleased(e -> onSearch());
+        btnAddMember = new M3Button("Add Member", ButtonVariant.FILLED);
+        btnAddMember.setGraphic(M3Icon.symbol("add"));
+        btnAddMember.setOnAction(e -> onAdd());
+        searchRow.getChildren().addAll(searchBar, btnAddMember);
+
+        // Filter chips flow.
+        FlowPane chipFlow = new FlowPane(8, 8);
+        chipFilterAll = new M3Chip("All Members", ChipVariant.FILTER);
+        chipFilterAll.setSelected(true);
+        chipFilterActive = new M3Chip("Active Only", ChipVariant.FILTER);
+        chipFilterSuspended = new M3Chip("Suspended", ChipVariant.FILTER);
+        chipFilterInactive = new M3Chip("Inactive", ChipVariant.FILTER);
+        chipFilterExpiring = new M3Chip("Expiring Soon", ChipVariant.FILTER);
+        for (M3Chip chip : List.of(chipFilterAll, chipFilterActive, chipFilterSuspended,
+                chipFilterInactive, chipFilterExpiring)) {
+            chip.setOnAction(e -> onFilterChanged());
+        }
+        chipFlow.getChildren().addAll(chipFilterAll, chipFilterActive, chipFilterSuspended,
+                chipFilterInactive, chipFilterExpiring);
+
+        // Virtualized master data table: rows open the quick-peek sheet, headers sort.
+        customerTable = new M3DataTable<>();
+        VBox.setVgrow(customerTable, Priority.ALWAYS);
+
+        workspace.getChildren().addAll(kpiRow, searchRow, chipFlow, customerTable);
+        mainLayout.setCenter(workspace);
+
+        // Contextual quick-peek side sheet (collapsible drawer).
+        sideSheetQuickPeek = new M3SideSheet();
+        sideSheetQuickPeek.setVisible(false);
+        StackPane.setAlignment(sideSheetQuickPeek, Pos.CENTER_RIGHT);
+
+        VBox sheetContent = new VBox(16);
+        sheetContent.setPrefWidth(380);
+        sheetContent.setPadding(new Insets(20));
+
+        HBox sheetHeader = new HBox();
+        sheetHeader.setAlignment(Pos.CENTER_LEFT);
+        Region sheetSpacer = new Region();
+        HBox.setHgrow(sheetSpacer, Priority.ALWAYS);
+        btnCloseSideSheet = new M3IconButton(M3Icon.symbol("close"), io.m3fx.controls.iconbutton.IconButtonVariant.STANDARD);
+        btnCloseSideSheet.setOnAction(e -> onCloseSideSheet());
+        btnCloseSideSheet.setAccessibleText("Close quick peek");
+        sheetHeader.getChildren().addAll(
+                styledLabel("ATHLETE QUICK PEEK", "title-medium"),
+                sheetSpacer,
+                btnCloseSideSheet);
+
+        // 3D holographic identity pass.
+        holographicPassCard = new M3TiltCard3D();
+
+        // Fast biometric HUD.
+        biometricHudBox = new VBox(8);
+        biometricHudBox.getStyleClass().add("biometric-hud-pane");
+
+        // Action triggers.
+        HBox sheetActions = new HBox(8);
+        btnOpenFullProfile = new M3Button("Open Full Profile", ButtonVariant.FILLED);
+        HBox.setHgrow(btnOpenFullProfile, Priority.ALWAYS);
+        btnOpenFullProfile.setOnAction(e -> onOpenSelectedProfile());
+        btnDeleteCustomer = new M3IconButton(M3Icon.symbol("delete"), io.m3fx.controls.iconbutton.IconButtonVariant.STANDARD);
+        btnDeleteCustomer.setOnAction(e -> onDeleteSelectedCustomer());
+        btnDeleteCustomer.setAccessibleText("Delete selected athlete");
+        sheetActions.getChildren().addAll(btnOpenFullProfile, btnDeleteCustomer);
+
+        sheetContent.getChildren().addAll(sheetHeader, holographicPassCard, biometricHudBox, sheetActions);
+        sideSheetQuickPeek.setContent(sheetContent);
+
+        // Floating action speed dial.
+        speedDial = new M3SpeedDial();
+        speedDial.setMaxSize(56, 56);
+        speedDial.setPickOnBounds(false);
+        StackPane.setAlignment(speedDial, Pos.BOTTOM_RIGHT);
+        StackPane.setMargin(speedDial, new Insets(0, 32, 32, 0));
+
+        rootContainer = new StackPane();
+        rootContainer.getStyleClass().add("customer-list-root");
+        rootContainer.getChildren().addAll(mainLayout, sideSheetQuickPeek, speedDial);
+
+        overlay = new M3Overlay();
+        return rootContainer;
+    }
+
+    /** Small label with one style class. */
+    private static Label styledLabel(String text, String styleClass) {
+        Label label = new Label(text);
+        label.getStyleClass().add(styleClass);
+        return label;
+    }
+
+    @Override
+    public Parent getRoot() {
+        return rootContainer;
+    }
+
     // ------------------------------------------------------------------
     // Event handlers (answers for every visible action)
     // ------------------------------------------------------------------
 
     /** Opens a small in-screen menu: jump to the search box or clear search + filters. */
-    @FXML
     public void onToggleNavRail() {
         M3Menu menu = new M3Menu();
         menu.item("Focus search box", searchBar::requestFocus);
@@ -141,9 +362,8 @@ public class CustomerListController {
     }
 
     /** Exports the visible roster rows as CSV to the clipboard and confirms the count. */
-    @FXML
     public void onExportData() {
-        List<Object[]> visible = table().getItems();
+        List<Object[]> visible = customerTable.getItems();
         if (visible.isEmpty()) {
             overlay.showSnackbar("Nothing to export — the current view has no athletes.");
             return;
@@ -169,7 +389,6 @@ public class CustomerListController {
     }
 
     /** Explains the roster screen in a dismissible dialog (real content, not a stub). */
-    @FXML
     public void onShowHelp() {
         M3Button gotIt = M3Button.text("Got it");
         M3Dialog dialog = M3Dialog.basic("How the roster works", helpContent(), gotIt);
@@ -179,13 +398,11 @@ public class CustomerListController {
     }
 
     /** Live search: combines the query with the active filter chip and re-renders. */
-    @FXML
     public void onSearch() {
         applyRosterView();
     }
 
     /** Opens the Add Member dialog; confirming inserts the athlete into the roster. */
-    @FXML
     public void onAdd() {
         M3TextField nameField = new M3TextField("Full name", TextFieldVariant.OUTLINED);
         M3TextField phoneField = new M3TextField("Phone (01xxxxxxxxx)", TextFieldVariant.OUTLINED);
@@ -222,13 +439,11 @@ public class CustomerListController {
     }
 
     /** Applies the selected filter chip (exactly one active) to the roster view. */
-    @FXML
     public void onFilterChanged() {
         applyRosterView();
     }
 
     /** Hides the quick-peek side sheet. */
-    @FXML
     public void onCloseSideSheet() {
         hideSideSheet();
     }
@@ -238,9 +453,8 @@ public class CustomerListController {
      * {@code navCustomers} rail destination on the way, exactly like a rail click, and passes
      * the selected member identity so {@link CustomerProfileController} prefills the name. The
      * quick-peek side sheet stays the answer for the peek action (row click / row icon).
-     * Standalone previews and FXML tests without the owning shell answer with a snackbar.
+     * Standalone previews and tests without the owning shell answer with a snackbar.
      */
-    @FXML
     public void onOpenSelectedProfile() {
         if (selectedRow == null) {
             overlay.showSnackbar("Select an athlete row first.");
@@ -250,7 +464,7 @@ public class CustomerListController {
         String memberId = String.valueOf(selectedRow[COL_ID]);
         AppShellController shell = shellFromScene();
         if (shell != null) {
-            shell.openScreenViaRail("navCustomers", "customer-profile.fxml", controller -> {
+            shell.openScreenViaRail("navCustomers", Screen.CUSTOMER_PROFILE, controller -> {
                 if (controller instanceof CustomerProfileController profile) {
                     profile.showMember(name, memberId);
                 }
@@ -263,10 +477,10 @@ public class CustomerListController {
     /**
      * The owning shell controller, published in the scene-root properties by
      * {@link AppShellController} ({@code AppShellController.SHELL_CONTROLLER_KEY}); null in
-     * standalone previews and FXML tests.
+     * standalone previews and tests.
      */
     private AppShellController shellFromScene() {
-        if (rootContainer == null || rootContainer.getScene() == null
+        if (rootContainer.getScene() == null
                 || !(rootContainer.getScene().getRoot() instanceof javafx.scene.Parent sceneRoot)) {
             return null;
         }
@@ -275,7 +489,6 @@ public class CustomerListController {
     }
 
     /** Two-step delete of the selected athlete with an Undo snackbar answer. */
-    @FXML
     public void onDeleteSelectedCustomer() {
         deleteRow(selectedRow);
     }
@@ -311,47 +524,35 @@ public class CustomerListController {
                 "Active", "Coach Marcus", 96, "2025-08-18"});
     }
 
-    @SuppressWarnings("unchecked")
-    private M3DataTable<Object[]> table() {
-        return (M3DataTable<Object[]>) (M3DataTable<?>) customerTable;
-    }
-
     /**
-     * Maps the FXML-declared TableColumn definitions (header text + preferred width) onto the
-     * M3DataTable with real per-column extractors, a status badge cell and per-row actions.
+     * Maps the column definitions (header text + preferred width) onto the M3DataTable with
+     * real per-column extractors, a status badge cell and per-row actions.
      */
     private void wireRosterColumns() {
-        if (customerTable == null) {
-            return;
-        }
-        M3DataTable<Object[]> table = table();
-        table.getColumns().add(new M3DataTable.Column<>(colId.getText(), row -> (String) row[COL_ID], colId.getPrefWidth()));
-        table.getColumns().add(new M3DataTable.Column<>(colFullName.getText(), row -> (String) row[COL_NAME], colFullName.getPrefWidth()));
-        table.getColumns().add(new M3DataTable.Column<>(colPhone.getText(), row -> (String) row[COL_PHONE], colPhone.getPrefWidth()));
-        table.getColumns().add(new M3DataTable.Column<>(colEmail.getText(), row -> (String) row[COL_EMAIL], colEmail.getPrefWidth()));
+        customerTable.getColumns().add(new M3DataTable.Column<>(colId.getText(), row -> (String) row[COL_ID], colId.getPrefWidth()));
+        customerTable.getColumns().add(new M3DataTable.Column<>(colFullName.getText(), row -> (String) row[COL_NAME], colFullName.getPrefWidth()));
+        customerTable.getColumns().add(new M3DataTable.Column<>(colPhone.getText(), row -> (String) row[COL_PHONE], colPhone.getPrefWidth()));
+        customerTable.getColumns().add(new M3DataTable.Column<>(colEmail.getText(), row -> (String) row[COL_EMAIL], colEmail.getPrefWidth()));
         M3DataTable.Column<Object[]> statusColumn = new M3DataTable.Column<>(
                 colStatus.getText(), row -> (String) row[COL_STATUS], colStatus.getPrefWidth());
         statusColumn.withCellFactory((row, value) -> statusBadge(value));
-        table.getColumns().add(statusColumn);
-        table.getColumns().add(new M3DataTable.Column<>(colTrainer.getText(), row -> (String) row[COL_TRAINER], colTrainer.getPrefWidth()));
-        table.getColumns().add(new M3DataTable.Column<>(colAttendanceSpark.getText(),
+        customerTable.getColumns().add(statusColumn);
+        customerTable.getColumns().add(new M3DataTable.Column<>(colTrainer.getText(), row -> (String) row[COL_TRAINER], colTrainer.getPrefWidth()));
+        customerTable.getColumns().add(new M3DataTable.Column<>(colAttendanceSpark.getText(),
                 row -> String.valueOf(row[COL_ACTIVITY]) + "%", colAttendanceSpark.getPrefWidth()));
         // The actions column renders through its cell factory only; the extractor returns an
         // empty string because M3DataTable calls the extractor for every populated row.
         M3DataTable.Column<Object[]> actionsColumn = new M3DataTable.Column<>(
                 colActions.getText(), row -> "", colActions.getPrefWidth());
         actionsColumn.withCellFactory((row, value) -> rowActions(row));
-        table.getColumns().add(actionsColumn);
+        customerTable.getColumns().add(actionsColumn);
 
         // Row activation opens the quick-peek side sheet (click or Enter/Space).
-        table.setOnRowAction(this::openSideSheet);
+        customerTable.setOnRowAction(this::openSideSheet);
     }
 
     /** Puts the five filter chips in one ToggleGroup so exactly one filter is active at a time. */
     private void keepFilterChipsExclusive() {
-        if (chipFilterAll == null) {
-            return;
-        }
         filterGroup = new ToggleGroup();
         filterGroup.getToggles().addAll(
                 chipFilterAll, chipFilterActive, chipFilterSuspended, chipFilterInactive, chipFilterExpiring);
@@ -381,7 +582,7 @@ public class CustomerListController {
                 view.add(row);
             }
         }
-        table().getItems().setAll(view);
+        customerTable.getItems().setAll(view);
     }
 
     /** Chip label -> roster status. Called from the FX thread only. */
@@ -389,7 +590,7 @@ public class CustomerListController {
         if (filterGroup == null) {
             return "All";
         }
-        javafx.scene.control.Toggle selected = filterGroup.getSelectedToggle();
+        Toggle selected = filterGroup.getSelectedToggle();
         if (selected == chipFilterActive) {
             return "Active";
         }
@@ -417,9 +618,7 @@ public class CustomerListController {
 
     private void clearSearchAndFilters() {
         searchBar.setQuery("");
-        if (chipFilterAll != null) {
-            chipFilterAll.setSelected(true);
-        }
+        chipFilterAll.setSelected(true);
         applyRosterView();
         overlay.showSnackbar("Search cleared — showing all " + roster.size() + " athletes.");
     }
@@ -459,10 +658,8 @@ public class CustomerListController {
 
     private void hideSideSheet() {
         selectedRow = null;
-        if (sideSheetQuickPeek != null) {
-            sideSheetQuickPeek.setVisible(false);
-            sideSheetQuickPeek.setManaged(false);
-        }
+        sideSheetQuickPeek.setVisible(false);
+        sideSheetQuickPeek.setManaged(false);
     }
 
     private void fillSideSheet(Object[] row) {
@@ -544,7 +741,7 @@ public class CustomerListController {
     }
 
     /** Shows an anchored menu; without a window (headless preview) it answers via snackbar. */
-    private void showMenuBelow(javafx.scene.Node anchor, M3Menu menu, String fallback) {
+    private void showMenuBelow(Node anchor, M3Menu menu, String fallback) {
         if (anchor.getScene() == null || anchor.getScene().getWindow() == null) {
             overlay.showSnackbar(fallback);
             return;

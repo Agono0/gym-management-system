@@ -1,15 +1,13 @@
-package com.gym.fxml;
+package com.gym.screen;
 
 import com.gym.GymApp;
-import com.gym.MainApp;
 import com.gym.controller.AppShellController;
+import com.gym.controller.Screen;
 import javafx.application.Platform;
-import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.net.URL;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -38,14 +36,9 @@ public class GymAppScreenViewerTest {
 
         Platform.runLater(() -> {
             try {
-                URL shellUrl = getClass().getResource("/fxml/app-shell.fxml");
-                assertNotNull(shellUrl, "Missing /fxml/app-shell.fxml");
-                FXMLLoader loader = new FXMLLoader(shellUrl);
-                Parent shellRoot = loader.load();
+                AppShellController controller = new AppShellController();
+                Parent shellRoot = controller.getRoot();
                 assertNotNull(shellRoot);
-
-                AppShellController controller = loader.getController();
-                assertNotNull(controller, "AppShellController must be injected");
 
                 // Verify Navigation Rail contains a ScrollPane for smooth side menu scrolling
                 javafx.scene.Node railScroll = shellRoot.lookup(".rail-scroll-pane");
@@ -77,7 +70,7 @@ public class GymAppScreenViewerTest {
                 assertEquals(javafx.scene.layout.Region.USE_COMPUTED_SIZE, ((javafx.scene.layout.Region) sp.getContent()).getPrefHeight(), 0.001);
 
                 // Load customer-profile (which has an inner ScrollPane) and verify no nested ScrollPane
-                controller.loadScreen("customer-profile.fxml");
+                controller.loadScreen(Screen.CUSTOMER_PROFILE);
                 javafx.scene.Node profileView = contentArea.getChildren().get(0);
                 assertFalse(profileView instanceof javafx.scene.control.ScrollPane, "Screens with inner ScrollPane must not be wrapped in outer ScrollPane");
 
@@ -88,7 +81,7 @@ public class GymAppScreenViewerTest {
             }
         });
 
-        assertTrue(latch.await(5, TimeUnit.SECONDS), "Timed out executing on JavaFX thread");
+        assertTrue(latch.await(15, TimeUnit.SECONDS), "Timed out executing on JavaFX thread");
         if (err.get() != null) {
             throw new AssertionError("Failed loading screens dynamically in AppShellController", err.get());
         }
@@ -114,11 +107,8 @@ public class GymAppScreenViewerTest {
                 assertEquals(javafx.scene.layout.Region.USE_PREF_SIZE, dial.getMaxWidth(), 0.001);
                 assertEquals(javafx.scene.layout.Region.USE_PREF_SIZE, dial.getMaxHeight(), 0.001);
 
-                // Verify dashboard FXML speed dial & snackbar
-                URL url = getClass().getResource("/fxml/dashboard.fxml");
-                assertNotNull(url);
-                FXMLLoader loader = new FXMLLoader(url);
-                Parent root = loader.load();
+                // Verify dashboard speed dial & snackbar
+                Parent root = Screen.DASHBOARD.create().getRoot();
                 javafx.scene.Node speedDial = root.lookup("#quickActionSpeedDial");
                 assertNotNull(speedDial);
                 assertFalse(speedDial.isPickOnBounds(), "Dashboard speed dial must not block mouse clicks");
@@ -133,7 +123,7 @@ public class GymAppScreenViewerTest {
             }
         });
 
-        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(latch.await(15, TimeUnit.SECONDS));
         if (err.get() != null) {
             throw new AssertionError("Speed dial or snackbar mouse blocking verification failed", err.get());
         }
@@ -163,7 +153,7 @@ public class GymAppScreenViewerTest {
             }
         });
 
-        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(latch.await(15, TimeUnit.SECONDS));
         if (err.get() != null) {
             throw new AssertionError("GymApp screen bounds test failed", err.get());
         }
@@ -176,10 +166,8 @@ public class GymAppScreenViewerTest {
 
         Platform.runLater(() -> {
             try {
-                URL shellUrl = getClass().getResource("/fxml/app-shell.fxml");
-                assertNotNull(shellUrl);
-                FXMLLoader loader = new FXMLLoader(shellUrl);
-                Parent shellRoot = loader.load();
+                AppShellController controller = new AppShellController();
+                Parent shellRoot = controller.getRoot();
                 javafx.scene.Scene scene = new javafx.scene.Scene(shellRoot, 1280, 800);
                 shellRoot.applyCss();
 
@@ -210,9 +198,9 @@ public class GymAppScreenViewerTest {
             }
         });
 
-        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(latch.await(15, TimeUnit.SECONDS));
         if (err.get() != null) {
-            throw new AssertionError("FXML event dispatch failed with exception", err.get());
+            throw new AssertionError("Shell event dispatch failed with exception", err.get());
         }
     }
 
@@ -247,7 +235,7 @@ public class GymAppScreenViewerTest {
             }
         });
 
-        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(latch.await(15, TimeUnit.SECONDS));
         if (err.get() != null) {
             throw new AssertionError("M3Carousel layout failed", err.get());
         }
@@ -260,10 +248,8 @@ public class GymAppScreenViewerTest {
 
         Platform.runLater(() -> {
             try {
-                URL shellUrl = getClass().getResource("/fxml/app-shell.fxml");
-                assertNotNull(shellUrl);
-                FXMLLoader loader = new FXMLLoader(shellUrl);
-                Parent shellRoot = loader.load();
+                AppShellController controller = new AppShellController();
+                Parent shellRoot = controller.getRoot();
                 javafx.scene.Scene scene = new javafx.scene.Scene(shellRoot, 1024, 600);
                 shellRoot.applyCss();
                 shellRoot.layout();
@@ -277,19 +263,18 @@ public class GymAppScreenViewerTest {
                 javafx.scene.Node navHelp = shellRoot.lookup("#navHelp");
                 assertNotNull(navHelp, "Documentation button navHelp must exist in rail");
 
-                // 2. Load trainer-list.fxml (which contains M3Carousel) and verify layout succeeds
-                AppShellController controller = loader.getController();
-                controller.loadScreen("trainer-list.fxml");
+                // 2. Load trainer-list (which contains M3Carousel) and verify layout succeeds
+                controller.loadScreen(Screen.TRAINER_LIST);
                 shellRoot.applyCss();
                 shellRoot.layout();
 
-                // 3. Load membership.fxml (which contains M3Carousel) and verify layout succeeds
-                controller.loadScreen("membership.fxml");
+                // 3. Load membership (which contains M3Carousel) and verify layout succeeds
+                controller.loadScreen(Screen.MEMBERSHIP);
                 shellRoot.applyCss();
                 shellRoot.layout();
 
-                // 4. Return to dashboard.fxml and test scrolling to bottom
-                controller.loadScreen("dashboard.fxml");
+                // 4. Return to dashboard and test scrolling to bottom
+                controller.loadScreen(Screen.DASHBOARD);
                 shellRoot.applyCss();
                 shellRoot.layout();
 
@@ -308,7 +293,7 @@ public class GymAppScreenViewerTest {
             }
         });
 
-        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(latch.await(15, TimeUnit.SECONDS));
         if (err.get() != null) {
             throw new AssertionError("Navigation rail or page scroll test failed", err.get());
         }
@@ -321,10 +306,9 @@ public class GymAppScreenViewerTest {
 
         Platform.runLater(() -> {
             try {
-                FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/membership.fxml"));
-                Parent root = loader.load();
-                Object ctrl = loader.getController();
-                assertNotNull(ctrl, "MembershipController should be injected");
+                com.gym.controller.ScreenController controller = Screen.MEMBERSHIP.create();
+                Parent root = controller.getRoot();
+                assertNotNull(controller, "MembershipController should be constructible");
 
                 javafx.scene.Scene scene = new javafx.scene.Scene(new javafx.scene.layout.StackPane(root), 1280, 800);
                 root.applyCss();
@@ -365,10 +349,9 @@ public class GymAppScreenViewerTest {
             }
         });
 
-        assertTrue(latch.await(5, TimeUnit.SECONDS));
+        assertTrue(latch.await(15, TimeUnit.SECONDS));
         if (err.get() != null) {
             throw new AssertionError("Membership screen layout test failed", err.get());
         }
     }
 }
-

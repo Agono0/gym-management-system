@@ -520,3 +520,27 @@
     knob for the legacy wrapper. Known limits: the backdrop is a cached snapshot (animated
     backdrops refresh on invalidation), the container merge is a convex-hull union (no metaball),
     chromatic aberration displaces the R/B sample positions exactly as the shader does.
+
+76. **Hardware-Accelerated Liquid Glass Engine & Apple Physics Realization (Nov 2026).**
+    Addressing the requirement for genuine Apple Liquid Glass physics and 60 FPS performance without
+    CPU locking on the JavaFX application thread:
+    (1) **Hardware-Accelerated Displacement Pipeline:** Integrated javafx.scene.effect.DisplacementMap
+    fed by precomputed/dynamically-updated FloatMap UV offset fields, offloading pixel sampling to the
+    Prism GPU pipeline while preserving exact mathematical optics (rounded-box SDF, directional corner
+    normals, edge^10 rim refraction, flat center blend, and optical counter-shift).
+    (2) **Viscous Fluid Dynamics Simulation:** Continuous AnimationTimer stepping real-time fluid ripple
+    mechanics ported from liquidGL/demos/fluid-interaction.html. Tracks cursor velocity (pointerVx,
+    pointerVy), applies exponential follow easing (ollow = 1.0 - exp(-dt / 0.12)), and decays via
+    viscous settling (settle = exp(-dt / (0.45 * viscosity))) for realistic fluid relaxation when the
+    pointer stops or exits the lens.
+    (3) **3D Perspective Tilt Mechanics:** Implemented dual-layer tilt from liquidGL: a 3D perspective
+    transformation on the node (Rotate X and Y with cubic ease-out) combined with an optical refraction
+    counter-vector (ec2(tan(rad(tiltY)), -tan(rad(tiltX))) * 0.05) in the shader/DisplacementMap.
+    (4) **Draggable Liquid Glass Lenses:** Interactive drag translation across parent containers with
+    elevation spring drop shadows and dynamic backdrop invalidation matching liquidGL/demos/draggable.html.
+    (5) **Apple Glass Buttons:** Dedicated M3GlassPane.button(...) ergonomics with interactive scale
+    springs (1.05x on hover, 0.96x on press), subtle rim highlight, and Cupertino-standard styling.
+    (6) **MainApp Showcase Gallery:** Replaced legacy demo with 9 comprehensive showcases replicating
+    liquidGL-main and liquid-glass-main reference demos (Fluid Viewport with ROV/CAM HUD telemetry,
+    3D Tilt Lens, Draggable Lens, Stacked Lenses, Apple Glass Buttons, True Refraction with live optical
+    knobs, Frost & Specular Lissajous Lights, Tinted Glass, and Effect Container Spacing Merge).

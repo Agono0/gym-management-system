@@ -1,7 +1,6 @@
 package io.m3fx.controls.glass;
 
 import javafx.beans.DefaultProperty;
-import javafx.beans.DefaultProperty;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.ObjectProperty;
@@ -11,6 +10,7 @@ import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.ObservableList;
 import javafx.scene.Node;
 import javafx.scene.control.Control;
+import javafx.scene.control.Label;
 import javafx.scene.control.Skin;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
@@ -22,36 +22,18 @@ import javafx.scene.paint.Color;
  *
  * <p>Real {@code Control} + {@link GlassPaneSkin}. The skin implements the pipeline from
  * {@code docs/SPEC_NOTES/liquid-glass.md}: cached backdrop snapshot &rarr; Gaussian blur &rarr;
- * {@code DisplacementMap} refraction ({@link GlassRefraction}) &rarr; saturation lift &rarr;
- * optional tint &rarr; specular rim + 1px edge stroke &rarr; drop shadow &rarr; content. All
- * colors resolve from {@code -md-sys-color-*} theme roles, so the glass is correct in light and
+ * {@code DisplacementMap} hardware refraction ({@link GlassRefraction}) &rarr; saturation/brightness
+ * lift &rarr; optional tint &rarr; specular rim + 1px edge stroke &rarr; drop shadow &rarr; content.
+ * All colors resolve from {@code -md-sys-color-*} theme roles, so the glass is correct in light and
  * dark and with any seed.
  *
- * <p>Properties cover the whole pipeline: {@link #glassEffectProperty() glassEffect}
- * ({@link GlassEffectParams} bundle), {@link #variantProperty() variant}, {@link #tintProperty()
- * tint}, {@link #shapeProperty() shape}, {@link #blurRadiusProperty() blurRadius},
- * {@link #cornerRadiusProperty() cornerRadius}, {@link #glassOpacityProperty() glassOpacity},
- * {@link #refractionProperty() refraction}, {@link #specularProperty() specular},
- * {@link #specularAngleProperty() specularAngle}, {@link #saturationProperty() saturation},
- * {@link #shadowProperty() shadow} and
- * {@link #interactiveProperty() interactive}. Setting {@code glassEffect} copies the bundle into
- * the individual properties (the bundle itself is immutable). The bundle accessor is named
- * {@code glassEffect} rather than {@code effect} because {@code Node} already owns
- * {@code effectProperty()} ({@code ObjectProperty<Effect>}); an {@code effect} property of a
- * different type could not override it.
+ * <p>Full reference physics from {@code liquidGL-main} and {@code liquid-glass-main} are provided:
+ * continuous viscous fluid dynamics with ripple relaxation, 3D perspective tilt with optical
+ * refraction offset, draggable lenses with elevation springs, and Apple glass button ergonomics.
  *
- * <p>Backdrop capture is cached and invalidated on scene/parent/layout/size/theme changes &mdash;
- * never per frame. Live-animated backdrops refresh only on invalidation; call
- * {@link #invalidateBackdrop()} to force a re-capture.
- *
- * <p>Factories: {@link #regular()}, {@link #clear()}, {@link #of(GlassEffectParams)}.
+ * <p>Factories: {@link #regular()}, {@link #clear()}, {@link #button(String)}, {@link #interactive()},
+ * and {@link #of(GlassEffectParams)}.
  */
-// Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
-// (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
-// constructor only stores the bean reference, exactly like every built-in control;
-// (2) constructor calls to JavaFX final methods (getStyleClass()) and to the non-final
-// property setters from the factories, which run after full construction on a fresh
-// instance. This class's own overridable methods are never called during construction.
 @SuppressWarnings("this-escape")
 @DefaultProperty("glassChildren")
 public class M3GlassPane extends Control {
@@ -97,6 +79,17 @@ public class M3GlassPane extends Control {
             new SimpleBooleanProperty(this, "fluidInteraction", false);
     private final DoubleProperty interactionRadius =
             new SimpleDoubleProperty(this, "interactionRadius", 0.35);
+    private final DoubleProperty interactionStrength =
+            new SimpleDoubleProperty(this, "interactionStrength", 0.5);
+    private final DoubleProperty interactionViscosity =
+            new SimpleDoubleProperty(this, "interactionViscosity", 0.65);
+
+    private final BooleanProperty tilt = new SimpleBooleanProperty(this, "tilt", false);
+    private final DoubleProperty tiltFactor = new SimpleDoubleProperty(this, "tiltFactor", 5.0);
+    private final DoubleProperty tiltEase = new SimpleDoubleProperty(this, "tiltEase", 400.0);
+
+    private final BooleanProperty draggable = new SimpleBooleanProperty(this, "draggable", false);
+    private final BooleanProperty buttonMode = new SimpleBooleanProperty(this, "buttonMode", false);
 
     /** Content holder floated above the glass layers (owned by the control so it exists pre-skin). */
     final StackPane contentBox = new StackPane();
@@ -157,6 +150,36 @@ public class M3GlassPane extends Control {
     }
 
     /**
+     * Creates an interactive glass pane with fluid interaction and 3D tilt.
+     *
+     * @return the interactive pane
+     */
+    public static M3GlassPane interactive() {
+        M3GlassPane pane = new M3GlassPane();
+        pane.setInteractive(true);
+        pane.setFluidInteraction(true);
+        pane.setTilt(true);
+        return pane;
+    }
+
+    /**
+     * Creates an Apple Liquid Glass button with hover scale, press squish and inset specular highlight.
+     *
+     * @param text button text
+     * @return the button pane
+     */
+    public static M3GlassPane button(String text) {
+        Label label = new Label(text);
+        label.setStyle("-fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface;");
+        M3GlassPane pane = new M3GlassPane(label);
+        pane.setButtonMode(true);
+        pane.setInteractive(true);
+        pane.setGlassShape(GlassShape.CAPSULE);
+        pane.getStyleClass().add("liquid-glass-button");
+        return pane;
+    }
+
+    /**
      * Creates a pane configured from an immutable {@link GlassEffectParams} bundle.
      *
      * @param params the bundle
@@ -187,8 +210,7 @@ public class M3GlassPane extends Control {
 
     /**
      * Applies an immutable {@link GlassEffectParams} bundle by copying its values into the pane's
-     * live properties. Named {@code setGlassEffect} (not {@code setEffect}) to stay clear of
-     * {@link Node#setEffect(javafx.scene.effect.Effect)}.
+     * live properties.
      *
      * @param params the bundle, may be {@code null} to clear
      */
@@ -211,6 +233,13 @@ public class M3GlassPane extends Control {
             setNikdelvinStrength(params.nikdelvinStrength());
             setFluidInteraction(params.isFluidInteraction());
             setInteractionRadius(params.interactionRadius());
+            setInteractionStrength(params.interactionStrength());
+            setInteractionViscosity(params.interactionViscosity());
+            setTilt(params.isTilt());
+            setTiltFactor(params.tiltFactor());
+            setTiltEase(params.tiltEase());
+            setDraggable(params.isDraggable());
+            setButtonMode(params.isButtonMode());
         }
     }
 
@@ -225,8 +254,7 @@ public class M3GlassPane extends Control {
     }
 
     /**
-     * Sets the glass variant (blur/saturation defaults are applied by the factories; this only
-     * switches the look used by the skin).
+     * Sets the glass variant.
      *
      * @param newVariant the variant, {@code null} resets to {@link GlassVariant#REGULAR}
      */
@@ -253,8 +281,7 @@ public class M3GlassPane extends Control {
         tint.set(newTint);
     }
 
-    /** Returns the glass shape property. Named {@code glassShape}: {@link Region} already owns a
-     * final {@code shapeProperty()} ({@code Shape} clip). */
+    /** Returns the glass shape property. */
     public ObjectProperty<GlassShape> glassShapeProperty() {
         return shape;
     }
@@ -284,9 +311,7 @@ public class M3GlassPane extends Control {
     }
 
     /**
-     * Sets whether the glass reacts to the pointer: pressing flattens the bevel (~40% less
-     * refraction) and deepens the shadow; hovering shifts the specular highlight toward the
-     * pointer. Springs run through {@code SpringAnimation}.
+     * Sets whether the glass reacts to the pointer.
      *
      * @param newInteractive {@code true} to enable pointer reaction
      */
@@ -304,11 +329,7 @@ public class M3GlassPane extends Control {
         return shadow.get();
     }
 
-    /**
-     * Enables or disables the drop shadow (spec default 0.30 alpha / 10 radius / +1 offsetY).
-     *
-     * @param newShadow {@code true} to show the shadow
-     */
+    /** Sets whether the drop shadow is enabled. */
     public void setShadow(boolean newShadow) {
         shadow.set(newShadow);
     }
@@ -323,73 +344,57 @@ public class M3GlassPane extends Control {
         return blurRadius.get();
     }
 
-    /**
-     * Sets the backdrop blur radius in px.
-     *
-     * @param newBlurRadius blur radius in px
-     */
-    public void setBlurRadius(double newBlurRadius) {
-        blurRadius.set(newBlurRadius);
+    /** Sets the backdrop blur radius in px. */
+    public void setBlurRadius(double newRadius) {
+        blurRadius.set(newRadius);
     }
 
-    /** Returns the corner radius property. */
+    /** Returns the corner radius property (used by {@link GlassShape#RECT}). */
     public DoubleProperty cornerRadiusProperty() {
         return cornerRadius;
     }
 
-    /** Returns the corner radius in px (used by {@link GlassShape#RECT}). */
+    /** Returns the corner radius in px. */
     public double getCornerRadius() {
         return cornerRadius.get();
     }
 
-    /**
-     * Sets the corner radius in px.
-     *
-     * @param newCornerRadius corner radius in px
-     */
-    public void setCornerRadius(double newCornerRadius) {
-        cornerRadius.set(newCornerRadius);
+    /** Sets the corner radius in px. */
+    public void setCornerRadius(double newRadius) {
+        cornerRadius.set(newRadius);
     }
 
-    /** Returns the glass opacity property. */
+    /** Returns the glass opacity property (the neutral surface fill). */
     public DoubleProperty glassOpacityProperty() {
         return glassOpacity;
     }
 
-    /** Returns the opacity of the milk/tint layer (legacy default 0.65). */
+    /** Returns the neutral surface opacity in {@code [0,1]}. */
     public double getGlassOpacity() {
         return glassOpacity.get();
     }
 
-    /**
-     * Sets the opacity of the milk/tint layer, clamped to {@code [0,1]} when applied.
-     *
-     * @param newGlassOpacity opacity in {@code [0,1]}
-     */
-    public void setGlassOpacity(double newGlassOpacity) {
-        glassOpacity.set(newGlassOpacity);
+    /** Sets the neutral surface opacity. */
+    public void setGlassOpacity(double newOpacity) {
+        glassOpacity.set(newOpacity);
     }
 
-    /** Returns the refraction property. */
+    /** Returns the refraction strength property (UV units). */
     public DoubleProperty refractionProperty() {
         return refraction;
     }
 
-    /** Returns the refraction strength multiplier (default 1.0). */
+    /** Returns the liquidGL refraction strength in UV units (default 0.01). */
     public double getRefraction() {
         return refraction.get();
     }
 
-    /**
-     * Sets the refraction strength multiplier.
-     *
-     * @param newRefraction multiplier, 0 disables refraction
-     */
+    /** Sets the liquidGL refraction strength. */
     public void setRefraction(double newRefraction) {
         refraction.set(newRefraction);
     }
 
-    /** Returns the map-style property (liquidGL shader vs nikdelvin SVG displacement). */
+    /** Returns the map style property. */
     public ObjectProperty<GlassEffectParams.MapStyle> mapStyleProperty() {
         return mapStyle;
     }
@@ -401,75 +406,75 @@ public class M3GlassPane extends Control {
 
     /** Sets the displacement-field source. */
     public void setMapStyle(GlassEffectParams.MapStyle newMapStyle) {
-        mapStyle.set(newMapStyle);
+        mapStyle.set(newMapStyle == null ? GlassEffectParams.MapStyle.LIQUIDGL : newMapStyle);
     }
 
-    /** Returns the bevel-depth property (UV, the {@code edge^10} rim term). */
+    /** Returns the bevel depth property. */
     public DoubleProperty bevelDepthProperty() {
         return bevelDepth;
     }
 
-    /** Returns the bevel depth. */
+    /** Returns the bevel depth in UV units (default 0.08). */
     public double getBevelDepth() {
         return bevelDepth.get();
     }
 
-    /** Sets the bevel depth. */
-    public void setBevelDepth(double newBevelDepth) {
-        bevelDepth.set(newBevelDepth);
+    /** Sets the bevel depth in UV units. */
+    public void setBevelDepth(double newDepth) {
+        bevelDepth.set(newDepth);
     }
 
-    /** Returns the bevel-width property (fraction of the smaller side). */
+    /** Returns the bevel width property. */
     public DoubleProperty bevelWidthProperty() {
         return bevelWidth;
     }
 
-    /** Returns the bevel width. */
+    /** Returns the bevel width as a fraction of the smaller side (default 0.15). */
     public double getBevelWidth() {
         return bevelWidth.get();
     }
 
-    /** Sets the bevel width. */
-    public void setBevelWidth(double newBevelWidth) {
-        bevelWidth.set(newBevelWidth);
+    /** Sets the bevel width as a fraction of the smaller side. */
+    public void setBevelWidth(double newWidth) {
+        bevelWidth.set(newWidth);
     }
 
-    /** Returns the frost property (liquidGL {@code u_frost}, 0 = sharp). */
+    /** Returns the frost blur property. */
     public DoubleProperty frostProperty() {
         return frost;
     }
 
-    /** Returns the frost strength. */
+    /** Returns the frost blur strength (0 = sharp). */
     public double getFrost() {
         return frost.get();
     }
 
-    /** Sets the frost strength. */
+    /** Sets the frost blur strength. */
     public void setFrost(double newFrost) {
         frost.set(newFrost);
     }
 
-    /** Returns the chromatic-aberration property (px). */
+    /** Returns the chromatic-aberration strength property. */
     public DoubleProperty aberrationProperty() {
         return aberration;
     }
 
-    /** Returns the chromatic aberration. */
+    /** Returns the chromatic-aberration strength in px (0 = off). */
     public double getAberration() {
         return aberration.get();
     }
 
-    /** Sets the chromatic aberration. */
+    /** Sets the chromatic-aberration strength in px. */
     public void setAberration(double newAberration) {
         aberration.set(newAberration);
     }
 
-    /** Returns the magnification property. */
+    /** Returns the backdrop magnification property. */
     public DoubleProperty magnifyProperty() {
         return magnify;
     }
 
-    /** Returns the backdrop magnification. */
+    /** Returns the backdrop magnification (default 1). */
     public double getMagnify() {
         return magnify.get();
     }
@@ -479,22 +484,22 @@ public class M3GlassPane extends Control {
         magnify.set(newMagnify);
     }
 
-    /** Returns the nikdelvin bezel-depth property (px). */
+    /** Returns the nikdelvin bezel depth property. */
     public DoubleProperty nikdelvinDepthProperty() {
         return nikdelvinDepth;
     }
 
-    /** Returns the nikdelvin bezel depth. */
+    /** Returns the nikdelvin bezel depth in px (default 10). */
     public double getNikdelvinDepth() {
         return nikdelvinDepth.get();
     }
 
-    /** Sets the nikdelvin bezel depth. */
+    /** Sets the nikdelvin bezel depth in px. */
     public void setNikdelvinDepth(double newDepth) {
         nikdelvinDepth.set(newDepth);
     }
 
-    /** Returns the nikdelvin displacement-scale property (px). */
+    /** Returns the nikdelvin displacement scale property. */
     public DoubleProperty nikdelvinStrengthProperty() {
         return nikdelvinStrength;
     }
@@ -539,6 +544,111 @@ public class M3GlassPane extends Control {
         interactionRadius.set(newRadius);
     }
 
+    /** Returns the fluid interaction strength property. */
+    public DoubleProperty interactionStrengthProperty() {
+        return interactionStrength;
+    }
+
+    /** Returns the fluid interaction strength multiplier. */
+    public double getInteractionStrength() {
+        return interactionStrength.get();
+    }
+
+    /** Sets the fluid interaction strength multiplier. */
+    public void setInteractionStrength(double newStrength) {
+        interactionStrength.set(newStrength);
+    }
+
+    /** Returns the fluid interaction viscosity property. */
+    public DoubleProperty interactionViscosityProperty() {
+        return interactionViscosity;
+    }
+
+    /** Returns the fluid interaction settling viscosity. */
+    public double getInteractionViscosity() {
+        return interactionViscosity.get();
+    }
+
+    /** Sets the fluid interaction settling viscosity. */
+    public void setInteractionViscosity(double newViscosity) {
+        interactionViscosity.set(newViscosity);
+    }
+
+    /** Returns the 3D perspective tilt property. */
+    public BooleanProperty tiltProperty() {
+        return tilt;
+    }
+
+    /** Returns whether 3D perspective tilt is enabled. */
+    public boolean isTilt() {
+        return tilt.get();
+    }
+
+    /** Enables or disables 3D perspective tilt. */
+    public void setTilt(boolean enabled) {
+        tilt.set(enabled);
+    }
+
+    /** Returns the maximum 3D tilt factor in degrees. */
+    public DoubleProperty tiltFactorProperty() {
+        return tiltFactor;
+    }
+
+    /** Returns the maximum 3D tilt factor in degrees. */
+    public double getTiltFactor() {
+        return tiltFactor.get();
+    }
+
+    /** Sets the maximum 3D tilt factor in degrees. */
+    public void setTiltFactor(double newFactor) {
+        tiltFactor.set(newFactor);
+    }
+
+    /** Returns the 3D tilt settle duration in milliseconds. */
+    public DoubleProperty tiltEaseProperty() {
+        return tiltEase;
+    }
+
+    /** Returns the 3D tilt settle duration in milliseconds. */
+    public double getTiltEase() {
+        return tiltEase.get();
+    }
+
+    /** Sets the 3D tilt settle duration in milliseconds. */
+    public void setTiltEase(double newEase) {
+        tiltEase.set(newEase);
+    }
+
+    /** Returns the draggable property. */
+    public BooleanProperty draggableProperty() {
+        return draggable;
+    }
+
+    /** Returns whether the lens can be dragged across its container. */
+    public boolean isDraggable() {
+        return draggable.get();
+    }
+
+    /** Sets whether the lens can be dragged across its container. */
+    public void setDraggable(boolean enabled) {
+        draggable.set(enabled);
+    }
+
+    /** Returns the button mode property. */
+    public BooleanProperty buttonModeProperty() {
+        return buttonMode;
+    }
+
+    /** Returns whether Apple liquid glass button styling/mechanics are active. */
+    public boolean isButtonMode() {
+        return buttonMode.get();
+    }
+
+    /** Sets whether Apple liquid glass button styling/mechanics are active. */
+    public void setButtonMode(boolean enabled) {
+        buttonMode.set(enabled);
+    }
+
     /** Returns the specular intensity property. */
     public DoubleProperty specularProperty() {
         return specular;
@@ -549,11 +659,7 @@ public class M3GlassPane extends Control {
         return specular.get();
     }
 
-    /**
-     * Sets the specular rim intensity.
-     *
-     * @param newSpecular intensity in {@code [0,1]}
-     */
+    /** Sets the specular rim intensity. */
     public void setSpecular(double newSpecular) {
         specular.set(newSpecular);
     }
@@ -563,17 +669,12 @@ public class M3GlassPane extends Control {
         return specularAngle;
     }
 
-    /** Returns the specular light angle in degrees (CSS convention: 0 = to top, clockwise). */
+    /** Returns the specular light angle in degrees. */
     public double getSpecularAngle() {
         return specularAngle.get();
     }
 
-    /**
-     * Sets the specular light angle in degrees (CSS convention: 0 = to top, clockwise; default
-     * 110 = highlight from the top-left).
-     *
-     * @param newSpecularAngle angle in degrees
-     */
+    /** Sets the specular light angle in degrees. */
     public void setSpecularAngle(double newSpecularAngle) {
         specularAngle.set(newSpecularAngle);
     }
@@ -583,17 +684,12 @@ public class M3GlassPane extends Control {
         return saturation;
     }
 
-    /** Returns the saturation adjustment, or {@link #SATURATION_AUTO} when variant-derived. */
+    /** Returns the saturation adjustment. */
     public double getSaturation() {
         return saturation.get();
     }
 
-    /**
-     * Sets the {@code ColorAdjust} saturation adjustment; negative restores the variant default
-     * (+0.18 regular, +0.10 clear).
-     *
-     * @param newSaturation saturation adjustment
-     */
+    /** Sets the saturation adjustment. */
     public void setSaturation(double newSaturation) {
         saturation.set(newSaturation);
     }
@@ -603,37 +699,22 @@ public class M3GlassPane extends Control {
         return contentBox;
     }
 
-    /**
-     * Raw-children view of the content box — the FXML default property, so legacy screens that
-     * nested children directly inside a {@code <M3GlassPane>} (the old StackPane-based pane
-     * allowed exactly that) keep loading and stacking identically.
-     *
-     * @return the live child list of the content box
-     */
+    /** Raw-children view of the content box. */
     public ObservableList<Node> getGlassChildren() {
         return contentBox.getChildren();
     }
 
-    /** Returns the single content node (for FXML {@code <content>} support), or {@code null}. */
+    /** Returns the single content node, or {@code null}. */
     public Node getContent() {
         return contentBox.getChildren().isEmpty() ? null : contentBox.getChildren().get(0);
     }
 
-    /**
-     * Replaces the glass pane content.
-     *
-     * @param node new content node
-     */
+    /** Replaces the glass pane content. */
     public void setContent(Node node) {
         contentBox.getChildren().setAll(node);
     }
 
-    /**
-     * Forces a backdrop re-capture on the next layout pulse. The capture is otherwise cached and
-     * invalidated automatically on scene/parent/layout/size/theme changes; live-animated backdrops
-     * do not refresh continuously, so call this (e.g. from an animation listener) when the content
-     * behind the glass moves.
-     */
+    /** Forces a backdrop re-capture on the next layout pulse. */
     public void invalidateBackdrop() {
         requestLayout();
         Skin<?> skin = getSkin();

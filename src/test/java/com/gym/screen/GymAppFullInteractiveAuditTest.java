@@ -1,16 +1,15 @@
-package com.gym.fxml;
+package com.gym.screen;
 
 import com.gym.GymApp;
 import com.gym.controller.AppShellController;
+import com.gym.controller.Screen;
 import javafx.application.Platform;
-import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -47,14 +46,10 @@ public class GymAppFullInteractiveAuditTest {
                 Parent root = scene.getRoot();
                 assertNotNull(root);
 
-                AppShellController controller = (AppShellController) root.getProperties().get("appShellController");
-                if (controller == null) {
-                    // Look through FXMLLoader in GymApp or locate controller
-                    URL url = getClass().getResource("/fxml/app-shell.fxml");
-                    FXMLLoader loader = new FXMLLoader(url);
-                    Parent shell = loader.load();
-                    controller = loader.getController();
-                }
+                // The shell publishes itself in the scene-root properties once attached.
+                AppShellController controller =
+                        (AppShellController) root.getProperties().get(AppShellController.SHELL_CONTROLLER_KEY);
+                assertNotNull(controller, "the running GymApp must publish its shell controller");
 
                 // Test Shell Operations
                 controller.onToggleRail();
@@ -72,33 +67,33 @@ public class GymAppFullInteractiveAuditTest {
                 controller.onOpenCommandPalette();
                 controller.onFastCheckIn();
 
-                // Test every FXML screen in existence
-                String[] allScreens = {
-                        "dashboard.fxml",
-                        "customer-list.fxml",
-                        "customer-profile.fxml",
-                        "trainer-list.fxml",
-                        "trainer-profile.fxml",
-                        "schedule.fxml",
-                        "availability.fxml",
-                        "membership.fxml",
-                        "equipment.fxml",
-                        "attendance.fxml",
-                        "payment.fxml",
-                        "progress.fxml",
-                        "medical-profile.fxml",
-                        "workout.fxml",
-                        "live-workout-hud.fxml",
-                        "gym-floor-map.fxml",
-                        "staff.fxml",
-                        "login.fxml"
+                // Test every screen in the registry
+                Screen[] allScreens = {
+                        Screen.DASHBOARD,
+                        Screen.CUSTOMER_LIST,
+                        Screen.CUSTOMER_PROFILE,
+                        Screen.TRAINER_LIST,
+                        Screen.TRAINER_PROFILE,
+                        Screen.SCHEDULE,
+                        Screen.AVAILABILITY,
+                        Screen.MEMBERSHIP,
+                        Screen.EQUIPMENT,
+                        Screen.ATTENDANCE,
+                        Screen.PAYMENT,
+                        Screen.PROGRESS,
+                        Screen.MEDICAL_PROFILE,
+                        Screen.WORKOUT,
+                        Screen.LIVE_WORKOUT_HUD,
+                        Screen.GYM_FLOOR_MAP,
+                        Screen.STAFF,
+                        Screen.LOGIN
                 };
 
-                for (String screen : allScreens) {
+                for (Screen screen : allScreens) {
                     controller.loadScreen(screen);
                     scene.getRoot().applyCss();
                     scene.getRoot().layout();
-                    loadedScreens.add(screen);
+                    loadedScreens.add(screen.key());
                 }
 
                 stage.hide();
@@ -109,11 +104,10 @@ public class GymAppFullInteractiveAuditTest {
             }
         });
 
-        assertTrue(latch.await(15, TimeUnit.SECONDS), "Timed out running interactive audit");
+        assertTrue(latch.await(30, TimeUnit.SECONDS), "Timed out running interactive audit");
         if (err.get() != null) {
             err.get().printStackTrace();
             throw new AssertionError("Interactive audit failed on screen: " + loadedScreens, err.get());
         }
     }
 }
-

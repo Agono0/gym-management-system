@@ -1,10 +1,7 @@
-package com.gym.fxml;
+package com.gym.screen;
 
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import com.gym.controller.Screen;
 import javafx.application.Platform;
-import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import org.junit.jupiter.api.BeforeAll;
@@ -12,22 +9,26 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 /**
- * Empirical Stress Harness and Scene-Graph Deep Validator.
+ * Empirical Stress Harness and Scene-Graph Deep Validator (the former FXML stress harness).
  * Executes on the JavaFX Application Thread:
- * 1. Deep JavaFX Node tree depth measurement
- * 2. Total Node count measurement in scene graph
- * 3. Controller binding verification (checks @javafx.fxml.FXML field injection)
- * 4. Repetitive load stress test (5 iterations per screen)
+ * <ol>
+ *   <li>Deep JavaFX node tree depth measurement</li>
+ *   <li>Total node count measurement in the scene graph</li>
+ *   <li>View-field verification (every Node/TableColumn/Tab field non-null after build)</li>
+ *   <li>Repetitive rebuild stress test (5 iterations per screen)</li>
+ * </ol>
  */
-public class FxmlStressHarnessTest {
+public class ScreenStressHarnessTest {
 
     public record ScreenMetrics(
             String screenName,
@@ -74,9 +75,10 @@ public class FxmlStressHarnessTest {
         return count;
     }
 
-    private record FxmlLoadResult(Parent root, Object controller, long elapsedNanos) {}
+    private record BuiltScreen(Parent root, Object controller, long elapsedNanos) {}
 
-    private static FxmlLoadResult loadFxmlWithTiming(URL resource) throws Exception {
+    /** Builds the screen on the FX thread with timing. */
+    private static BuiltScreen buildWithTiming(Screen screen) throws Exception {
         AtomicReference<Parent> rootRef = new AtomicReference<>();
         AtomicReference<Object> controllerRef = new AtomicReference<>();
         AtomicReference<Throwable> errorRef = new AtomicReference<>();
@@ -85,10 +87,9 @@ public class FxmlStressHarnessTest {
 
         Platform.runLater(() -> {
             try {
-                FXMLLoader loader = new FXMLLoader(resource);
-                Parent root = loader.load();
-                rootRef.set(root);
-                controllerRef.set(loader.getController());
+                com.gym.controller.ScreenController controller = screen.create();
+                rootRef.set(controller.getRoot());
+                controllerRef.set(controller);
             } catch (Throwable t) {
                 errorRef.set(t);
             } finally {
@@ -99,12 +100,20 @@ public class FxmlStressHarnessTest {
         boolean finished = latch.await(10, TimeUnit.SECONDS);
         long elapsed = System.nanoTime() - startTime;
         if (!finished) {
-            throw new RuntimeException("Timeout loading " + resource);
+            throw new RuntimeException("Timeout building " + screen.key());
         }
         if (errorRef.get() != null) {
-            throw new RuntimeException("Error loading " + resource, errorRef.get());
+            throw new RuntimeException("Error building " + screen.key(), errorRef.get());
         }
-        return new FxmlLoadResult(rootRef.get(), controllerRef.get(), elapsed);
+        return new BuiltScreen(rootRef.get(), controllerRef.get(), elapsed);
+    }
+
+    /** Node-bearing view fields: Node itself plus the two tree members that carry ids. */
+    private static boolean isViewField(Field field) {
+        Class<?> type = field.getType();
+        return Node.class.isAssignableFrom(type)
+                || javafx.scene.control.TableColumn.class.isAssignableFrom(type)
+                || javafx.scene.control.Tab.class.isAssignableFrom(type);
     }
 
     @Test
@@ -112,52 +121,51 @@ public class FxmlStressHarnessTest {
     void testEmpiricalStressAndSceneGraphMetrics() throws Exception {
         List<ScreenMetrics> metricsList = new ArrayList<>();
 
-        for (String screenName : FxmlIntegrityTest.ALL_19_SCREENS) {
-            URL url = getClass().getResource("/fxml/" + screenName);
-            assertNotNull(url, "Screen must exist on classpath: " + screenName);
-
-            // 1. Initial timed load
-            FxmlLoadResult result = loadFxmlWithTiming(url);
+        for (Screen screen : ScreenBuildIntegrityTest.ALL_19_SCREENS) {
+            // 1. Initial timed build
+            BuiltScreen result = buildWithTiming(screen);
             Parent root = result.root();
             Object controller = result.controller();
 
-            assertNotNull(root, "Root must not be null for " + screenName);
-            assertNotNull(controller, "Controller must be bound for " + screenName);
+            assertNotNull(root, "Root must not be null for " + screen.key());
+            assertNotNull(controller, "Controller must be bound for " + screen.key());
 
             int depth = computeNodeDepth(root, 1);
             int nodeCount = countTotalNodes(root);
 
             // Verify depth >= 3 requirement
-            assertTrue(depth >= 3, "Node depth for " + screenName + " must be >= 3, but was " + depth);
+            assertTrue(depth >= 3, "Node depth for " + screen.key() + " must be >= 3, but was " + depth);
 
-            // Inspect @FXML fields
-            int totalFxmlFields = 0;
+            // Inspect the view fields (the former @FXML bindings)
+            int totalViewFields = 0;
             int boundFields = 0;
-            for (Field field : controller.getClass().getDeclaredFields()) {
-                if (field.isAnnotationPresent(javafx.fxml.FXML.class)) {
-                    totalFxmlFields++;
-                    field.setAccessible(true);
-                    Object val = field.get(controller);
-                    if (val != null) {
-                        boundFields++;
+            for (Class<?> c = controller.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+                for (Field field : c.getDeclaredFields()) {
+                    if (isViewField(field)) {
+                        totalViewFields++;
+                        field.setAccessible(true);
+                        Object val = field.get(controller);
+                        if (val != null) {
+                            boundFields++;
+                        }
                     }
                 }
             }
 
-            // 2. Stress testing: 5 consecutive reloads
+            // 2. Stress testing: 5 consecutive rebuilds
             long stressStart = System.nanoTime();
             for (int i = 0; i < 5; i++) {
-                FxmlLoadResult stressRes = loadFxmlWithTiming(url);
+                BuiltScreen stressRes = buildWithTiming(screen);
                 assertNotNull(stressRes.root());
             }
             long stressElapsed = System.nanoTime() - stressStart;
 
             metricsList.add(new ScreenMetrics(
-                    screenName,
+                    screen.key(),
                     root.getClass().getSimpleName(),
                     depth,
                     nodeCount,
-                    totalFxmlFields,
+                    totalViewFields,
                     boundFields,
                     result.elapsedNanos(),
                     stressElapsed
@@ -168,8 +176,8 @@ public class FxmlStressHarnessTest {
         System.out.println("\n==========================================================================================================");
         System.out.println("                         EMPIRICAL CHALLENGER STRESS & METRICS REPORT                             ");
         System.out.println("==========================================================================================================");
-        System.out.printf("%-22s | %-12s | %-5s | %-6s | %-11s | %-10s | %-11s%n",
-                "Screen Name", "Root Class", "Depth", "Nodes", "Bound/Total", "1st Load", "5-Reloads");
+        System.out.printf("%-22s | %-12s | %-5s | %-6s | %-11s | %-11s | %-11s%n",
+                "Screen Name", "Root Class", "Depth", "Nodes", "Bound/Total", "1st Build", "5-Rebuilds");
         System.out.println("----------------------------------------------------------------------------------------------------------");
 
         for (ScreenMetrics m : metricsList) {

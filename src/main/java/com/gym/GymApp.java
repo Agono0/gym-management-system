@@ -6,7 +6,6 @@ import io.m3fx.core.theme.ThemeVariant;
 import com.gym.controller.AppShellController;
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.paint.Color;
@@ -14,11 +13,12 @@ import javafx.stage.Stage;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadMXBean;
-import java.net.URL;
 
 /**
- * Dedicated application launcher for the complete Gym Management System (app-shell.fxml).
+ * Dedicated application launcher for the complete Gym Management System.
  * Provides the production 2026 Material Design 3 shell with live navigation across all 19 screens.
+ * The shell is a Java-built controller view ({@link AppShellController} constructs its whole
+ * node tree) — no FXML resource is loaded anywhere.
  */
 public class GymApp extends Application {
 
@@ -29,22 +29,19 @@ public class GymApp extends Application {
      * fluid morph into the shell). {@link #main(String[])} sets it to {@code true} so a real
      * {@code gradlew runGym} gets the full choreography; every test calls {@link #start(Stage)}
      * directly with the flag left {@code false}, so the shell appears exactly as before and
-     * no test contract (fx:id/@FXML counts, screen inspection) is affected.
+     * screen-inspection test contracts are unaffected.
      */
     public static boolean SHOW_LAUNCH_GATES = false;
 
     @Override
     public void start(Stage stage) throws Exception {
-        // Register active M3 theme upfront so all custom controls resolve colors during FXML inflation
+        // Register active M3 theme upfront so all custom controls resolve colors during view construction
         M3Theme theme = M3Theme.fromSeed(SEED_PURPLE, ThemeVariant.TONAL_SPOT, true);
         M3Stylesheets.setLatestTheme(theme);
 
-        URL url = getClass().getResource("/fxml/app-shell.fxml");
-        if (url == null) {
-            throw new IllegalStateException("Missing /fxml/app-shell.fxml resource");
-        }
-        FXMLLoader loader = new FXMLLoader(url);
-        Parent root = loader.load();
+        // Java-built shell: the controller constructs its whole node tree in its constructor.
+        AppShellController shellController = new AppShellController();
+        Parent root = shellController.getRoot();
 
         // Responsive desktop canvas (will cleanly fill the maximized work area without border clipping)
         Scene scene = new Scene(root, 1280, 800);
@@ -67,7 +64,7 @@ public class GymApp extends Application {
         // Launch gates (splash + login) only for the real run: start() is already on the FX
         // thread, and the gate controller defers its first overlay to a later pulse so the
         // freshly shown scene lays out first.
-        if (SHOW_LAUNCH_GATES && loader.getController() instanceof AppShellController shellController) {
+        if (SHOW_LAUNCH_GATES) {
             shellController.beginLaunchGates();
         }
     }

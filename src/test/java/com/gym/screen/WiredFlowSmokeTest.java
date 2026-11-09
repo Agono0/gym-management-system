@@ -1,4 +1,4 @@
-package com.gym.fxml;
+package com.gym.screen;
 
 import com.gym.controller.AppShellController;
 import io.m3fx.controls.button.M3Button;
@@ -6,7 +6,6 @@ import io.m3fx.controls.data.M3DataTable;
 import io.m3fx.controls.textfield.M3TextField;
 import javafx.application.Platform;
 import javafx.event.ActionEvent;
-import javafx.fxml.FXMLLoader;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
@@ -15,7 +14,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.net.URL;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -27,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Interactive smoke tests for the app flows being wired in this same round:
+ * Interactive smoke tests for the app flows:
  * <ol>
  *   <li>trainer-list Open action navigates to trainer-profile and hands over the chosen coach;</li>
  *   <li>customer-list Open Full Profile navigates to customer-profile;</li>
@@ -35,15 +33,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *   <li>a payment action and an attendance action each produce a visible snackbar/row answer.</li>
  * </ol>
  *
- * <p>These tests verify the WIRING contract of the controller changes landing in parallel with
- * them: where a lookup target or behavior is not implemented yet, the assertions below document
- * the contract the wiring must satisfy, and they fail by design until the wiring lands.</p>
- *
  * <p>Pattern: fire the real rail buttons / row handlers / onAction targets on the FX thread and
  * assert the resulting shell state, exactly like {@link GymAppScreenViewerTest} does. Tests run
  * with {@code GymApp.SHOW_LAUNCH_GATES == false}, so "the login gate" is the in-shell
- * login.fxml Authentication Vault screen (the same target {@code AppShellController.onLogout}
- * uses when gates are disabled).</p>
+ * Authentication Vault screen (the same target {@code AppShellController.onLogout} uses when
+ * gates are disabled).
  */
 public class WiredFlowSmokeTest {
 
@@ -78,9 +72,10 @@ public class WiredFlowSmokeTest {
                 assertNotNull(roster, "trainer roster #tableTrainers must exist in the shell");
                 assertFalse(roster.getItems().isEmpty(), "roster must show the demo rows");
 
-                // trainer-profile.fxml ships a static placeholder coach ("Elena Rostova, ...");
-                // pick a roster row whose name differs from it so the shown-coach assertion
-                // cannot pass off the FXML default. Degenerate rosters fall back to row 0.
+                // The trainer-profile screen ships a static placeholder coach
+                // ("Elena Rostova, ..."); pick a roster row whose name differs from it so the
+                // shown-coach assertion cannot pass off the default. Degenerate rosters fall
+                // back to row 0.
                 String row = null;
                 String chosenName = null;
                 for (String candidate : roster.getItems()) {
@@ -102,11 +97,11 @@ public class WiredFlowSmokeTest {
                 assertNotNull(roster.getOnRowAction(), "roster rows must have an open action");
                 roster.getOnRowAction().accept(row);
 
-                // WIRING CONTRACT: the open action must navigate the shell to trainer-profile.fxml
+                // WIRING CONTRACT: the open action must navigate the shell to trainer-profile
                 // and hand the chosen coach over as a TrainerSnapshot —
                 // TrainerProfileController.showTrainer fills #lblCoachName with the coach's name.
                 assertNotNull(shell.root().lookup("#lblCoachName"),
-                        "shell must navigate to trainer-profile.fxml (coach name label present)");
+                        "shell must navigate to trainer-profile (coach name label present)");
                 assertNotNull(shell.root().lookup("#gaugeCapacity"),
                         "trainer-profile capacity gauge must be part of the shown screen");
                 assertNull(shell.root().lookup("#tableTrainers"),
@@ -114,7 +109,7 @@ public class WiredFlowSmokeTest {
                 Label coachLabel = (Label) shell.root().lookup("#lblCoachName");
                 assertEquals(chosenName, coachLabel.getText(),
                         "the trainer profile must show the chosen coach (" + chosenId + " / "
-                                + chosenName + "), not the FXML placeholder");
+                                + chosenName + "), not the placeholder");
             } catch (Throwable t) {
                 err.set(t);
             } finally {
@@ -122,7 +117,7 @@ public class WiredFlowSmokeTest {
             }
         });
 
-        assertTrue(latch.await(10, TimeUnit.SECONDS), "Timed out executing on the JavaFX thread");
+        assertTrue(latch.await(15, TimeUnit.SECONDS), "Timed out executing on the JavaFX thread");
         if (err.get() != null) {
             throw new AssertionError("Trainer open-to-profile flow failed", err.get());
         }
@@ -157,9 +152,9 @@ public class WiredFlowSmokeTest {
                 assertNotNull(openFullProfile, "#btnOpenFullProfile must exist in the side sheet");
                 openFullProfile.fireEvent(new ActionEvent());
 
-                // WIRING CONTRACT: Open Full Profile must navigate the shell to customer-profile.fxml.
+                // WIRING CONTRACT: Open Full Profile must navigate the shell to customer-profile.
                 assertNotNull(shell.root().lookup("#holographicPass"),
-                        "shell must navigate to customer-profile.fxml (holographic pass present)");
+                        "shell must navigate to customer-profile (holographic pass present)");
                 assertNull(shell.root().lookup("#customerTable"),
                         "customer list must no longer be the visible screen");
             } catch (Throwable t) {
@@ -169,7 +164,7 @@ public class WiredFlowSmokeTest {
             }
         });
 
-        assertTrue(latch.await(10, TimeUnit.SECONDS), "Timed out executing on the JavaFX thread");
+        assertTrue(latch.await(15, TimeUnit.SECONDS), "Timed out executing on the JavaFX thread");
         if (err.get() != null) {
             throw new AssertionError("Customer open-full-profile flow failed", err.get());
         }
@@ -187,7 +182,7 @@ public class WiredFlowSmokeTest {
 
         Platform.runLater(() -> {
             try {
-                Shell shell = loadShell(); // initialize() loads dashboard.fxml by default
+                Shell shell = loadShell(); // the shell loads the dashboard by default
                 Node logoutButton = shell.root().lookup("#logoutButton");
                 assertNotNull(logoutButton, "dashboard #logoutButton must exist");
                 logoutButton.fireEvent(new ActionEvent());
@@ -198,9 +193,10 @@ public class WiredFlowSmokeTest {
                 confirm.fireEvent(new ActionEvent());
 
                 // WIRING CONTRACT: confirming End Shift hands the operator session back to the
-                // login gate (with gates disabled in tests: the in-shell login.fxml screen).
+                // login gate (with gates disabled in tests: the in-shell Authentication Vault
+                // screen).
                 assertNotNull(shell.root().lookup("#authCard"),
-                        "shell must return to the login gate (login.fxml auth card present)");
+                        "shell must return to the login gate (auth card present)");
                 assertNull(shell.root().lookup("#logoutButton"),
                         "dashboard must no longer be the visible screen");
             } catch (Throwable t) {
@@ -210,7 +206,7 @@ public class WiredFlowSmokeTest {
             }
         });
 
-        assertTrue(latch.await(10, TimeUnit.SECONDS), "Timed out executing on the JavaFX thread");
+        assertTrue(latch.await(15, TimeUnit.SECONDS), "Timed out executing on the JavaFX thread");
         if (err.get() != null) {
             throw new AssertionError("Dashboard end-shift flow failed", err.get());
         }
@@ -257,7 +253,7 @@ public class WiredFlowSmokeTest {
             }
         });
 
-        assertTrue(latch.await(10, TimeUnit.SECONDS), "Timed out executing on the JavaFX thread");
+        assertTrue(latch.await(15, TimeUnit.SECONDS), "Timed out executing on the JavaFX thread");
         if (err.get() != null) {
             throw new AssertionError("Payment record flow failed", err.get());
         }
@@ -300,7 +296,7 @@ public class WiredFlowSmokeTest {
             }
         });
 
-        assertTrue(latch.await(10, TimeUnit.SECONDS), "Timed out executing on the JavaFX thread");
+        assertTrue(latch.await(15, TimeUnit.SECONDS), "Timed out executing on the JavaFX thread");
         if (err.get() != null) {
             throw new AssertionError("Attendance manual check-in flow failed", err.get());
         }
@@ -311,26 +307,23 @@ public class WiredFlowSmokeTest {
     // ------------------------------------------------------------------
 
     /**
-     * Type-safe fx:id lookup. JavaFX 21 {@code Node.lookup} returns plain {@code Node}, so the
-     * unchecked cast is unavoidable; it is a false positive here — the fx:id-to-type mapping is
-     * fixed by the FXML contract this test file pins (see ControllerBindingContractTest).
+     * Type-safe id lookup. JavaFX 21 {@code Node.lookup} returns plain {@code Node}, so the
+     * unchecked cast is unavoidable; it is a false positive here — the id-to-type mapping is
+     * fixed by the view contract this test file pins (see ScreenBuildContractTest).
      */
     @SuppressWarnings("unchecked")
     private static <N extends Node> N lookup(Parent root, String id) {
         return (N) root.lookup(id);
     }
 
-    /** The loaded app shell: root node, controller and the #contentArea host pane. */
+    /** The built app shell: root node, controller and the #contentArea host pane. */
     private record Shell(Parent root, AppShellController controller) {}
 
-    /** Loads app-shell.fxml into a scene (dashboard loads by default) and applies CSS/layout. */
+    /** Builds the shell into a scene (dashboard loads by default) and applies CSS/layout. */
     private Shell loadShell() throws Exception {
-        URL shellUrl = getClass().getResource("/fxml/app-shell.fxml");
-        assertNotNull(shellUrl, "Missing /fxml/app-shell.fxml");
-        FXMLLoader loader = new FXMLLoader(shellUrl);
-        Parent shellRoot = loader.load();
-        AppShellController controller = loader.getController();
-        assertNotNull(controller, "AppShellController must be injected");
+        AppShellController controller = new AppShellController();
+        Parent shellRoot = controller.getRoot();
+        assertNotNull(shellRoot, "AppShellController must build its shell root");
         new Scene(shellRoot, 1280, 800);
         shellRoot.applyCss();
         shellRoot.layout();

@@ -87,6 +87,8 @@ import io.m3fx.controls.data.M3Stepper;
 import io.m3fx.controls.data.M3Timeline;
 import io.m3fx.controls.data.M3Timeline.Status;
 import io.m3fx.controls.glass.GlassEffectParams;
+import io.m3fx.controls.glass.GlassShape;
+import io.m3fx.controls.glass.GlassVariant;
 import io.m3fx.controls.glass.M3GlassPane;
 import io.m3fx.controls.effect.M3GlowShadow;
 import io.m3fx.controls.effect.M3Hologram;
@@ -124,12 +126,16 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Tab;
 import javafx.scene.control.ToggleGroup;
+import java.io.File;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -138,7 +144,6 @@ import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.Parent;
 import javafx.stage.Stage;
-import javafx.fxml.FXMLLoader;
 
 import java.net.URL;
 import java.util.LinkedHashMap;
@@ -197,7 +202,7 @@ public class MainApp extends Application {
                 "Enterprise Data & Telemetry",
                 "Live Workout HUD",
                 "Gym Floorplan Map",
-                "Gym App Screens (19 FXMLs)");
+                "Gym App Screens (19 Java-Built)");
 
         List<M3NavDestination> destinations = List.of(
                 M3NavDestination.of("Overview", "home"),
@@ -287,8 +292,8 @@ public class MainApp extends Application {
         commandPalette.registerAction("Analytics", "Open Peak Hours Heatmap", "Occupancy density matrix", "stats", () -> navigateTo("Cyber Analytics & Charts"));
         commandPalette.registerAction("Themes", "Toggle Dark / Light Mode", "Switch system color scheme", "dark", this::toggleTheme);
         commandPalette.registerAction("Effects", "Open Kinetic Particle Network", "Interactive node physics & shockwaves", "light", () -> navigateTo("Futuristic Visual Effects"));
-        commandPalette.registerAction("Screens", "Open Gym App FXML Porting Studio", "Interactive viewer for all 19 FXML screens", "star", () -> navigateTo("Gym App Screens (19 FXMLs)"));
-        commandPalette.registerAction("Screens", "Launch Full Application Shell Window", "Open app-shell.fxml in full desktop window", "home", () -> {
+        commandPalette.registerAction("Screens", "Open Gym App Screen Gallery", "Interactive viewer for all 19 Java-built screens", "star", () -> navigateTo("Gym App Screens (19 Java-Built)"));
+        commandPalette.registerAction("Screens", "Launch Full Application Shell Window", "Open the Gym-OS app shell in a full desktop window", "home", () -> {
             try {
                 new GymApp().start(new Stage());
             } catch (Exception ex) {
@@ -405,7 +410,7 @@ public class MainApp extends Application {
             case "Enterprise Data & Telemetry" -> telemetryPage();
             case "Live Workout HUD" -> workoutHudPage();
             case "Gym Floorplan Map" -> floorplanPage();
-            case "Gym App Screens (19 FXMLs)" -> gymAppScreensPage();
+            case "Gym App Screens (19 Java-Built)" -> gymAppScreensPage();
             default -> new Label("Select a section from the navigation drawer.");
         };
     }
@@ -1339,134 +1344,427 @@ public class MainApp extends Application {
     }
 
     // ==========================================
-    // 13b. Liquid Glass (Apple iOS 26)
+    // 13b. Liquid Glass (Apple iOS 26 / liquidGL & nikdelvin)
     // ==========================================
-    private VBox liquidGlassPage() {
-        Label desc = new Label("Apple iOS 26 Liquid Glass, ported per-pixel from the liquidGL "
-                + "(WebGPU/WebGL) and nikdelvin (SVG displacement) engines: real rim refraction "
-                + "with a flat centre, frost taps, chromatic aberration, magnification, tint, "
-                + "fluid pointer interaction, container merging and FLUID-spring morphing. "
-                + "Every knob below is live.");
-        desc.setWrapText(true);
-        desc.setStyle("-fx-font-size: 14px; -fx-text-fill: -md-sys-color-on-surface-variant;");
-
-        // ---- 1. Live-tunable hero lens: every engine uniform wired to a slider ---------------
-        StackPane heroBackdrop = colorfulBackdrop(660, 240);
-        Label heroText = new Label("LIQUID GLASS / rim refraction with a flat centre");
-        heroText.setStyle("-fx-font-size: 26px; -fx-font-weight: bold; "
-                + "-fx-text-fill: -md-sys-color-on-surface; -fx-opacity: 0.85;");
-        StackPane.setAlignment(heroText, Pos.CENTER);
-        heroBackdrop.getChildren().add(heroText);
-
-        M3GlassPane heroPane = M3GlassPane.regular();
-        heroPane.setPrefSize(300, 160);
-        heroPane.setInteractive(true);
-        VBox heroContent = new VBox(6, M3Icon.symbol("star"), new Label("Drag the sliders"));
-        heroContent.setAlignment(Pos.CENTER);
-        heroPane.setContent(heroContent);
-        StackPane.setAlignment(heroPane, Pos.CENTER);
-        heroBackdrop.getChildren().add(heroPane);
-
-        M3Slider refractionSlider = new M3Slider(0, 0.05, 0.01);
-        M3Slider bevelDepthSlider = new M3Slider(0, 0.25, 0.08);
-        M3Slider bevelWidthSlider = new M3Slider(0.02, 0.5, 0.15);
-        M3Slider frostSlider = new M3Slider(0, 4, 0);
-        M3Slider aberrationSlider = new M3Slider(0, 6, 0);
-        M3Slider magnifySlider = new M3Slider(1, 2, 1);
-        refractionSlider.valueProperty().bindBidirectional(heroPane.refractionProperty());
-        bevelDepthSlider.valueProperty().bindBidirectional(heroPane.bevelDepthProperty());
-        bevelWidthSlider.valueProperty().bindBidirectional(heroPane.bevelWidthProperty());
-        frostSlider.valueProperty().bindBidirectional(heroPane.frostProperty());
-        aberrationSlider.valueProperty().bindBidirectional(heroPane.aberrationProperty());
-        magnifySlider.valueProperty().bindBidirectional(heroPane.magnifyProperty());
-
-        javafx.scene.control.ComboBox<GlassEffectParams.MapStyle> styleBox =
-                new javafx.scene.control.ComboBox<>(
-                        javafx.collections.FXCollections.observableArrayList(
-                                GlassEffectParams.MapStyle.values()));
-        styleBox.getSelectionModel().selectFirst();
-        styleBox.setOnAction(e -> heroPane.setMapStyle(styleBox.getValue()));
-        M3Switch fluidSwitch = new M3Switch(false);
-        fluidSwitch.selectedProperty().addListener((obs, o, on) -> {
-            heroPane.setFluidInteraction(on);
-            if (on) {
-                heroPane.setInteractive(true);
+    private static Image loadGlassWallpaper(String fileName) {
+        try {
+            URL res = MainApp.class.getResource("/images/glass/" + fileName);
+            if (res != null) {
+                return new Image(res.toExternalForm(), 920, 480, false, true);
             }
-        });
-        Label fluidCaption = new Label("Fluid interaction (pointer deforms the glass):");
-        fluidCaption.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-on-surface-variant;");
-
-        GridPane heroControls = new GridPane();
-        heroControls.setHgap(12);
-        heroControls.setVgap(8);
-        heroControls.setPadding(new Insets(8));
-        String[][] heroKnobs = {
-                {"Refraction", "0 -> 0.05 UV (liquidGL default 0.01)"},
-                {"Bevel depth", "0 -> 0.25 UV (the edge^10 rim kick)"},
-                {"Bevel width", "0.02 -> 0.5 of the smaller side"},
-                {"Frost", "0 -> 4 (16-tap blur radius = frost * 4 px)"},
-                {"Aberration", "0 -> 6 px (R/B channel split)"},
-                {"Magnify", "1 -> 2 backdrop zoom"},
-        };
-        M3Slider[] heroSliderList = {refractionSlider, bevelDepthSlider, bevelWidthSlider,
-                frostSlider, aberrationSlider, magnifySlider};
-        for (int i = 0; i < heroKnobs.length; i++) {
-            Label name = new Label(heroKnobs[i][0]);
-            name.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-on-surface;");
-            name.setMinWidth(110);
-            heroSliderList[i].setPrefWidth(260);
-            Label hint = new Label(heroKnobs[i][1]);
-            hint.setStyle("-fx-font-size: 11px; -fx-text-fill: -md-sys-color-on-surface-variant;");
-            heroControls.add(name, 0, i);
-            heroControls.add(heroSliderList[i], 1, i);
-            heroControls.add(hint, 2, i);
+            File file = new File("src/main/resources/images/glass/" + fileName);
+            if (file.exists()) {
+                return new Image(file.toURI().toString(), 920, 480, false, true);
+            }
+        } catch (Exception ignored) {
         }
-        HBox heroStyleRow = new HBox(12, new Label("Map style:"), styleBox,
-                fluidCaption, fluidSwitch);
-        heroStyleRow.setAlignment(Pos.CENTER_LEFT);
-        heroControls.add(heroStyleRow, 0, heroKnobs.length, 3, 1);
-        VBox heroBox = new VBox(10, heroBackdrop, heroControls);
+        return null;
+    }
 
-        // ---- 2. Frost & specular (liquidGL "Frost & Specular" demo) --------------------------
-        StackPane frostBackdrop = colorfulBackdrop(620, 170);
-        M3GlassPane frostPane = M3GlassPane.regular();
-        frostPane.setPrefSize(280, 120);
-        frostPane.setFrost(1.5);
-        frostPane.setContent(new Label("Frost: 1.5"));
-        StackPane.setAlignment(frostPane, Pos.CENTER_LEFT);
-        StackPane.setMargin(frostPane, new Insets(0, 0, 0, 40));
-        M3GlassPane specularPane = M3GlassPane.regular();
-        specularPane.setPrefSize(280, 120);
-        specularPane.setSpecular(1.0);
-        specularPane.setContent(new Label("Specular lights: ON"));
-        StackPane.setAlignment(specularPane, Pos.CENTER_RIGHT);
-        StackPane.setMargin(specularPane, new Insets(0, 40, 0, 0));
-        frostBackdrop.getChildren().addAll(frostPane, specularPane);
-        VBox frostBox = new VBox(10, frostBackdrop);
+    private VBox liquidGlassPage() {
+        Label header = new Label("Apple iOS 26 Liquid Glass");
+        header.setStyle("-fx-font-size: 26px; -fx-font-weight: 900; -fx-text-fill: -md-sys-color-on-surface;");
 
-        // ---- 3. Tinted glass (liquidGL "Tinted Glass" demo) ---------------------------------
-        StackPane tintBackdrop = colorfulBackdrop(620, 150);
-        M3GlassPane darkTint = M3GlassPane.regular();
-        darkTint.setPrefSize(240, 100);
-        darkTint.setTint(Color.rgb(8, 10, 20, 0.35));
-        darkTint.setContent(new Label("Dark glass tint"));
-        StackPane.setAlignment(darkTint, Pos.CENTER_LEFT);
-        StackPane.setMargin(darkTint, new Insets(0, 0, 0, 40));
-        M3GlassPane coloredTint = M3GlassPane.regular();
-        coloredTint.setPrefSize(240, 100);
-        coloredTint.setTint(Color.rgb(70, 50, 180, 0.35));
-        coloredTint.setContent(new Label("Colored glass tint"));
-        StackPane.setAlignment(coloredTint, Pos.CENTER_RIGHT);
-        StackPane.setMargin(coloredTint, new Insets(0, 40, 0, 0));
-        tintBackdrop.getChildren().addAll(darkTint, coloredTint);
-        VBox tintBox = new VBox(10, tintBackdrop);
+        Label desc = new Label("Authentic optical physics ported directly from liquidGL (WebGPU/WebGL v3.0.0) "
+                + "and nikdelvin (SVG displacement). Real-time signed-distance-field refraction, viscous fluid ripples, "
+                + "3D perspective tilt, and draggable lenses over real high-resolution artwork.");
+        desc.setWrapText(true);
+        desc.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-on-surface-variant;");
 
-        // ---- 4. GlassEffectContainer: merging icons ------------------------------------------
-        StackPane mergeBackdrop = colorfulBackdrop(620, 150);
+        // ---- 1. Wallpaper & Stage Setup ----------------------------------------------------
+        StackPane stage = new StackPane();
+        stage.getStyleClass().addAll("glass-stage", "glass-backdrop");
+        stage.setPrefSize(920, 480);
+        stage.setMaxSize(920, 480);
+        stage.setStyle("-fx-background-radius: 24px; -fx-border-radius: 24px; "
+                + "-fx-border-color: rgba(255, 255, 255, 0.18); -fx-border-width: 1px; "
+                + "-fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 36, 0, 0, 14);");
+
+        Rectangle stageClip = new Rectangle(920, 480);
+        stageClip.setArcWidth(48);
+        stageClip.setArcHeight(48);
+        stage.setClip(stageClip);
+
+        ImageView wallpaperView = new ImageView();
+        wallpaperView.setFitWidth(920);
+        wallpaperView.setFitHeight(480);
+        wallpaperView.setPreserveRatio(false);
+        wallpaperView.setImage(loadGlassWallpaper("silk1.png"));
+
+        Region scrim = new Region();
+        scrim.setMouseTransparent(true);
+        scrim.setStyle("-fx-background-color: radial-gradient(center 50% 50%, radius 75%, transparent 35%, rgba(0, 0, 0, 0.45) 100%);");
+
+        StackPane showcaseHost = new StackPane();
+        showcaseHost.setAlignment(Pos.CENTER);
+
+        stage.getChildren().addAll(wallpaperView, scrim, showcaseHost);
+
+        // ---- Live Tuning Controls (Tuning Dock) ---------------------------------------------
+        M3Slider refractionSlider = new M3Slider(0.00, 0.08, 0.025);
+        M3Slider bevelDepthSlider = new M3Slider(0.00, 0.22, 0.08);
+        M3Slider frostSlider = new M3Slider(0.0, 4.0, 0.0);
+        M3Slider aberrationSlider = new M3Slider(0.0, 5.0, 0.0);
+        M3Slider viscositySlider = new M3Slider(0.10, 0.95, 0.55);
+        M3Slider tiltSlider = new M3Slider(2.0, 16.0, 8.5);
+
+        refractionSlider.setPrefWidth(120);
+        bevelDepthSlider.setPrefWidth(120);
+        frostSlider.setPrefWidth(110);
+        aberrationSlider.setPrefWidth(110);
+        viscositySlider.setPrefWidth(110);
+        tiltSlider.setPrefWidth(110);
+
+        List<M3GlassPane> activeGlassPanes = new java.util.ArrayList<>();
+        Consumer<M3GlassPane> bindKnobs = pane -> {
+            pane.refractionProperty().bind(refractionSlider.valueProperty());
+            pane.bevelDepthProperty().bind(bevelDepthSlider.valueProperty());
+            pane.frostProperty().bind(frostSlider.valueProperty());
+            pane.aberrationProperty().bind(aberrationSlider.valueProperty());
+            pane.interactionViscosityProperty().bind(viscositySlider.valueProperty());
+            pane.tiltFactorProperty().bind(tiltSlider.valueProperty());
+            activeGlassPanes.add(pane);
+        };
+
+        // ---- Showcase 1: Apple Hero (liquid-glass-main) -------------------------------------
+        VBox heroContent = new VBox(14);
+        heroContent.setAlignment(Pos.CENTER);
+
+        M3GlassPane titlePill = M3GlassPane.regular();
+        titlePill.setPrefSize(500, 80);
+        titlePill.setCornerRadius(40);
+        titlePill.setTilt(true);
+        bindKnobs.accept(titlePill);
+
+        Label titleText = new Label("IOS LIQUID GLASS");
+        titleText.setStyle("-fx-font-size: 32px; -fx-font-weight: 900; -fx-text-fill: rgba(255,255,255,0.96); "
+                + "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.5), 12, 0, 0, 2); -fx-letter-spacing: 2px;");
+        titlePill.setContent(titleText);
+
+        M3GlassPane subtitlePill = M3GlassPane.clear();
+        subtitlePill.setPrefSize(380, 44);
+        subtitlePill.setCornerRadius(22);
+        subtitlePill.setTilt(true);
+        bindKnobs.accept(subtitlePill);
+
+        Label subtitleText = new Label("Tailwind CSS & WebGPU Optics in JavaFX");
+        subtitleText.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: rgba(255,255,255,0.9);");
+        subtitlePill.setContent(subtitleText);
+
+        HBox appleButtons = new HBox(16);
+        appleButtons.setAlignment(Pos.CENTER);
+
+        M3GlassPane btnGetStarted = M3GlassPane.button("Get Started");
+        btnGetStarted.setPrefSize(140, 46);
+        bindKnobs.accept(btnGetStarted);
+
+        M3GlassPane btnExplore = M3GlassPane.button("Explore");
+        btnExplore.setPrefSize(120, 46);
+        btnExplore.setTint(Color.rgb(0, 122, 255, 0.35));
+        bindKnobs.accept(btnExplore);
+
+        M3GlassPane btnPlay = M3GlassPane.button("");
+        btnPlay.setPrefSize(46, 46);
+        btnPlay.setGlassShape(GlassShape.CIRCLE);
+        btnPlay.setContent(M3Icon.symbol("play_arrow"));
+        bindKnobs.accept(btnPlay);
+
+        appleButtons.getChildren().addAll(btnGetStarted, btnExplore, btnPlay);
+        heroContent.getChildren().addAll(titlePill, subtitlePill, appleButtons);
+
+        // ---- Showcase 2: Fluid Viewport (liquidGL fluid-interaction.html) -------------------
+        StackPane fluidLayout = new StackPane();
+        fluidLayout.setPrefSize(920, 480);
+
+        HBox hudTop = new HBox(16);
+        hudTop.setAlignment(Pos.CENTER_LEFT);
+        hudTop.setPadding(new Insets(16, 24, 0, 24));
+        Label rovBadge = new Label("ROV-04");
+        rovBadge.setStyle("-fx-font-size: 12px; -fx-font-weight: 900; -fx-text-fill: #80d8ff; -fx-font-family: monospace;");
+        Label fluidTitle = new Label("FLUID VIEWPORT // TOUCH-AWARE VISCOUS REACTION");
+        fluidTitle.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: rgba(255,255,255,0.9); -fx-font-family: monospace;");
+        Region hudTopSpacer = new Region();
+        HBox.setHgrow(hudTopSpacer, Priority.ALWAYS);
+        Label liveBadge = new Label("● LIVE TELEMETRY");
+        liveBadge.setStyle("-fx-font-size: 11px; -fx-font-weight: 900; -fx-text-fill: #00e676; -fx-font-family: monospace;");
+        hudTop.getChildren().addAll(rovBadge, fluidTitle, hudTopSpacer, liveBadge);
+        StackPane.setAlignment(hudTop, Pos.TOP_CENTER);
+
+        HBox hudBottom = new HBox(16);
+        hudBottom.setAlignment(Pos.CENTER_LEFT);
+        hudBottom.setPadding(new Insets(0, 24, 16, 24));
+        Label camBadge = new Label("CAM-02");
+        camBadge.setStyle("-fx-font-size: 12px; -fx-font-weight: 900; -fx-text-fill: #80d8ff; -fx-font-family: monospace;");
+        Region hudBottomSpacer = new Region();
+        HBox.setHgrow(hudBottomSpacer, Priority.ALWAYS);
+        Label coordsTag = new Label("X 0.50 · Y 0.50");
+        coordsTag.setStyle("-fx-font-size: 12px; -fx-font-weight: 900; -fx-text-fill: white; -fx-font-family: monospace;");
+        hudBottom.getChildren().addAll(camBadge, hudBottomSpacer, coordsTag);
+        StackPane.setAlignment(hudBottom, Pos.BOTTOM_CENTER);
+
+        M3GlassPane fluidLens = M3GlassPane.regular();
+        fluidLens.setPrefSize(680, 260);
+        fluidLens.setMaxSize(680, 260);
+        fluidLens.setCornerRadius(28);
+        fluidLens.setFluidInteraction(true);
+        fluidLens.setInteractive(true);
+        fluidLens.setInteractionStrength(3.0);
+        bindKnobs.accept(fluidLens);
+
+        BorderPane hudInside = new BorderPane();
+        hudInside.setPadding(new Insets(16, 20, 16, 20));
+        hudInside.setMouseTransparent(true);
+        Label hudDepth = new Label("Depth\n18.4m");
+        hudDepth.setStyle("-fx-font-size: 12px; -fx-font-family: monospace; -fx-text-fill: white; -fx-font-weight: 900;");
+        Label hudTemp = new Label("Temp\n24.1 °C");
+        hudTemp.setStyle("-fx-font-size: 12px; -fx-font-family: monospace; -fx-text-fill: white; -fx-font-weight: 900; -fx-text-alignment: right;");
+        Label hudVisc = new Label("Viscosity\n0.55");
+        hudVisc.setStyle("-fx-font-size: 12px; -fx-font-family: monospace; -fx-text-fill: #80d8ff; -fx-font-weight: 900;");
+        Label hudFlow = new Label("Flow\n1.2 kn");
+        hudFlow.setStyle("-fx-font-size: 12px; -fx-font-family: monospace; -fx-text-fill: #69f0ae; -fx-font-weight: 900; -fx-text-alignment: right;");
+
+        VBox hudNotice = new VBox(6,
+                M3Icon.symbol("water_drop"),
+                new Label("Move cursor to stir fluid surface / release to watch viscous relaxation"));
+        hudNotice.setAlignment(Pos.CENTER);
+        hudNotice.getChildren().get(1).setStyle("-fx-font-size: 12px; -fx-text-fill: rgba(255,255,255,0.85); -fx-font-weight: bold;");
+
+        hudInside.setTop(new BorderPane(null, null, hudTemp, null, hudDepth));
+        hudInside.setBottom(new BorderPane(null, null, hudFlow, null, hudVisc));
+        hudInside.setCenter(hudNotice);
+        fluidLens.setContent(hudInside);
+        StackPane.setAlignment(fluidLens, Pos.CENTER);
+
+        fluidLens.setOnMouseMoved(e -> {
+            double rx = e.getX() / Math.max(1.0, fluidLens.getWidth());
+            double ry = e.getY() / Math.max(1.0, fluidLens.getHeight());
+            coordsTag.setText(String.format("X %.2f · Y %.2f", rx, ry));
+        });
+        fluidLens.setOnMouseExited(e -> coordsTag.setText("X 0.50 · Y 0.50"));
+
+        fluidLayout.getChildren().addAll(hudTop, fluidLens, hudBottom);
+
+        // ---- Showcase 3: 3D Perspective Tilt -----------------------------------------------
+        VBox tiltLayout = new VBox(12);
+        tiltLayout.setAlignment(Pos.CENTER);
+
+        M3GlassPane tiltLens = M3GlassPane.regular();
+        tiltLens.setPrefSize(560, 200);
+        tiltLens.setMaxSize(560, 200);
+        tiltLens.setCornerRadius(30);
+        tiltLens.setTilt(true);
+        tiltLens.setTiltFactor(10.0);
+        bindKnobs.accept(tiltLens);
+
+        VBox tiltInner = new VBox(10,
+                M3Icon.symbol("3d_rotation"),
+                new Label("3D Perspective Tilt Mechanics"),
+                new Label("Move pointer over lens to tilt in 3D with optical counter-refraction displacement"));
+        tiltInner.setAlignment(Pos.CENTER);
+        tiltInner.getChildren().get(1).setStyle("-fx-font-size: 20px; -fx-font-weight: 900; -fx-text-fill: white;");
+        tiltInner.getChildren().get(2).setStyle("-fx-font-size: 13px; -fx-text-fill: rgba(255,255,255,0.85);");
+        tiltLens.setContent(tiltInner);
+        tiltLayout.getChildren().add(tiltLens);
+
+        // ---- Showcase 4: Draggable Lens Studio ---------------------------------------------
+        Pane dragStage = new Pane();
+        dragStage.setPrefSize(920, 480);
+
+        Label dragHint = new Label("PICK UP & DRAG LENS ACROSS ARTWORK");
+        dragHint.setStyle("-fx-font-size: 26px; -fx-font-weight: 900; -fx-text-fill: rgba(255,255,255,0.35);");
+        dragHint.setLayoutX(180);
+        dragHint.setLayoutY(220);
+        dragStage.getChildren().add(dragHint);
+
+        M3GlassPane draggableLens = M3GlassPane.regular();
+        draggableLens.setPrefSize(320, 100);
+        draggableLens.setGlassShape(GlassShape.CAPSULE);
+        draggableLens.setDraggable(true);
+        draggableLens.setInteractive(true);
+        draggableLens.setLayoutX(300);
+        draggableLens.setLayoutY(180);
+        bindKnobs.accept(draggableLens);
+
+        HBox dragContent = new HBox(12, M3Icon.symbol("pan_tool"), new Label("Drag me over the background"));
+        dragContent.setAlignment(Pos.CENTER);
+        dragContent.getChildren().get(1).setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: white;");
+        draggableLens.setContent(dragContent);
+        dragStage.getChildren().add(draggableLens);
+
+        // ---- Showcase 5: Stacked Optical Hierarchy -----------------------------------------
+        Pane stackedStage = new Pane();
+        stackedStage.setPrefSize(920, 480);
+
+        M3GlassPane parentLens = M3GlassPane.regular();
+        parentLens.setPrefSize(720, 320);
+        parentLens.setCornerRadius(32);
+        parentLens.setTint(Color.rgb(36, 0, 24, 0.45));
+        parentLens.setLayoutX(100);
+        parentLens.setLayoutY(80);
+        bindKnobs.accept(parentLens);
+
+        M3GlassPane childLens1 = M3GlassPane.regular();
+        childLens1.setPrefSize(280, 140);
+        childLens1.setCornerRadius(20);
+        childLens1.setTint(Color.rgb(0, 0, 0, 0.40));
+        childLens1.setLayoutX(140);
+        childLens1.setLayoutY(140);
+        bindKnobs.accept(childLens1);
+
+        VBox child1Box = new VBox(6,
+                new Label("LENS-L2 (Inner)"),
+                new Label("Nested refraction tier"));
+        child1Box.setAlignment(Pos.CENTER);
+        child1Box.getChildren().get(0).setStyle("-fx-font-weight: 900; -fx-font-size: 15px; -fx-text-fill: white;");
+        child1Box.getChildren().get(1).setStyle("-fx-text-fill: rgba(255,255,255,0.75); -fx-font-size: 12px;");
+        childLens1.setContent(child1Box);
+
+        M3GlassPane childLens2 = M3GlassPane.clear();
+        childLens2.setPrefSize(300, 60);
+        childLens2.setGlassShape(GlassShape.CAPSULE);
+        childLens2.setTint(Color.rgb(0, 0, 0, 0.50));
+        childLens2.setLayoutX(460);
+        childLens2.setLayoutY(280);
+        bindKnobs.accept(childLens2);
+
+        Label child2Text = new Label("Refracting parent glass stream");
+        child2Text.setStyle("-fx-font-family: monospace; -fx-font-weight: bold; -fx-text-fill: #69f0ae; -fx-font-size: 13px;");
+        childLens2.setContent(child2Text);
+
+        stackedStage.getChildren().addAll(parentLens, childLens1, childLens2);
+
+        // ---- Set Initial Showcase ----------------------------------------------------------
+        showcaseHost.getChildren().setAll(heroContent);
+
+        // ---- 2. Top Bar: Wallpaper Switcher & Mode Switcher --------------------------------
+        HBox topToolbar = new HBox(12);
+        topToolbar.setAlignment(Pos.CENTER_LEFT);
+
+        Label wpLabel = new Label("Wallpaper:");
+        wpLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface-variant;");
+
+        String[][] wallpapers = {
+                {"Silk 3D", "silk1.png"},
+                {"Chrome Ribbons", "chrome1.png"},
+                {"Cosmic Rocks", "rocks1.png"},
+                {"Deep Ocean", "fluid_bg.jpg"},
+                {"Stacked Horizon", "stacked_bg.jpg"},
+                {"Studio Light", "refraction_bg.jpg"},
+                {"Obsidian Tint", "tinted_bg.jpg"}
+        };
+
+        HBox wpBar = new HBox(8);
+        for (String[] wp : wallpapers) {
+            M3Button btn = M3Button.outlined(wp[0]);
+            btn.setStyle("-fx-font-size: 11px;");
+            btn.setOnAction(e -> {
+                Image img = loadGlassWallpaper(wp[1]);
+                if (img != null) {
+                    wallpaperView.setImage(img);
+                    Platform.runLater(() -> {
+                        for (M3GlassPane p : activeGlassPanes) {
+                            p.invalidateBackdrop();
+                        }
+                    });
+                }
+            });
+            wpBar.getChildren().add(btn);
+        }
+
+        topToolbar.getChildren().addAll(wpLabel, wpBar);
+
+        // Mode Switcher
+        HBox modeBar = new HBox(8);
+        modeBar.setAlignment(Pos.CENTER_LEFT);
+        Label modeLabel = new Label("Showcase Mode:");
+        modeLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface-variant;");
+
+        M3Button m1 = M3Button.tonal("Apple Hero (liquid-glass)");
+        M3Button m2 = M3Button.outlined("Fluid Viewport (liquidGL)");
+        M3Button m3 = M3Button.outlined("3D Tilt Lens");
+        M3Button m4 = M3Button.outlined("Draggable Lens");
+        M3Button m5 = M3Button.outlined("Stacked Optical");
+
+        Runnable updateModeStyles = () -> {
+            m1.setVariant(showcaseHost.getChildren().contains(heroContent) ? ButtonVariant.TONAL : ButtonVariant.OUTLINED);
+            m2.setVariant(showcaseHost.getChildren().contains(fluidLayout) ? ButtonVariant.TONAL : ButtonVariant.OUTLINED);
+            m3.setVariant(showcaseHost.getChildren().contains(tiltLayout) ? ButtonVariant.TONAL : ButtonVariant.OUTLINED);
+            m4.setVariant(showcaseHost.getChildren().contains(dragStage) ? ButtonVariant.TONAL : ButtonVariant.OUTLINED);
+            m5.setVariant(showcaseHost.getChildren().contains(stackedStage) ? ButtonVariant.TONAL : ButtonVariant.OUTLINED);
+        };
+
+        m1.setOnAction(e -> {
+            showcaseHost.getChildren().setAll(heroContent);
+            updateModeStyles.run();
+            Platform.runLater(() -> activeGlassPanes.forEach(M3GlassPane::invalidateBackdrop));
+        });
+        m2.setOnAction(e -> {
+            showcaseHost.getChildren().setAll(fluidLayout);
+            updateModeStyles.run();
+            Platform.runLater(() -> activeGlassPanes.forEach(M3GlassPane::invalidateBackdrop));
+        });
+        m3.setOnAction(e -> {
+            showcaseHost.getChildren().setAll(tiltLayout);
+            updateModeStyles.run();
+            Platform.runLater(() -> activeGlassPanes.forEach(M3GlassPane::invalidateBackdrop));
+        });
+        m4.setOnAction(e -> {
+            showcaseHost.getChildren().setAll(dragStage);
+            updateModeStyles.run();
+            Platform.runLater(() -> activeGlassPanes.forEach(M3GlassPane::invalidateBackdrop));
+        });
+        m5.setOnAction(e -> {
+            showcaseHost.getChildren().setAll(stackedStage);
+            updateModeStyles.run();
+            Platform.runLater(() -> activeGlassPanes.forEach(M3GlassPane::invalidateBackdrop));
+        });
+
+        modeBar.getChildren().addAll(modeLabel, m1, m2, m3, m4, m5);
+
+        // ---- 3. Floating Glass Tuning Dock (Below Stage) -----------------------------------
+        HBox tuningDock = new HBox(18);
+        tuningDock.setAlignment(Pos.CENTER);
+        tuningDock.setPadding(new Insets(12, 20, 12, 20));
+        tuningDock.setStyle("-fx-background-color: -md-sys-color-surface-container-high; "
+                + "-fx-background-radius: 18px; -fx-border-color: -md-sys-color-outline-variant; "
+                + "-fx-border-radius: 18px; -fx-border-width: 1px;");
+
+        VBox k1 = new VBox(2, new Label("Refraction"), refractionSlider);
+        VBox k2 = new VBox(2, new Label("Bevel Depth"), bevelDepthSlider);
+        VBox k3 = new VBox(2, new Label("Frost Blur"), frostSlider);
+        VBox k4 = new VBox(2, new Label("Aberration"), aberrationSlider);
+        VBox k5 = new VBox(2, new Label("Viscosity"), viscositySlider);
+        VBox k6 = new VBox(2, new Label("Max 3D Tilt"), tiltSlider);
+
+        for (VBox k : new VBox[] {k1, k2, k3, k4, k5, k6}) {
+            k.setAlignment(Pos.CENTER);
+            ((Label) k.getChildren().get(0)).setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface-variant;");
+        }
+
+        tuningDock.getChildren().addAll(k1, k2, k3, k4, k5, k6);
+
+        // ---- 4. Shape Merging (Effect Container) ------------------------------------------
+        StackPane mergeBackdrop = new StackPane();
+        mergeBackdrop.getStyleClass().addAll("glass-stage", "glass-backdrop");
+        mergeBackdrop.setPrefSize(920, 160);
+        mergeBackdrop.setMaxSize(920, 160);
+        mergeBackdrop.setStyle("-fx-background-radius: 20px; -fx-border-radius: 20px; "
+                + "-fx-border-color: rgba(255, 255, 255, 0.15); -fx-border-width: 1px;");
+
+        Rectangle mergeClip = new Rectangle(920, 160);
+        mergeClip.setArcWidth(40);
+        mergeClip.setArcHeight(40);
+        mergeBackdrop.setClip(mergeClip);
+
+        ImageView mergeBg = new ImageView();
+        mergeBg.setFitWidth(920);
+        mergeBg.setFitHeight(160);
+        mergeBg.setImage(loadGlassWallpaper("refraction_bg.jpg"));
+
         M3GlassEffectContainer mergeContainer = new M3GlassEffectContainer();
         mergeContainer.setSpacing(M3GlassEffectContainer.DEFAULT_SPACING);
-        M3Slider gapSlider = new M3Slider(0, 220, 130);
-        gapSlider.setPrefWidth(320);
+        M3Slider gapSlider = new M3Slider(0, 180, 110);
+        gapSlider.setPrefWidth(260);
 
         M3GlassPane icon1 = M3GlassPane.regular();
         M3GlassPane icon2 = M3GlassPane.regular();
@@ -1474,164 +1772,42 @@ public class MainApp extends Application {
         M3GlassPane[] icons = {icon1, icon2, icon3};
         String[] iconNames = {"favorite", "bolt", "star"};
         for (int i = 0; i < icons.length; i++) {
-            icons[i].setPrefSize(84, 84);
-            icons[i].setLayoutX(24);
-            icons[i].setLayoutY(33);
+            icons[i].setPrefSize(72, 72);
+            icons[i].setLayoutX(60);
+            icons[i].setLayoutY(44);
             icons[i].setContent(M3Icon.symbol(iconNames[i]));
+            activeGlassPanes.add(icons[i]);
         }
-        icon2.layoutXProperty().bind(icon1.layoutXProperty()
-                .add(icon1.widthProperty()).add(gapSlider.valueProperty()));
-        icon3.layoutXProperty().bind(icon2.layoutXProperty()
-                .add(icon2.widthProperty()).add(gapSlider.valueProperty()));
+        icon2.layoutXProperty().bind(icon1.layoutXProperty().add(icon1.widthProperty()).add(gapSlider.valueProperty()));
+        icon3.layoutXProperty().bind(icon2.layoutXProperty().add(icon2.widthProperty()).add(gapSlider.valueProperty()));
         mergeContainer.getChildren().addAll(icon1, icon2, icon3);
-        mergeBackdrop.getChildren().add(mergeContainer);
+        mergeBackdrop.getChildren().addAll(mergeBg, mergeContainer);
 
-        Label gapCaption = new Label("Gap between glass icons (container spacing is 40 px):");
-        gapCaption.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-on-surface-variant;");
+        Label gapCaption = new Label("Effect Container: shapes merge into a continuous liquid glass blob under 40px spacing:");
+        gapCaption.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface;");
         Label mergeReadout = new Label("Merged groups: —");
-        mergeReadout.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-primary;");
+        mergeReadout.setStyle("-fx-font-size: 12px; -fx-text-fill: -md-sys-color-primary; -fx-font-weight: bold;");
         Runnable updateMergeReadout = () -> mergeReadout.setText(
                 "Merged groups: " + mergeContainer.getMergedGroups().size()
-                + "  (members: " + mergeContainer.getMergedGroups().stream()
-                        .mapToInt(List::size).sum() + ")");
-        gapSlider.valueProperty().addListener((obs, oldV, newV) ->
-                Platform.runLater(updateMergeReadout));
-        boolean[] firstLayout = {true};
-        icon1.widthProperty().addListener((obs, oldW, newW) -> {
-            if (firstLayout[0] && newW.doubleValue() > 0) {
-                firstLayout[0] = false;
-                Platform.runLater(updateMergeReadout);
-            }
-        });
-        VBox mergeBox = new VBox(10, mergeBackdrop, gapCaption, gapSlider, mergeReadout);
-
-        // ---- 5. Morphing pair (glassEffectID + namespace pattern) ----------------------------
-        StackPane morphBackdrop = colorfulBackdrop(620, 160);
-        M3GlassEffectContainer morphContainer = new M3GlassEffectContainer();
-        M3GlassPane collapsed = M3GlassPane.regular();
-        collapsed.setPrefSize(64, 64);
-        collapsed.setCornerRadius(32);
-        collapsed.setLayoutX(40);
-        collapsed.setLayoutY(48);
-        collapsed.setContent(M3Icon.symbol("search"));
-        M3GlassPane expanded = M3GlassPane.regular();
-        expanded.setPrefSize(300, 64);
-        expanded.setCornerRadius(32);
-        expanded.setLayoutX(40);
-        expanded.setLayoutY(48);
-        HBox expandedContent = new HBox(10, M3Icon.symbol("search"), new Label("Search workouts"));
-        expandedContent.setAlignment(Pos.CENTER_LEFT);
-        expandedContent.setPadding(new Insets(0, 0, 0, 20));
-        expanded.setContent(expandedContent);
-        morphContainer.registerGlass(collapsed, "collapsed");
-        morphContainer.registerGlass(expanded, "expanded");
-        morphContainer.getChildren().add(collapsed);
-        morphBackdrop.getChildren().add(morphContainer);
-
-        M3Switch morphToggle = new M3Switch(false);
-        Label morphCaption = new Label("Expand search field:");
-        morphCaption.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-on-surface-variant;");
-        morphToggle.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
-            if (isSelected) {
-                morphContainer.morphTo("collapsed", "expanded");
-                morphContainer.getChildren().remove(collapsed);
-                if (!morphContainer.getChildren().contains(expanded)) {
-                    morphContainer.getChildren().add(expanded);
-                }
-            } else {
-                morphContainer.morphTo("expanded", "collapsed");
-                morphContainer.getChildren().remove(expanded);
-                if (!morphContainer.getChildren().contains(collapsed)) {
-                    morphContainer.getChildren().add(collapsed);
-                }
-            }
-        });
-
-        Region toolbarSlot = new Region();
-        toolbarSlot.setPrefSize(300, 64);
-        toolbarSlot.setStyle("-fx-border-color: -md-sys-color-outline-variant; "
-                + "-fx-border-style: segments(6, 4) line-cap round; -fx-border-radius: 32px; "
-                + "-fx-background-color: -md-sys-color-surface-container; -fx-background-radius: 32px;");
-        M3Button slotButton = M3Button.outlined("Morph into toolbar slot");
-        slotButton.setOnAction(e -> {
-            M3GlassPane current = morphContainer.getChildren().contains(expanded)
-                    ? expanded : collapsed;
-            if (current.getScene() != null && toolbarSlot.getScene() != null) {
-                Bounds slotBounds = toolbarSlot.localToScene(toolbarSlot.getBoundsInLocal());
-                if (slotBounds != null) {
-                    GlassMorph.morphToBounds(current, slotBounds);
-                }
-            }
-        });
-        M3Button resetMorphButton = M3Button.text("Reset morph");
-        resetMorphButton.setOnAction(e -> {
-            GlassMorph.resetMorph(collapsed);
-            GlassMorph.resetMorph(expanded);
-        });
-        HBox morphControls = new HBox(16, morphCaption, morphToggle, slotButton, resetMorphButton);
-        morphControls.setAlignment(Pos.CENTER_LEFT);
-        HBox slotRow = new HBox(16, new Label("Toolbar slot:"), toolbarSlot);
-        slotRow.setAlignment(Pos.CENTER_LEFT);
-        VBox morphBox = new VBox(10, morphBackdrop, morphControls, slotRow);
-
-        // ---- 6. Glass buttons (ButtonVariant.GLASS / GLASS_PROMINENT) ------------------------
-        M3Button glassButton = M3Button.glass("Continue");
-        M3Button glassProminentButton = M3Button.glassProminent("Get Started");
-        HBox glassButtonsRow = new HBox(16, glassButton, glassProminentButton);
-        glassButtonsRow.setAlignment(Pos.CENTER_LEFT);
-        glassButtonsRow.setPadding(new Insets(8));
-
-        // ---- 7. Glass card + toolbar (CardVariant.GLASS / ToolbarStyle.GLASS) ----------------
-        StackPane cardBackdrop = colorfulBackdrop(560, 170);
-        VBox glassCardContent = new VBox(8,
-                new Label("Liquid Glass Card"),
-                new Label("CardVariant.GLASS over a colorful backdrop."),
-                M3Button.tonal("Explore"));
-        glassCardContent.setPadding(new Insets(16));
-        M3Card glassCard = M3Card.glass(glassCardContent);
-        glassCard.setPrefSize(420, 130);
-        StackPane.setAlignment(glassCard, Pos.CENTER_LEFT);
-        StackPane.setMargin(glassCard, new Insets(0, 0, 0, 30));
-        M3Toolbar glassToolbar = M3Toolbar.glass();
-        glassToolbar.getItems().addAll(
-                M3Icon.symbol("favorite"), M3Icon.symbol("bolt"), M3Icon.symbol("star"));
-        StackPane.setAlignment(glassToolbar, Pos.CENTER_RIGHT);
-        StackPane.setMargin(glassToolbar, new Insets(0, 30, 0, 0));
-        cardBackdrop.getChildren().addAll(glassCard, glassToolbar);
-
-        // ---- 8. Adaptivity readout (GlassAdaptivity) -----------------------------------------
-        Label variantOut = new Label("Suggested variant: —");
-        Label scrimOut = new Label("Scrim strength: —");
-        Label textOut = new Label("Readable text: —");
-        for (Label out : new Label[] {variantOut, scrimOut, textOut}) {
-            out.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-on-surface;");
-        }
-        M3Button analyzeButton = M3Button.tonal("Analyze backdrop luminance");
-        analyzeButton.setOnAction(e -> {
-            WritableImage snapshot = heroBackdrop.snapshot(null, null);
-            double luminance = GlassAdaptivity.averageLuminance(snapshot);
-            variantOut.setText("Suggested variant: "
-                    + GlassAdaptivity.suggestVariant(luminance)
-                    + String.format("  (backdrop luminance %.2f)", luminance));
-            scrimOut.setText(String.format("Scrim strength: %.2f",
-                    GlassAdaptivity.scrimStrength(luminance)));
-            textOut.setText("Readable text: "
-                    + GlassAdaptivity.readableTextOnGlass(theme.dark()));
-        });
-        VBox adaptivityBox = new VBox(8, analyzeButton, variantOut, scrimOut, textOut);
-
+                + "  (members: " + mergeContainer.getMergedGroups().stream().mapToInt(List::size).sum() + ")");
+        gapSlider.valueProperty().addListener((obs, oldV, newV) -> Platform.runLater(updateMergeReadout));
+        icon1.widthProperty().addListener((obs, oldW, newW) -> Platform.runLater(updateMergeReadout));
+        HBox gapRow = new HBox(14, gapCaption, gapSlider, mergeReadout);
+        gapRow.setAlignment(Pos.CENTER_LEFT);
+        VBox mergeBox = new VBox(10, mergeBackdrop, gapRow);
         updateMergeReadout.run();
 
-        return new VBox(20,
-                section("Liquid Glass — Apple iOS 26 material (liquidGL + nikdelvin port)", desc),
-                section("Live Engine: tune refraction, bevel, frost, aberration, magnify, map style", heroBox),
-                section("Frost & Specular Lights (liquidGL frost + time-animated lights)", frostBox),
-                section("Tinted Glass (liquidGL tint)", tintBox),
-                section("Effect Container: Glass Shapes Blend Under 40px Spacing", mergeBox),
-                section("Morphing Pair & Toolbar Morph (GlassMorph + FLUID spring)", morphBox),
-                section("Glass Buttons (M3Button.glass / glassProminent)", glassButtonsRow),
-                section("Glass Card & Toolbar (CardVariant.GLASS / ToolbarStyle.GLASS)", cardBackdrop),
-                section("Legibility Adaptation (GlassAdaptivity)", adaptivityBox)
+        // Delay 1 frame after layout to ensure wallpaper is rendered before initial capture
+        Platform.runLater(() -> activeGlassPanes.forEach(M3GlassPane::invalidateBackdrop));
+
+        return new VBox(18,
+                header,
+                desc,
+                topToolbar,
+                modeBar,
+                stage,
+                tuningDock,
+                section("Liquid Glass Morphing & Shape Merging", mergeBox)
         );
     }
 
@@ -1793,39 +1969,23 @@ public class MainApp extends Application {
     }
 
     // ==========================================
-    // 17. Gym App Screens (19 FXMLs Porting Viewer)
+    // 17. Gym App Screens (19 Java-Built Screen Viewer)
     // ==========================================
     private VBox gymAppScreensPage() {
-        Label desc = new Label("Live interactive porting viewer for all 19 production-grade Material Design 3 FXML screens. Select any screen below to preview its layout, widgets, and controller injection in real-time.");
+        Label desc = new Label("Live interactive viewer for all 19 production-grade Material Design 3 Gym-OS screens. Every screen is a Java-built controller view (the com.gym.controller.Screen registry) — no FXML is loaded anywhere. Select any screen below to preview its layout, widgets, and controller in real-time.");
         desc.setWrapText(true);
         desc.setStyle("-fx-font-size: 14px; -fx-text-fill: -md-sys-color-on-surface-variant;");
 
-        LinkedHashMap<String, String> screensMap = new LinkedHashMap<>();
-        screensMap.put("01. Authentication Vault (login.fxml)", "login.fxml");
-        screensMap.put("02. Adaptive Application Shell (app-shell.fxml)", "app-shell.fxml");
-        screensMap.put("03. Executive Operations Dashboard (dashboard.fxml)", "dashboard.fxml");
-        screensMap.put("04. Member Directory & Search Roster (customer-list.fxml)", "customer-list.fxml");
-        screensMap.put("05. Member 360° VIP Dossier (customer-profile.fxml)", "customer-profile.fxml");
-        screensMap.put("06. Medical & Injury Clearance (medical-profile.fxml)", "medical-profile.fxml");
-        screensMap.put("07. Athletic Transformation & VBT (progress.fxml)", "progress.fxml");
-        screensMap.put("08. Coach Roster & Workload (trainer-list.fxml)", "trainer-list.fxml");
-        screensMap.put("09. Coach Master Profile & Certs (trainer-profile.fxml)", "trainer-profile.fxml");
-        screensMap.put("10. Coach Availability Matrix (availability.fxml)", "availability.fxml");
-        screensMap.put("11. Kinetic Workout Routine Builder (workout.fxml)", "workout.fxml");
-        screensMap.put("12. Live Workout Telemetry HUD (live-workout-hud.fxml)", "live-workout-hud.fxml");
-        screensMap.put("13. Master Schedule & Booking (schedule.fxml)", "schedule.fxml");
-        screensMap.put("14. Equipment 3D Inventory (equipment.fxml)", "equipment.fxml");
-        screensMap.put("15. Gym Facility Blueprint Map (gym-floor-map.fxml)", "gym-floor-map.fxml");
-        screensMap.put("16. Fast-Lane Attendance Check-In (attendance.fxml)", "attendance.fxml");
-        screensMap.put("17. Membership Plan Tiers (membership.fxml)", "membership.fxml");
-        screensMap.put("18. Cashless POS & Billing (payment.fxml)", "payment.fxml");
-        screensMap.put("19. Staff RBAC Security & Audit (staff.fxml)", "staff.fxml");
+        LinkedHashMap<String, com.gym.controller.Screen> screensMap = new LinkedHashMap<>();
+        for (com.gym.controller.Screen screen : com.gym.controller.Screen.values()) {
+            screensMap.put(screen.key(), screen);
+        }
 
         ComboBox<String> screenSelector = new ComboBox<>(FXCollections.observableArrayList(screensMap.keySet()));
         screenSelector.getSelectionModel().selectFirst();
         screenSelector.setPrefWidth(420);
 
-        Label statusLabel = new Label("Loaded: login.fxml");
+        Label statusLabel = new Label("Loaded: login");
         statusLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: -md-sys-color-primary; -fx-padding: 6px 12px; -fx-background-color: -md-sys-color-primary-container; -fx-background-radius: 8px;");
 
         M3Button launchShellBtn = M3Button.filled("Launch App Shell Window");
@@ -1842,16 +2002,13 @@ public class MainApp extends Application {
         launchLoginBtn.setGraphic(M3Icon.symbol("settings"));
         launchLoginBtn.setOnAction(e -> {
             try {
-                URL url = getClass().getResource("/fxml/login.fxml");
-                if (url != null) {
-                    Parent root = FXMLLoader.load(url);
-                    Scene sc = new Scene(root, 960, 640);
-                    M3Stylesheets.applyTo(sc, theme);
-                    Stage st = new Stage();
-                    st.setTitle("GYM-OS // Member & Staff Authentication");
-                    st.setScene(sc);
-                    st.show();
-                }
+                Parent root = com.gym.controller.Screen.LOGIN.create().getRoot();
+                Scene sc = new Scene(root, 960, 640);
+                M3Stylesheets.applyTo(sc, theme);
+                Stage st = new Stage();
+                st.setTitle("GYM-OS // Member & Staff Authentication");
+                st.setScene(sc);
+                st.show();
             } catch (Exception ex) {
                 ex.printStackTrace();
             }
@@ -1875,29 +2032,25 @@ public class MainApp extends Application {
         VBox.setVgrow(viewportHolder, Priority.ALWAYS);
         viewportHolder.setStyle("-fx-border-color: -md-sys-color-outline-variant; -fx-border-radius: 12px; -fx-background-color: -md-sys-color-surface-container-low; -fx-background-radius: 12px; -fx-padding: 8px;");
 
-        Consumer<String> loadScreenIntoViewport = fxmlName -> {
+        Consumer<com.gym.controller.Screen> loadScreenIntoViewport = screen -> {
             try {
-                URL url = getClass().getResource("/fxml/" + fxmlName);
-                if (url != null) {
-                    FXMLLoader loader = new FXMLLoader(url);
-                    Parent root = loader.load();
-                    if (root instanceof Region region) {
-                        region.setPrefHeight(Region.USE_COMPUTED_SIZE);
-                        region.setMinHeight(Region.USE_PREF_SIZE);
-                    }
-                    if (hasNestedScrollPane(root)) {
-                        viewportHolder.getChildren().setAll(root);
-                    } else {
-                        ScrollPane sp = new ScrollPane(root);
-                        sp.setFitToWidth(true);
-                        sp.setFitToHeight(false);
-                        sp.setStyle("-fx-background-color: transparent; -fx-padding: 0;");
-                        viewportHolder.getChildren().setAll(sp);
-                    }
-                    statusLabel.setText("Loaded: " + fxmlName + " (" + root.getClass().getSimpleName() + ")");
+                Parent root = screen.create().getRoot();
+                if (root instanceof Region region) {
+                    region.setPrefHeight(Region.USE_COMPUTED_SIZE);
+                    region.setMinHeight(Region.USE_PREF_SIZE);
                 }
+                if (hasNestedScrollPane(root)) {
+                    viewportHolder.getChildren().setAll(root);
+                } else {
+                    ScrollPane sp = new ScrollPane(root);
+                    sp.setFitToWidth(true);
+                    sp.setFitToHeight(false);
+                    sp.setStyle("-fx-background-color: transparent; -fx-padding: 0;");
+                    viewportHolder.getChildren().setAll(sp);
+                }
+                statusLabel.setText("Loaded: " + screen.key() + " (" + root.getClass().getSimpleName() + ")");
             } catch (Exception ex) {
-                Label err = new Label("Error loading /fxml/" + fxmlName + ": " + ex.getMessage());
+                Label err = new Label("Error building screen " + screen.key() + ": " + ex.getMessage());
                 err.setStyle("-fx-text-fill: -md-sys-color-error;");
                 viewportHolder.getChildren().setAll(err);
                 ex.printStackTrace();
@@ -1906,16 +2059,15 @@ public class MainApp extends Application {
 
         screenSelector.getSelectionModel().selectedItemProperty().addListener((obs, oldV, selectedLabel) -> {
             if (selectedLabel != null) {
-                String fxml = screensMap.get(selectedLabel);
-                loadScreenIntoViewport.accept(fxml);
+                loadScreenIntoViewport.accept(screensMap.get(selectedLabel));
             }
         });
 
-        // Load initial screen (login.fxml)
-        loadScreenIntoViewport.accept("login.fxml");
+        // Load initial screen (login)
+        loadScreenIntoViewport.accept(com.gym.controller.Screen.LOGIN);
 
         return new VBox(16,
-                section("Gym Management System — 19 Interactive FXML Screens", desc),
+                section("Gym Management System — 19 Interactive Java-Built Screens", desc),
                 topControls,
                 viewportHolder);
     }

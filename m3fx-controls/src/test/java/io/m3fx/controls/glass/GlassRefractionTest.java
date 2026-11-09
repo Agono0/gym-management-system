@@ -5,12 +5,13 @@ import javafx.scene.paint.Color;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Locks the Liquid Glass shader port (liquidGL {@code fs} math) and the nikdelvin SVG-map
  * construction: SDF, edge factor, the flat-centre/active-rim offset field, the deform point,
- * render-level masks, and the reference-engine defaults.
+ * render-level masks, hardware DisplacementField generation, and the reference-engine defaults.
  */
 class GlassRefractionTest {
 
@@ -205,5 +206,48 @@ class GlassRefractionTest {
                         "two renders of the same input must be identical");
             }
         }
+    }
+
+    @Test
+    void buildLiquidGLFieldProducesZeroAtCentreAndDisplacementAtRim() {
+        int w = 200, h = 100;
+        var channels = GlassRefraction.liquidGLChannels(w, h, 20.0, 0.02, 0.08, 0.15, 0.0, 0.0, null);
+        double[][] u = channels[0];
+        double[][] v = channels[1];
+        double[][] mask = channels[2];
+
+        // Centre is flat (0.0 displacement)
+        assertEquals(0.0, u[h / 2][w / 2], 1e-4, "centre X offset is 0");
+        assertEquals(0.0, v[h / 2][w / 2], 1e-4, "centre Y offset is 0");
+
+        // Right rim: outward displacement (+X)
+        double rimX = u[h / 2][w - 2];
+        assertTrue(rimX > 0.0, "right rim X offset is outward (+X), got " + rimX);
+
+        // Outside shape: masked to 0
+        assertEquals(0.0, mask[0][0], 1e-5, "corner outside shape is masked to 0");
+    }
+
+    @Test
+    void buildLiquidGLFieldAppliesOpticalTiltOffset() {
+        int w = 200, h = 100;
+        var unTilted = GlassRefraction.liquidGLChannels(w, h, 20.0, 0.02, 0.08, 0.15, 0.0, 0.0, null);
+        var tilted = GlassRefraction.liquidGLChannels(w, h, 20.0, 0.02, 0.08, 0.15, 5.0, 5.0, null);
+
+        // Centre: unTilted is 0, tilted has optical tilt counter-offset tan(5 deg)*0.05
+        double unTiltedX = unTilted[0][h / 2][w / 2];
+        double tiltedX = tilted[0][h / 2][w / 2];
+        assertEquals(0.0, unTiltedX, 1e-4);
+        assertTrue(tiltedX < 0.0, "positive tiltY shifts refraction in negative X direction, got " + tiltedX);
+    }
+
+    @Test
+    void buildLiquidGLFieldDeformsAroundFluidInteractionPointer() {
+        int w = 200, h = 100;
+        var interaction = new GlassRefraction.Interaction(0.5, 0.5, 0.05, 0.0, 0.4);
+        var field = GlassRefraction.buildLiquidGLField(w, h, 20.0, 0.02, 0.08, 0.15, 0.0, 0.0, interaction);
+        var map = field.map();
+        assertNotNull(map);
+        assertTrue(map.getWidth() == w && map.getHeight() == h);
     }
 }

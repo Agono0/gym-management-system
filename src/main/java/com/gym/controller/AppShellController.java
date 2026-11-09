@@ -1,7 +1,10 @@
 package com.gym.controller;
 
 import io.m3fx.controls.appbar.M3TopAppBar;
+import io.m3fx.controls.appbar.TopAppBarVariant;
+import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3SplitButton;
+import io.m3fx.controls.chip.ChipVariant;
 import io.m3fx.controls.chip.M3Chip;
 import io.m3fx.controls.command.M3CommandPalette;
 import io.m3fx.controls.effect.M3PulseBeacon;
@@ -17,17 +20,22 @@ import io.m3fx.controls.nav.M3NavigationRail;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.selection.M3Switch;
 import javafx.beans.property.SimpleDoubleProperty;
-import javafx.fxml.FXML;
 import javafx.geometry.Bounds;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.control.ContentDisplay;
+import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Separator;
 import javafx.scene.control.Toggle;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -36,17 +44,22 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Controller skeleton for Adaptive Application Shell (app-shell.fxml).
+ * Controller for the Adaptive Application Shell — the host of all 19 Gym-OS screens.
  * Conforms to docs/ui/shell/APP_SHELL_UI.md Section 7 contract.
  * Pure UI stub: strictly no backend service, DAO, or database logic.
  *
+ * <p>The shell builds its whole node tree in Java ({@link #buildView()}), the programmatic
+ * replacement for the former app-shell.fxml: same nodes, same style classes, same handler
+ * wiring. Screen navigation goes through the {@link Screen} registry instead of an
+ * {@code FXMLLoader}: {@link #loadScreen(Screen)} instantiates a screen controller, which
+ * builds its own view, and the shell mounts the returned root in the workspace.
+ *
  * <p>Motion: page swaps stay synchronous (the new page is in the scene graph as soon as
- * {@link #loadScreen(String)} returns; the fluid enter animation is applied afterwards),
+ * {@link #loadScreen(Screen)} returns; the fluid enter animation is applied afterwards),
  * and the navigation rail carries an Apple-style highlight pill that springs between
- * destinations. The pill is created in code with no fx:id and no new @FXML fields so the
- * FXML binding contract counts are untouched.
+ * destinations.
  */
-public class AppShellController {
+public class AppShellController implements ScreenController {
 
     /**
      * Scene-root property key under which this shell publishes itself so screen controllers can
@@ -65,8 +78,7 @@ public class AppShellController {
     /** Mirrors the theme currently applied to the scene; GymApp starts with the dark scheme. */
     private boolean darkMode = true;
 
-    // Motion state (plain fields on purpose: no @FXML annotation, so the pinned
-    // controller binding counts in ControllerBindingContractTest stay exact).
+    // Motion state (plain fields).
     /** Apple tab-bar style highlight that springs to the selected rail destination. */
     private Region navHighlightPill;
     /** True once the pill has snapped to its first valid geometry (later moves spring). */
@@ -88,93 +100,280 @@ public class AppShellController {
 
     /**
      * The Apple-style launch gate (splash → login → morph), created lazily and reused for
-     * sign-out. Plain field on purpose: no @FXML annotation, so the pinned controller binding
-     * counts in ControllerBindingContractTest stay exact. Only touched when
-     * {@code GymApp.SHOW_LAUNCH_GATES} is enabled; tests never construct it.
+     * sign-out. Only touched when {@code GymApp.SHOW_LAUNCH_GATES} is enabled; tests never
+     * construct it.
      */
     private LaunchGateController launchGate;
 
     /**
-     * Controller instance created by the most recent successful {@link #loadScreen(String)} call,
+     * Controller instance created by the most recent successful {@link #loadScreen(Screen)} call,
      * so cross-screen handoffs ({@link #openScreenViaRail}) can pass data to the freshly loaded
-     * screen. Plain field on purpose: no @FXML annotation, so the pinned controller binding
-     * counts in ControllerBindingContractTest stay exact.
+     * screen.
      */
     private Object lastLoadedController;
 
     /**
      * Lazy snackbar host for shell-level feedback (failed screen loads). Attached to the scene
      * root on first use, mirroring the {@code installFeedbackLayer} pattern of the trainer
-     * screens. Plain field on purpose: no @FXML annotation, so the pinned controller binding
-     * counts in ControllerBindingContractTest stay exact.
+     * screens.
      */
     private M3Overlay shellFeedback;
 
-    @FXML private BorderPane rootShellPane;
-    @FXML private M3TopAppBar topAppBar;
-    @FXML private M3IconButton railToggleBtn;
-    @FXML private HBox searchTriggerBar;
-    @FXML private M3PulseBeacon dbSyncBeacon;
-    @FXML private M3Switch themeModeSwitch;
-    @FXML private M3Chip userRoleChip;
-    @FXML private M3IconButton logoutBtn;
+    // ---- View fields (the former fx:id injections, now built by buildView) ----
+    private StackPane viewRoot;
+    private BorderPane rootShellPane;
+    private M3TopAppBar topAppBar;
+    private M3IconButton railToggleBtn;
+    private HBox searchTriggerBar;
+    private M3PulseBeacon dbSyncBeacon;
+    private M3Switch themeModeSwitch;
+    private M3Chip userRoleChip;
+    private M3IconButton logoutBtn;
 
-    @FXML private M3NavigationRail navigationRail;
-    @FXML private M3SplitButton globalActionSplitBtn;
-    @FXML private ToggleButton navDashboard;
-    @FXML private ToggleButton navCustomers;
-    @FXML private ToggleButton navTrainers;
-    @FXML private ToggleButton navSchedule;
-    @FXML private ToggleButton navMemberships;
-    @FXML private ToggleButton navEquipment;
-    @FXML private ToggleButton navAttendance;
-    @FXML private ToggleButton navPayments;
-    @FXML private ToggleButton navStaff;
-    @FXML private ToggleButton navHelp;
+    private M3NavigationRail navigationRail;
+    private M3SplitButton globalActionSplitBtn;
+    private ToggleButton navDashboard;
+    private ToggleButton navCustomers;
+    private ToggleButton navTrainers;
+    private ToggleButton navSchedule;
+    private ToggleButton navMemberships;
+    private ToggleButton navEquipment;
+    private ToggleButton navAttendance;
+    private ToggleButton navPayments;
+    private ToggleButton navStaff;
+    private ToggleButton navHelp;
 
-    @FXML private StackPane contentArea;
-    @FXML private M3CommandPalette commandPalette;
-    @FXML private StackPane globalSnackbar;
+    private StackPane contentArea;
+    private M3CommandPalette commandPalette;
+    private StackPane globalSnackbar;
 
-    public AppShellController() {}
+    /**
+     * Builds the complete shell view and initializes all behavior. Same ordering semantics the
+     * FXMLLoader used to provide: the node tree exists and every field is assigned before the
+     * former {@code initialize()} work runs.
+     */
+    public AppShellController() {
+        rootShellPane = new BorderPane();
 
-    @FXML
-    public void initialize() {
-        if (rootShellPane != null) {
-            // Publish this shell in the scene-root properties once attached, so screen
-            // controllers can find it with a guarded lookup (SHELL_CONTROLLER_KEY).
-            rootShellPane.sceneProperty().addListener((obs, oldScene, scene) -> {
-                if (scene != null && scene.getRoot() != null) {
-                    scene.getRoot().getProperties().put(SHELL_CONTROLLER_KEY, this);
-                }
-            });
-        }
-        if (navigationRail != null) {
-            setupNavigationRail();
-            javafx.application.Platform.runLater(() -> {
-                javafx.scene.control.ScrollPane railScroll = (javafx.scene.control.ScrollPane) navigationRail.lookup(".rail-scroll-pane");
-                if (railScroll != null) {
-                    enableSmoothScrolling(railScroll);
-                }
-                setupNavRailMotion();
-            });
-        }
-        loadScreen("dashboard.fxml");
+        // TOP: glass canopy top app bar container.
+        StackPane appBarContainer = new StackPane();
+        appBarContainer.getStyleClass().add("glass-app-bar-container");
+
+        topAppBar = new M3TopAppBar("GYM-OS // ENTERPRISE 2026", TopAppBarVariant.SMALL);
+        topAppBar.setPrefHeight(64.0);
+        topAppBar.getStyleClass().add("glass-app-bar");
+
+        railToggleBtn = new M3IconButton(M3Icon.symbol("menu"), IconButtonVariant.STANDARD);
+        railToggleBtn.setOnAction(e -> onToggleRail());
+        topAppBar.setNavigationIcon(railToggleBtn);
+
+        // Center + Right: search trigger and system controls share ONE row so the search
+        // field can never slide underneath the telemetry/user cluster at narrow widths.
+        HBox topRow = new HBox(16);
+        topRow.setAlignment(Pos.CENTER_LEFT);
+        topRow.setPickOnBounds(false);
+        topRow.setPadding(new Insets(0, 16, 0, 300));
+
+        searchTriggerBar = new HBox(12);
+        searchTriggerBar.setAlignment(Pos.CENTER_LEFT);
+        searchTriggerBar.getStyleClass().add("global-search-trigger");
+        searchTriggerBar.setMaxWidth(380);
+        HBox.setHgrow(searchTriggerBar, Priority.ALWAYS);
+        searchTriggerBar.setOnMouseClicked(e -> onOpenCommandPalette());
+        Region searchSpacer = new Region();
+        HBox.setHgrow(searchSpacer, Priority.ALWAYS);
+        searchTriggerBar.getChildren().addAll(
+                M3Icon.symbol("search"),
+                placeholderLabel("Quick Command or Search...", "search-placeholder"),
+                searchSpacer,
+                placeholderLabel("Ctrl + K", "shortcut-badge"));
+
+        Region topRowSpacer = new Region();
+        HBox.setHgrow(topRowSpacer, Priority.ALWAYS);
+
+        HBox systemCluster = new HBox(16);
+        systemCluster.setAlignment(Pos.CENTER_RIGHT);
+
+        HBox telemetryPill = new HBox(8);
+        telemetryPill.setAlignment(Pos.CENTER);
+        telemetryPill.getStyleClass().add("telemetry-pill");
+        dbSyncBeacon = new M3PulseBeacon();
+        dbSyncBeacon.setStatus(M3PulseBeacon.BeaconStatus.ONLINE);
+        telemetryPill.getChildren().addAll(
+                dbSyncBeacon,
+                placeholderLabel("DB: WAL ONLINE", "telemetry-text"));
+
+        themeModeSwitch = new M3Switch(true);
+        themeModeSwitch.setOnMouseClicked(e -> onToggleThemeMode());
+
+        userRoleChip = new M3Chip("Alex Carter [ADMIN]", ChipVariant.ASSIST);
+        userRoleChip.setOnAction(e -> onOpenUserMenu());
+
+        logoutBtn = new M3IconButton(M3Icon.symbol("close"), IconButtonVariant.STANDARD);
+        logoutBtn.setOnAction(e -> onLogout());
+
+        systemCluster.getChildren().addAll(telemetryPill, themeModeSwitch, userRoleChip, logoutBtn);
+        topRow.getChildren().addAll(searchTriggerBar, topRowSpacer, systemCluster);
+        appBarContainer.getChildren().addAll(topAppBar, topRow);
+        rootShellPane.setTop(appBarContainer);
+
+        // LEFT: expandable M3 navigation rail.
+        navigationRail = new M3NavigationRail();
+        navigationRail.setPrefWidth(220.0);
+        navigationRail.getStyleClass().add("side-nav-rail");
+
+        // Header fast action split button.
+        VBox railActionContainer = new VBox();
+        railActionContainer.setAlignment(Pos.CENTER);
+        railActionContainer.getStyleClass().add("rail-action-container");
+        railActionContainer.setPadding(new Insets(16.0, 8.0, 16.0, 8.0));
+        globalActionSplitBtn = new M3SplitButton("FAST CHECK-IN", ButtonVariant.FILLED, null);
+        globalActionSplitBtn.setOnAction(e -> onFastCheckIn());
+        globalActionSplitBtn.setMaxWidth(Double.MAX_VALUE);
+        railActionContainer.getChildren().add(globalActionSplitBtn);
+
+        // Navigation destination items (smooth scrollable rail).
+        ScrollPane railScroll = new ScrollPane();
+        railScroll.setFitToWidth(true);
+        railScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        railScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        railScroll.getStyleClass().add("rail-scroll-pane");
+        railScroll.setStyle("-fx-background-color: transparent; -fx-padding: 0;");
+        VBox.setVgrow(railScroll, Priority.ALWAYS);
+
+        VBox railButtonsBox = new VBox(4);
+        railButtonsBox.setAlignment(Pos.TOP_CENTER);
+        railButtonsBox.setPadding(new Insets(0, 4.0, 64.0, 4.0));
+
+        ToggleGroup railNavGroup = new ToggleGroup();
+        navDashboard = railDestination("Dashboard", "home", railNavGroup, true, this::onNavDashboard);
+        navCustomers = railDestination("Members", "group", railNavGroup, false, this::onNavCustomers);
+        navTrainers = railDestination("Trainers", "person", railNavGroup, false, this::onNavTrainers);
+        navSchedule = railDestination("Schedule", "calendar", railNavGroup, false, this::onNavSchedule);
+        navMemberships = railDestination("Plans", "favorite", railNavGroup, false, this::onNavMemberships);
+        navEquipment = railDestination("Equipment", "stats", railNavGroup, false, this::onNavEquipment);
+        navAttendance = railDestination("Attendance", "check", railNavGroup, false, this::onNavAttendance);
+        navPayments = railDestination("Finance", "money", railNavGroup, false, this::onNavPayments);
+        navStaff = railDestination("Staff & Admin", "settings", railNavGroup, false, this::onNavStaff);
+        navHelp = railDestination("Documentation", "info", railNavGroup, false, this::onNavHelp);
+        railButtonsBox.getChildren().addAll(
+                navDashboard, navCustomers, navTrainers, navSchedule, navMemberships,
+                navEquipment, navAttendance, navPayments,
+                new Separator(),
+                navStaff, navHelp);
+        railScroll.setContent(railButtonsBox);
+        navigationRail.getChildren().addAll(railActionContainer, railScroll);
+        rootShellPane.setLeft(navigationRail);
+
+        // CENTER: main dynamic workspace viewport (dynamically injected active module views).
+        contentArea = new StackPane();
+        contentArea.getStyleClass().add("workspace-container");
+        rootShellPane.setCenter(contentArea);
+
+        viewRoot = new StackPane();
+        viewRoot.getStyleClass().add("app-shell-root");
+        viewRoot.getChildren().add(rootShellPane);
+
+        // Floating overlays.
+        commandPalette = new M3CommandPalette();
+        commandPalette.setVisible(false);
+        commandPalette.setManaged(false);
+
+        globalSnackbar = new StackPane();
+        globalSnackbar.setPickOnBounds(false);
+        globalSnackbar.setMouseTransparent(true);
+        globalSnackbar.setMaxSize(480.0, 48.0);
+        StackPane.setAlignment(globalSnackbar, Pos.BOTTOM_CENTER);
+        StackPane.setMargin(globalSnackbar, new Insets(0, 0, 24.0, 0));
+        viewRoot.getChildren().addAll(commandPalette, globalSnackbar);
+
+
+    // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
+    // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
+    // (findById("navCustomers") and friends) and the interaction tests keep working unchanged.
+        rootShellPane.setId("rootShellPane");
+        topAppBar.setId("topAppBar");
+        railToggleBtn.setId("railToggleBtn");
+        searchTriggerBar.setId("searchTriggerBar");
+        dbSyncBeacon.setId("dbSyncBeacon");
+        themeModeSwitch.setId("themeModeSwitch");
+        userRoleChip.setId("userRoleChip");
+        logoutBtn.setId("logoutBtn");
+        navigationRail.setId("navigationRail");
+        globalActionSplitBtn.setId("globalActionSplitBtn");
+        navDashboard.setId("navDashboard");
+        navCustomers.setId("navCustomers");
+        navTrainers.setId("navTrainers");
+        navSchedule.setId("navSchedule");
+        navMemberships.setId("navMemberships");
+        navEquipment.setId("navEquipment");
+        navAttendance.setId("navAttendance");
+        navPayments.setId("navPayments");
+        navStaff.setId("navStaff");
+        navHelp.setId("navHelp");
+        contentArea.setId("contentArea");
+        commandPalette.setId("commandPalette");
+        globalSnackbar.setId("globalSnackbar");
+        initialize();
+    }
+
+    /** Small styled label used inside the search trigger and telemetry pill. */
+    private static Label placeholderLabel(String text, String styleClass) {
+        Label label = new Label(text);
+        label.getStyleClass().add(styleClass);
+        return label;
+    }
+
+    /** Builds one navigation rail destination toggle button. */
+    private static ToggleButton railDestination(String text, String symbolName, ToggleGroup group,
+                                                boolean selected, Runnable action) {
+        ToggleButton button = new ToggleButton(text, M3Icon.symbol(symbolName));
+        button.setToggleGroup(group);
+        button.setSelected(selected);
+        button.getStyleClass().add("m3-navigation-item");
+        button.setMaxWidth(Double.MAX_VALUE);
+        button.setAlignment(Pos.CENTER_LEFT);
+        button.setOnAction(e -> action.run());
+        return button;
+    }
+
+    @Override
+    public Parent getRoot() {
+        return viewRoot;
+    }
+
+    private void initialize() {
+        // Publish this shell in the scene-root properties once attached, so screen
+        // controllers can find it with a guarded lookup (SHELL_CONTROLLER_KEY).
+        rootShellPane.sceneProperty().addListener((obs, oldScene, scene) -> {
+            if (scene != null && scene.getRoot() != null) {
+                scene.getRoot().getProperties().put(SHELL_CONTROLLER_KEY, this);
+            }
+        });
+        setupNavigationRail();
+        javafx.application.Platform.runLater(() -> {
+            ScrollPane railScroll = (ScrollPane) navigationRail.lookup(".rail-scroll-pane");
+            if (railScroll != null) {
+                enableSmoothScrolling(railScroll);
+            }
+            setupNavRailMotion();
+        });
+        loadScreen(Screen.DASHBOARD);
         initCommandPalette();
     }
 
     private void setupNavigationRail() {
         navButtons.clear();
-        if (navDashboard != null) navButtons.add(navDashboard);
-        if (navCustomers != null) navButtons.add(navCustomers);
-        if (navTrainers != null) navButtons.add(navTrainers);
-        if (navSchedule != null) navButtons.add(navSchedule);
-        if (navMemberships != null) navButtons.add(navMemberships);
-        if (navEquipment != null) navButtons.add(navEquipment);
-        if (navAttendance != null) navButtons.add(navAttendance);
-        if (navPayments != null) navButtons.add(navPayments);
-        if (navStaff != null) navButtons.add(navStaff);
-        if (navHelp != null) navButtons.add(navHelp);
+        navButtons.add(navDashboard);
+        navButtons.add(navCustomers);
+        navButtons.add(navTrainers);
+        navButtons.add(navSchedule);
+        navButtons.add(navMemberships);
+        navButtons.add(navEquipment);
+        navButtons.add(navAttendance);
+        navButtons.add(navPayments);
+        navButtons.add(navStaff);
+        navButtons.add(navHelp);
 
         for (ToggleButton btn : navButtons) {
             btn.setMinHeight(48.0);
@@ -183,7 +382,7 @@ public class AppShellController {
             Tooltip.install(btn, new Tooltip(btn.getText()));
         }
 
-        if (globalActionSplitBtn != null && globalActionSplitBtn.getParent() instanceof javafx.scene.layout.Pane actionContainer) {
+        if (globalActionSplitBtn.getParent() instanceof javafx.scene.layout.Pane actionContainer) {
             collapsedActionBtn = new M3IconButton(M3Icon.symbol("bolt"), IconButtonVariant.FILLED);
             collapsedActionBtn.setAccessibleText("Fast Check-In");
             Tooltip.install(collapsedActionBtn, new Tooltip("Fast Check-In"));
@@ -197,7 +396,7 @@ public class AppShellController {
     /**
      * Starts the Apple-style launch choreography (splash → login gate → fluid morph into this
      * shell). Called by {@code GymApp.start} only when {@code GymApp.SHOW_LAUNCH_GATES} is
-     * enabled, so the FXML-based tests, which call {@code start} directly, never enter here.
+     * enabled, so the tests, which call {@code start} directly, never enter here.
      */
     public void beginLaunchGates() {
         launchGate().beginLaunchGates();
@@ -217,10 +416,10 @@ public class AppShellController {
      * full-scale Apple entrance so it never ends up half-faded behind the gate.
      */
     public void settleCurrentPage() {
-        if (contentArea == null || contentArea.getChildren().isEmpty()) {
+        if (contentArea.getChildren().isEmpty()) {
             return;
         }
-        javafx.scene.Node page = contentArea.getChildren().get(0);
+        Node page = contentArea.getChildren().get(0);
         if (page.getOpacity() < 1.0 || page.getTranslateX() != 0 || page.getTranslateY() != 0
                 || page.getScaleX() != 1.0 || page.getScaleY() != 1.0) {
             MotionUtil.enter(page, MotionUtil.MotionDirection.UP, 1.0);
@@ -235,30 +434,31 @@ public class AppShellController {
         return launchGate;
     }
 
-    public void loadScreen(String fxmlName) {
-        if (contentArea == null) return;
+    /**
+     * Navigates the shell to the given screen: instantiates its controller (which builds its
+     * own view), clears any rigid pref-height constraint, mounts the view in the workspace
+     * (inside a smooth-scrolling {@link ScrollPane} when the view has none of its own), and
+     * plays the fluid entrance. Synchronous: the page is in the scene graph when this returns.
+     */
+    public void loadScreen(Screen screen) {
         try {
-            java.net.URL url = getClass().getResource("/fxml/" + fxmlName);
-            if (url == null) {
-                throw new java.io.IOException("FXML resource not found on the classpath");
-            }
-            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(url);
-            javafx.scene.Parent view = loader.load();
-            lastLoadedController = loader.getController();
+            ScreenController controller = screen.create();
+            lastLoadedController = controller;
+            Parent view = controller.getRoot();
 
             // Clear any rigid prefHeight from root so it can expand dynamically. The min-height
             // stretch applies ONLY to roots that are not already a ScrollPane: pinning a
             // ScrollPane's min height to its own pref pins it to the FULL content height,
             // which defeats its scrolling and forces enormous layout passes (the reported
             // trainer-tab freeze).
-            if (view instanceof javafx.scene.layout.Region region) {
-                region.setPrefHeight(javafx.scene.layout.Region.USE_COMPUTED_SIZE);
+            if (view instanceof Region region) {
+                region.setPrefHeight(Region.USE_COMPUTED_SIZE);
                 if (!containsScrollPane(view)) {
-                    region.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+                    region.setMinHeight(Region.USE_PREF_SIZE);
                 }
             }
 
-            javafx.scene.Node page;
+            Node page;
             if (containsScrollPane(view)) {
                 // View already has its own dedicated ScrollPane layout
                 applySmoothScrolling(view);
@@ -266,11 +466,11 @@ public class AppShellController {
                 page = view;
             } else {
                 // View needs smooth vertical scrolling
-                javafx.scene.control.ScrollPane sp = new javafx.scene.control.ScrollPane(view);
+                ScrollPane sp = new ScrollPane(view);
                 sp.setFitToWidth(true);
                 sp.setFitToHeight(false);
-                sp.setHbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.NEVER);
-                sp.setVbarPolicy(javafx.scene.control.ScrollPane.ScrollBarPolicy.AS_NEEDED);
+                sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+                sp.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
                 sp.setStyle("-fx-background-color: transparent; -fx-padding: 0;");
                 enableSmoothScrolling(sp);
                 contentArea.getChildren().setAll(sp);
@@ -292,35 +492,35 @@ public class AppShellController {
             // child is ever present, so rapid navigation can never stack duplicates.
             MotionUtil.enter(page, MotionUtil.MotionDirection.UP, 1.0);
         } catch (Exception e) {
-            System.err.println("Failed to load /fxml/" + fxmlName + ": " + e.getMessage());
+            System.err.println("Failed to load screen " + screen.key() + ": " + e.getMessage());
             e.printStackTrace();
-            showShellSnackbar("Could not open " + screenDisplayName(fxmlName));
+            showShellSnackbar("Could not open " + screenDisplayName(screen.key()));
         }
     }
 
     /**
      * Navigates the shell to a detail screen on behalf of another screen: fires the pinned rail
-     * button with the given fx:id (the exact pathway of a rail click, so the ToggleGroup
-     * selection and the highlight pill stay consistent), then loads the detail FXML
+     * button with the given key (the exact pathway of a rail click, so the ToggleGroup
+     * selection and the highlight pill stay consistent), then loads the detail screen
      * synchronously and hands its freshly created controller to {@code setup} for data passing.
      * Both steps are guarded — a missing rail button or a failed load simply skips that step,
      * and {@code setup} never runs with a controller of the wrong type (callers instanceof-check).
      *
-     * @param railButtonId fx:id of the pinned rail destination to fire (e.g. {@code navTrainers})
-     * @param detailFxml   FXML file of the detail screen to load after the rail click
-     * @param setup        receives the detail screen's controller (may be any object; callers check)
+     * @param railButtonKey key of the pinned rail destination to fire (e.g. {@code navTrainers})
+     * @param screen        the detail screen to load after the rail click
+     * @param setup         receives the detail screen's controller (may be any object; callers check)
      */
-    public void openScreenViaRail(String railButtonId, String detailFxml, Consumer<Object> setup) {
-        fireRailButton(railButtonId);
-        loadScreen(detailFxml);
+    public void openScreenViaRail(String railButtonKey, Screen screen, Consumer<Object> setup) {
+        fireRailButton(railButtonKey);
+        loadScreen(screen);
         if (setup != null && lastLoadedController != null) {
             setup.accept(lastLoadedController);
         }
     }
 
-    /** Fires the pinned rail destination with the given fx:id (no-op when absent or disabled). */
-    private void fireRailButton(String railButtonId) {
-        ToggleButton button = railButtonById(railButtonId);
+    /** Fires the pinned rail destination with the given key (no-op when absent or disabled). */
+    private void fireRailButton(String railButtonKey) {
+        ToggleButton button = railButtonByKey(railButtonKey);
         if (button == null || button.isDisabled()) {
             return;
         }
@@ -335,9 +535,9 @@ public class AppShellController {
         }
     }
 
-    /** Maps a rail button fx:id to its pinned @FXML field (direct, no tree search needed). */
-    private ToggleButton railButtonById(String railButtonId) {
-        return switch (railButtonId) {
+    /** Maps a rail destination key to its pinned field (direct, no tree search needed). */
+    private ToggleButton railButtonByKey(String railButtonKey) {
+        return switch (railButtonKey) {
             case "navDashboard" -> navDashboard;
             case "navCustomers" -> navCustomers;
             case "navTrainers" -> navTrainers;
@@ -359,8 +559,8 @@ public class AppShellController {
      * loads) the answer is skipped — the caller's stderr detail remains.
      */
     private void showShellSnackbar(String message) {
-        if (rootShellPane == null || rootShellPane.getScene() == null
-                || !(rootShellPane.getScene().getRoot() instanceof javafx.scene.layout.Pane sceneRoot)) {
+        if (!(rootShellPane.getScene() != null
+                && rootShellPane.getScene().getRoot() instanceof javafx.scene.layout.Pane sceneRoot)) {
             return;
         }
         if (shellFeedback == null) {
@@ -372,30 +572,30 @@ public class AppShellController {
         shellFeedback.showSnackbar(message);
     }
 
-    /** Strips the .fxml suffix for human-facing screen names ("trainer-profile"). */
-    private static String screenDisplayName(String fxmlName) {
-        return fxmlName.endsWith(".fxml") ? fxmlName.substring(0, fxmlName.length() - 5) : fxmlName;
+    /** Human-facing screen name ("dashboard") for feedback messages. */
+    private static String screenDisplayName(String screenKey) {
+        return screenKey;
     }
 
-    private void applySmoothScrolling(javafx.scene.Node node) {
-        if (node instanceof javafx.scene.control.ScrollPane sp) {
+    private void applySmoothScrolling(Node node) {
+        if (node instanceof ScrollPane sp) {
             enableSmoothScrolling(sp);
         }
-        if (node instanceof javafx.scene.Parent parent) {
-            for (javafx.scene.Node child : parent.getChildrenUnmodifiable()) {
+        if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
                 applySmoothScrolling(child);
             }
         }
     }
 
-    public static void enableSmoothScrolling(javafx.scene.control.ScrollPane sp) {
+    public static void enableSmoothScrolling(ScrollPane sp) {
         if (sp == null) return;
         sp.setPannable(true);
         sp.addEventFilter(javafx.scene.input.ScrollEvent.SCROLL, event -> {
             double deltaY = event.getDeltaY();
             if (deltaY == 0) return;
 
-            javafx.scene.Node content = sp.getContent();
+            Node content = sp.getContent();
             if (content == null) return;
 
             double contentHeight = content.getBoundsInLocal().getHeight();
@@ -410,10 +610,10 @@ public class AppShellController {
         });
     }
 
-    private boolean containsScrollPane(javafx.scene.Node node) {
-        if (node instanceof javafx.scene.control.ScrollPane) return true;
-        if (node instanceof javafx.scene.Parent parent) {
-            for (javafx.scene.Node child : parent.getChildrenUnmodifiable()) {
+    private boolean containsScrollPane(Node node) {
+        if (node instanceof ScrollPane) return true;
+        if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
                 if (containsScrollPane(child)) return true;
             }
         }
@@ -423,13 +623,13 @@ public class AppShellController {
     /**
      * Wires the Apple-style rail motion: a single highlight pill that springs to the selected
      * destination (like an iOS tab bar) and a subtle spring press-scale on every destination.
-     * The pill is added in code (no fx:id, no @FXML field), is unmanaged (never disturbs the
-     * rail layout), mouse-transparent (never blocks clicks or keyboard focus) and sits behind
+     * The pill is added in code, is unmanaged (never disturbs the rail layout),
+     * mouse-transparent (never blocks clicks or keyboard focus) and sits behind
      * the destination buttons. Failure here must never break shell setup.
      */
     private void setupNavRailMotion() {
         try {
-            if (navigationRail == null || navDashboard == null || navHighlightPill != null) return;
+            if (navHighlightPill != null) return;
             ScrollPane railScroll = findRailScrollPane();
             if (!(railScroll != null && railScroll.getContent() instanceof VBox buttonsBox)) return;
             ToggleGroup group = navDashboard.getToggleGroup();
@@ -479,9 +679,8 @@ public class AppShellController {
     }
 
     private ScrollPane findRailScrollPane() {
-        if (navigationRail == null) return null;
         if (navigationRail.lookup(".rail-scroll-pane") instanceof ScrollPane sp) return sp;
-        for (javafx.scene.Node child : navigationRail.getChildrenUnmodifiable()) {
+        for (Node child : navigationRail.getChildrenUnmodifiable()) {
             if (child instanceof ScrollPane sp) return sp;
         }
         return null;
@@ -540,33 +739,32 @@ public class AppShellController {
     }
 
     private void initCommandPalette() {
-        if (commandPalette == null) return;
-        commandPalette.registerAction("Screens", "01. Authentication Vault (login.fxml)", "Sign In & Biometrics", "person", () -> {
+        commandPalette.registerAction("Screens", "01. Authentication Vault", "Sign In & Biometrics", "person", () -> {
             // Gates enabled: re-open the real login gate (same flow as sign-out). Otherwise the
-            // legacy in-shell Authentication Vault screen stays available.
+            // in-shell Authentication Vault screen stays available.
             if (com.gym.GymApp.SHOW_LAUNCH_GATES) {
                 launchGate().showLoginGate();
             } else {
-                loadScreen("login.fxml");
+                loadScreen(Screen.LOGIN);
             }
         });
-        commandPalette.registerAction("Screens", "02. Executive Dashboard (dashboard.fxml)", "Bento Operations Center", "home", () -> loadScreen("dashboard.fxml"));
-        commandPalette.registerAction("Screens", "03. Member Directory (customer-list.fxml)", "Roster & Search Table", "group", () -> loadScreen("customer-list.fxml"));
-        commandPalette.registerAction("Screens", "04. Athlete VIP Dossier (customer-profile.fxml)", "360 Profile & Hologram Pass", "person", () -> loadScreen("customer-profile.fxml"));
-        commandPalette.registerAction("Screens", "05. Medical Profile (medical-profile.fxml)", "Injury Assessment & 3D Anatomy", "favorite", () -> loadScreen("medical-profile.fxml"));
-        commandPalette.registerAction("Screens", "06. Athletic Progress (progress.fxml)", "VBT Scatter & 52-Week Heatmap", "stats", () -> loadScreen("progress.fxml"));
-        commandPalette.registerAction("Screens", "07. Trainer Roster (trainer-list.fxml)", "Coaching Staff Roster", "person", () -> loadScreen("trainer-list.fxml"));
-        commandPalette.registerAction("Screens", "08. Trainer Profile (trainer-profile.fxml)", "Coach Dossier & Capacity Gauge", "person", () -> loadScreen("trainer-profile.fxml"));
-        commandPalette.registerAction("Screens", "09. Availability Matrix (availability.fxml)", "Weekly Booking & Slot Caps", "calendar", () -> loadScreen("availability.fxml"));
-        commandPalette.registerAction("Screens", "10. Workout Builder (workout.fxml)", "Routine Pipeline & Exercises", "stats", () -> loadScreen("workout.fxml"));
-        commandPalette.registerAction("Screens", "11. Live Workout HUD (live-workout-hud.fxml)", "Kinetic Rep Counter & Cardiac Zones", "time", () -> loadScreen("live-workout-hud.fxml"));
-        commandPalette.registerAction("Screens", "12. Schedule Calendar (schedule.fxml)", "Class Agenda & Booking Drawer", "calendar", () -> loadScreen("schedule.fxml"));
-        commandPalette.registerAction("Screens", "13. Equipment 3D Inventory (equipment.fxml)", "12 Procedural 3D Models & Maintenance", "settings", () -> loadScreen("equipment.fxml"));
-        commandPalette.registerAction("Screens", "14. Gym Floorplan Map (gym-floor-map.fxml)", "2.5D Facility Blueprint & Occupancy", "home", () -> loadScreen("gym-floor-map.fxml"));
-        commandPalette.registerAction("Screens", "15. Attendance Scanner (attendance.fxml)", "Turnstile Scanner & Peak Heatmap", "check", () -> loadScreen("attendance.fxml"));
-        commandPalette.registerAction("Screens", "16. Membership Plans (membership.fxml)", "Tier Cards & Conversion Funnel", "favorite", () -> loadScreen("membership.fxml"));
-        commandPalette.registerAction("Screens", "17. Cashless POS & Billing (payment.fxml)", "POS Terminal & Thermal Receipts", "money", () -> loadScreen("payment.fxml"));
-        commandPalette.registerAction("Screens", "18. Staff RBAC Security (staff.fxml)", "Staff Permissions & Security Audit", "settings", () -> loadScreen("staff.fxml"));
+        commandPalette.registerAction("Screens", "02. Executive Dashboard", "Bento Operations Center", "home", () -> loadScreen(Screen.DASHBOARD));
+        commandPalette.registerAction("Screens", "03. Member Directory", "Roster & Search Table", "group", () -> loadScreen(Screen.CUSTOMER_LIST));
+        commandPalette.registerAction("Screens", "04. Athlete VIP Dossier", "360 Profile & Hologram Pass", "person", () -> loadScreen(Screen.CUSTOMER_PROFILE));
+        commandPalette.registerAction("Screens", "05. Medical Profile", "Injury Assessment & 3D Anatomy", "favorite", () -> loadScreen(Screen.MEDICAL_PROFILE));
+        commandPalette.registerAction("Screens", "06. Athletic Progress", "VBT Scatter & 52-Week Heatmap", "stats", () -> loadScreen(Screen.PROGRESS));
+        commandPalette.registerAction("Screens", "07. Trainer Roster", "Coaching Staff Roster", "person", () -> loadScreen(Screen.TRAINER_LIST));
+        commandPalette.registerAction("Screens", "08. Trainer Profile", "Coach Dossier & Capacity Gauge", "person", () -> loadScreen(Screen.TRAINER_PROFILE));
+        commandPalette.registerAction("Screens", "09. Availability Matrix", "Weekly Booking & Slot Caps", "calendar", () -> loadScreen(Screen.AVAILABILITY));
+        commandPalette.registerAction("Screens", "10. Workout Builder", "Routine Pipeline & Exercises", "stats", () -> loadScreen(Screen.WORKOUT));
+        commandPalette.registerAction("Screens", "11. Live Workout HUD", "Kinetic Rep Counter & Cardiac Zones", "time", () -> loadScreen(Screen.LIVE_WORKOUT_HUD));
+        commandPalette.registerAction("Screens", "12. Schedule Calendar", "Class Agenda & Booking Drawer", "calendar", () -> loadScreen(Screen.SCHEDULE));
+        commandPalette.registerAction("Screens", "13. Equipment 3D Inventory", "12 Procedural 3D Models & Maintenance", "settings", () -> loadScreen(Screen.EQUIPMENT));
+        commandPalette.registerAction("Screens", "14. Gym Floorplan Map", "2.5D Facility Blueprint & Occupancy", "home", () -> loadScreen(Screen.GYM_FLOOR_MAP));
+        commandPalette.registerAction("Screens", "15. Attendance Scanner", "Turnstile Scanner & Peak Heatmap", "check", () -> loadScreen(Screen.ATTENDANCE));
+        commandPalette.registerAction("Screens", "16. Membership Plans", "Tier Cards & Conversion Funnel", "favorite", () -> loadScreen(Screen.MEMBERSHIP));
+        commandPalette.registerAction("Screens", "17. Cashless POS & Billing", "POS Terminal & Thermal Receipts", "money", () -> loadScreen(Screen.PAYMENT));
+        commandPalette.registerAction("Screens", "18. Staff RBAC Security", "Staff Permissions & Security Audit", "settings", () -> loadScreen(Screen.STAFF));
         // Deferred one pulse so the lookup runs with the shell fully attached (same pattern as
         // the rail scroll-pane lookup above); a missed lookup simply keeps the plain card.
         javafx.application.Platform.runLater(this::applyCommandPaletteGlass);
@@ -590,10 +788,7 @@ public class AppShellController {
      */
     private void applyCommandPaletteGlass() {
         try {
-            if (commandPalette == null) {
-                return;
-            }
-            javafx.scene.Node card = commandPalette.lookup(".m3-command-palette-card");
+            Node card = commandPalette.lookup(".m3-command-palette-card");
             // The palette card is an M3Card (a Region); glass needs its max-size constraints,
             // which live on Region, not Node.
             if (!(card instanceof javafx.scene.layout.Region cardRegion
@@ -633,9 +828,7 @@ public class AppShellController {
         }
     }
 
-    @FXML
     public void onToggleRail() {
-        if (navigationRail == null) return;
         railCollapsed = !railCollapsed;
         double targetWidth = railCollapsed ? 80.0 : 220.0;
 
@@ -647,10 +840,8 @@ public class AppShellController {
                 btn.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
                 btn.setAlignment(Pos.CENTER);
             }
-            if (globalActionSplitBtn != null) {
-                globalActionSplitBtn.setVisible(false);
-                globalActionSplitBtn.setManaged(false);
-            }
+            globalActionSplitBtn.setVisible(false);
+            globalActionSplitBtn.setManaged(false);
             if (collapsedActionBtn != null) {
                 collapsedActionBtn.setVisible(true);
                 collapsedActionBtn.setManaged(true);
@@ -661,10 +852,8 @@ public class AppShellController {
                 collapsedActionBtn.setVisible(false);
                 collapsedActionBtn.setManaged(false);
             }
-            if (globalActionSplitBtn != null) {
-                globalActionSplitBtn.setVisible(true);
-                globalActionSplitBtn.setManaged(true);
-            }
+            globalActionSplitBtn.setVisible(true);
+            globalActionSplitBtn.setManaged(true);
         }
 
         if (navigationRail.getScene() != null) {
@@ -696,16 +885,12 @@ public class AppShellController {
         }
     }
 
-    @FXML
     public void onOpenCommandPalette() {
-        if (commandPalette != null) {
-            commandPalette.show();
-        }
+        commandPalette.show();
     }
 
-    @FXML
     public void onToggleThemeMode() {
-        if (rootShellPane != null && rootShellPane.getScene() != null) {
+        if (rootShellPane.getScene() != null) {
             // Flip our own state instead of reading the switch: the skin toggles the switch with
             // its own MOUSE_CLICKED handler, so the read could see either the old or new value.
             darkMode = !darkMode;
@@ -714,80 +899,65 @@ public class AppShellController {
                     io.m3fx.core.theme.M3Theme.fromSeed(com.gym.GymApp.SEED_PURPLE, io.m3fx.core.theme.ThemeVariant.TONAL_SPOT, darkMode);
             io.m3fx.controls.M3Stylesheets.applyTo(scene, theme);
         }
-        if (themeModeSwitch != null) {
-            // Keep the switch visual in sync with the applied scheme regardless of event order.
-            themeModeSwitch.setSelected(darkMode);
-        }
+        // Keep the switch visual in sync with the applied scheme regardless of event order.
+        themeModeSwitch.setSelected(darkMode);
     }
 
-    @FXML
     public void onOpenUserMenu() {
         onNavStaff();
     }
 
-    @FXML
     public void onLogout() {
         // Real runs: sign out into the Apple-style login gate. Tests / gates-disabled runs keep
         // the original behavior (load the in-shell Authentication Vault screen).
         if (com.gym.GymApp.SHOW_LAUNCH_GATES) {
             launchGate().showLoginGate();
         } else {
-            loadScreen("login.fxml");
+            loadScreen(Screen.LOGIN);
         }
     }
 
-    @FXML
     public void onFastCheckIn() {
-        loadScreen("attendance.fxml");
+        loadScreen(Screen.ATTENDANCE);
     }
 
-    @FXML
     public void onNavDashboard() {
-        loadScreen("dashboard.fxml");
+        loadScreen(Screen.DASHBOARD);
     }
 
-    @FXML
     public void onNavCustomers() {
-        loadScreen("customer-list.fxml");
+        loadScreen(Screen.CUSTOMER_LIST);
     }
 
-    @FXML
     public void onNavTrainers() {
-        loadScreen("trainer-list.fxml");
+        loadScreen(Screen.TRAINER_LIST);
     }
 
-    @FXML
     public void onNavSchedule() {
-        loadScreen("schedule.fxml");
+        loadScreen(Screen.SCHEDULE);
     }
 
-    @FXML
     public void onNavMemberships() {
-        loadScreen("membership.fxml");
+        loadScreen(Screen.MEMBERSHIP);
     }
 
-    @FXML
     public void onNavEquipment() {
-        loadScreen("equipment.fxml");
+        loadScreen(Screen.EQUIPMENT);
     }
 
-    @FXML
     public void onNavAttendance() {
-        loadScreen("attendance.fxml");
+        loadScreen(Screen.ATTENDANCE);
     }
 
-    @FXML
     public void onNavPayments() {
-        loadScreen("payment.fxml");
+        loadScreen(Screen.PAYMENT);
     }
 
-    @FXML
     public void onNavStaff() {
-        loadScreen("staff.fxml");
+        loadScreen(Screen.STAFF);
     }
 
-    @FXML
     public void onNavHelp() {
-        loadScreen("gym-floor-map.fxml");
+        loadScreen(Screen.GYM_FLOOR_MAP);
     }
 }

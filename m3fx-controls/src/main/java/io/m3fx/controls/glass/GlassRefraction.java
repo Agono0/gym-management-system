@@ -6,10 +6,9 @@ import javafx.scene.image.WritableImage;
 import javafx.scene.paint.Color;
 
 /**
- * The Liquid Glass fragment shader, ported line-for-line from the liquidGL engine
- * ({@code liquidGL-main/scripts/liquidGL.js}, main {@code fs}) into a per-pixel Java function.
- * Rendering runs over the cached backdrop capture — one pass per invalidation, not per frame —
- * so the exact shader semantics survive on JavaFX without custom GPU code:
+ * The Liquid Glass fragment shader and displacement map generator, ported line-for-line from the
+ * liquidGL engine ({@code liquidGL-main/scripts/liquidGL.js}, main {@code fs}) and the nikdelvin
+ * engine ({@code liquid-glass-main/src/utils/liquidGlass.ts}).
  *
  * <pre>
  *   d        = -udRoundBox(p, b, r)                                   signed distance, px
@@ -17,19 +16,13 @@ import javafx.scene.paint.Color;
  *   offset   = edge*refraction + edge^10 * bevelDepth                  UV units
  *   centre   = smoothstep(0.15, 0.45, |p| / boxH)                      flat centre, live rim
  *   dir      = cornerNormal(p, b, r, normalize(p+eps))                 rim-aware outward normal
- *   uv       = mapped + dir*offset*centre                              refracted sample
+ *   uv       = mapped + dir*offset*centre - tiltOffset                 refracted sample
  *   frost    = 16 random taps in a frost*4-texel radius (else a 5-tap cross)
  *   aberr    = R sampled at uv-chroma, B at uv+chroma, chroma = offset*aberration
  * </pre>
- * with the liquidGL defaults {@code refraction = 0.01}, {@code bevelDepth = 0.08},
- * {@code bevelWidth = 0.15}, {@code magnify = 1}, and the fluid-interaction
- * {@code deformPoint}/{SDF-gradient} pair ported verbatim. The nikdelvin map construction
- * ({@code liquid-glass-main/src/utils/liquidGlass.ts}) is honored as the SVG_DISPLACEMENT
- * profile through the same shading loop with its gradient-screen displacement field.
  *
- * <p>Sources: {@code docs/SPEC_NOTES/liquid-glass.md}; liquidGL engine (user-provided
- * {@code liquidGL-main}); nikdelvin {@code liquid-glass-main} (user-provided); Apple WWDC25
- * "Meet Liquid Glass" (behavior framing). Defaults are the reference engines', not invented.
+ * <p>Both the hardware-accelerated {@link javafx.scene.effect.DisplacementMap} {@link FloatMap}
+ * generation and the software CPU rasterizer {@link #render} are implemented with full fidelity.
  */
 public final class GlassRefraction {
 
@@ -47,7 +40,15 @@ public final class GlassRefraction {
     public record ShaderParams(double boxW, double boxH, double radius, double refraction,
                                double bevelDepth, double bevelWidth, double frost,
                                double aberration, double magnify, Color tint,
+                               double tiltX, double tiltY,
                                Interaction interaction) {
+        public ShaderParams(double boxW, double boxH, double radius, double refraction,
+                            double bevelDepth, double bevelWidth, double frost,
+                            double aberration, double magnify, Color tint,
+                            Interaction interaction) {
+            this(boxW, boxH, radius, refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
+                    tint, 0.0, 0.0, interaction);
+        }
     }
 
     /** liquidGL defaults (engine {@code defaults} block). */
@@ -152,19 +153,6 @@ public final class GlassRefraction {
     /**
      * The shader's refraction offset at one surface point: the UV displacement
      * {@code dir * offsetAmt * centreBlend} (exactly the shader's {@code offset} vector).
-     *
-     * @param pPx         deformed point x relative to the box centre (px)
-     * @param pPy         deformed point y relative to the box centre (px)
-     * @param originalX   undeformed point x (px, for the gradient blend weight)
-     * @param originalY   undeformed point y (px)
-     * @param boxW        pane width in px
-     * @param boxH        pane height in px
-     * @param radius      corner radius in px
-     * @param refraction  liquidGL {@code u_refraction} (UV units)
-     * @param bevelDepth  bevel depth (UV, {@code edge^10} term)
-     * @param bevelWidth  bevel width (fraction of the smaller side)
-     * @param interaction fluid-interaction state ({@code null} = none)
-     * @return {@code {offsetX, offsetY}} in texture UV units
      */
     public static double[] refractionOffset(double pPx, double pPy, double originalX,
                                             double originalY, double boxW, double boxH,
@@ -176,7 +164,6 @@ public final class GlassRefraction {
         double offsetAmt = edge * refraction + Math.pow(edge, 10.0) * bevelDepth;
         double plen = Math.hypot(pPx / boxH, pPy / boxH);
         double centreBlend = smoothstep(0.15, 0.45, plen);
-        // Shader fallback: normalize(p + vec2(0.000001)) — the outward radial direction.
         double fbLen = Math.hypot(pPx + 0.000001, pPy);
         double fbX = fbLen <= SDF_EPS ? 0.0 : (pPx + 0.000001) / fbLen;
         double fbY = fbLen <= SDF_EPS ? 0.0 : pPy / fbLen;
@@ -206,6 +193,118 @@ public final class GlassRefraction {
     }
 
     /**
+     * Computes raw liquidGL displacement channels (U, V offsets and shape mask) in UV units.
+     * Exposed package-private so tests can assert the field geometry directly.
+     */
+    static double[][][] liquidGLChannels(double width, double height,
+                                         double radius, double refraction,
+                                         double bevelDepth, double bevelWidth,
+                                         double tiltX, double tiltY,
+                                         Interaction interaction) {
+        int w = Math.max(1, (int) Math.ceil(width));
+        int h = Math.max(1, (int) Math.ceil(height));
+        double halfW = width / 2.0;
+        double halfH = height / 2.0;
+        double effectiveR = Math.min(radius, Math.min(halfW, halfH));
+        double[][] uField = new double[h][w];
+        double[][] vField = new double[h][w];
+        double[][] maskField = new double[h][w];
+
+        double tiltOffsetX = Math.tan(Math.toRadians(tiltY)) * 0.05;
+        double tiltOffsetY = -Math.tan(Math.toRadians(tiltX)) * 0.05;
+
+        for (int y = 0; y < h; y++) {
+            double lensV = (y + 0.5) / h;
+            double originalY = (lensV - 0.5) * height;
+            for (int x = 0; x < w; x++) {
+                double lensU = (x + 0.5) / w;
+                double originalX = (lensU - 0.5) * width;
+
+                double[] p = deformPoint(originalX, originalY, width, height, interaction);
+                double dmask = sdfRoundBox(p[0], p[1], halfW, halfH, effectiveR);
+                double inShape = 1.0 - smoothstep(-0.5, 0.5, dmask);
+                maskField[y][x] = inShape;
+                if (inShape <= 0.0) {
+                    continue;
+                }
+
+                double edge = edgeFactor(p[0], p[1], halfW, halfH, effectiveR, bevelWidth, width, height);
+                double offsetAmt = edge * refraction + Math.pow(edge, 10.0) * bevelDepth;
+                double plen = Math.hypot(p[0] / height, p[1] / height);
+                double centreBlend = smoothstep(0.15, 0.45, plen);
+
+                double fbLen = Math.hypot(p[0] + 0.000001, p[1]);
+                double fbX = fbLen <= SDF_EPS ? 0.0 : (p[0] + 0.000001) / fbLen;
+                double fbY = fbLen <= SDF_EPS ? 0.0 : p[1] / fbLen;
+                double[] dir = cornerNormal(p[0], p[1], halfW, halfH, effectiveR, fbX, fbY);
+
+                if (interaction != null && interaction.radius() > 0.0) {
+                    double[] ppx = deformPoint(originalX + 0.5, originalY, width, height, interaction);
+                    double[] pmx = deformPoint(originalX - 0.5, originalY, width, height, interaction);
+                    double[] ppy = deformPoint(originalX, originalY + 0.5, width, height, interaction);
+                    double[] pmy = deformPoint(originalX, originalY - 0.5, width, height, interaction);
+                    double gx = sdfRoundBox(ppx[0], ppx[1], halfW, halfH, effectiveR)
+                            - sdfRoundBox(pmx[0], pmx[1], halfW, halfH, effectiveR);
+                    double gy = sdfRoundBox(ppy[0], ppy[1], halfW, halfH, effectiveR)
+                            - sdfRoundBox(pmy[0], pmy[1], halfW, halfH, effectiveR);
+                    double gLen = Math.hypot(gx, gy);
+                    if (gLen > SDF_EPS) {
+                        double deformDist = Math.min(Math.hypot(p[0] - originalX, p[1] - originalY), 1.0);
+                        double mixX = dir[0] + ((gx / gLen) - dir[0]) * deformDist;
+                        double mixY = dir[1] + ((gy / gLen) - dir[1]) * deformDist;
+                        double mixLen = Math.hypot(mixX, mixY);
+                        if (mixLen > SDF_EPS) {
+                            dir[0] = mixX / mixLen;
+                            dir[1] = mixY / mixLen;
+                        }
+                    }
+                }
+
+                double offU = dir[0] * offsetAmt * centreBlend;
+                double offV = dir[1] * offsetAmt * centreBlend;
+
+                uField[y][x] = (offU - tiltOffsetX) * inShape;
+                vField[y][x] = (offV - tiltOffsetY) * inShape;
+            }
+        }
+        return new double[][][] {uField, vField, maskField};
+    }
+
+    /**
+     * Builds the liquidGL displacement field into a JavaFX {@link FloatMap}: SDF rim refraction
+     * with flat centre, directional corner normals, optical 3D tilt offset and viscous fluid
+     * deformation. Output is normalized in UV units (where 1.0 represents the full dimension).
+     */
+    public static DisplacementField buildLiquidGLField(double width, double height,
+                                                       double radius, double refraction,
+                                                       double bevelDepth, double bevelWidth,
+                                                       double tiltX, double tiltY,
+                                                       Interaction interaction) {
+        int w = Math.max(1, (int) Math.ceil(width));
+        int h = Math.max(1, (int) Math.ceil(height));
+        double[][][] channels = liquidGLChannels(width, height, radius, refraction, bevelDepth,
+                bevelWidth, tiltX, tiltY, interaction);
+        double[][] u = channels[0];
+        double[][] v = channels[1];
+        double[][] m = channels[2];
+        FloatMap map = new FloatMap(w, h);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                map.setSamples(x, y, (float) u[y][x], (float) v[y][x], 0.0f, (float) m[y][x]);
+            }
+        }
+        return new DisplacementField(map, 1.0, 1.0);
+    }
+
+    /** Convenience overload for {@link #buildLiquidGLField} without tilt. */
+    public static DisplacementField buildLiquidGLField(double width, double height,
+                                                       double radius, double refraction,
+                                                       double bevelDepth, double bevelWidth,
+                                                       Interaction interaction) {
+        return buildLiquidGLField(width, height, radius, refraction, bevelDepth, bevelWidth, 0.0, 0.0, interaction);
+    }
+
+    /**
      * liquidGL's {@code random}: the deterministic hash the frost taps use, ported so renders
      * are reproducible.
      */
@@ -220,15 +319,7 @@ public final class GlassRefraction {
     /**
      * Renders the refracted pane into {@code out} from the captured backdrop, per pixel, exactly
      * the liquidGL fragment shader: shape mask, rim refraction with the flat centre, frost,
-     * chromatic aberration, magnification, the tint mix and the in-shape alpha mask. Pixels the
-     * shader leaves to the shadow pass render transparent (the skin's DropShadow covers them).
-     *
-     * @param backdrop    the captured (padded) backdrop image
-     * @param out         the target image (pane-sized)
-     * @param offsetX     capture x of the pane's top-left inside the backdrop
-     * @param offsetY     capture y of the pane's top-left inside the backdrop
-     * @param params      shader uniforms for this pass
-     * @param interaction fluid-interaction state ({@code null} = none)
+     * chromatic aberration, magnification, the tint mix and the in-shape alpha mask.
      */
     public static void render(WritableImage backdrop, WritableImage out,
                               double offsetX, double offsetY, ShaderParams params,
@@ -245,14 +336,16 @@ public final class GlassRefraction {
         double halfW = boxW / 2.0;
         double halfH = boxH / 2.0;
         double radius = Math.min(params.radius(), Math.min(halfW, halfH));
-        double bevelPx = params.bevelWidth() * Math.min(boxW, boxH);
         Color tint = params.tint();
         double tintA = tint == null ? 0.0 : clamp01(tint.getOpacity());
         double texelX = 1.0 / Math.max(1.0, backdrop.getWidth());
         double texelY = 1.0 / Math.max(1.0, backdrop.getHeight());
+
+        double tiltOffsetX = Math.tan(Math.toRadians(params.tiltY())) * 0.05;
+        double tiltOffsetY = -Math.tan(Math.toRadians(params.tiltX())) * 0.05;
+
         for (int py = 0; py < outH; py++) {
             for (int px = 0; px < outW; px++) {
-                // lensUV over the pane; p relative to the box centre (shader: (lensUV-res-subpixel)/box).
                 double lensU = (px + 0.5) / outW;
                 double lensV = (py + 0.5) / outH;
                 double originalX = (lensU - 0.5) * boxW;
@@ -298,15 +391,12 @@ public final class GlassRefraction {
                 double offU = dir[0] * offsetAmt * centreBlend;
                 double offV = dir[1] * offsetAmt * centreBlend;
 
-                // mapped: the pane rect inside the padded capture; magnify zooms localUV.
                 double localU = (lensU - 0.5) / Math.max(params.magnify(), SDF_EPS) + 0.5;
                 double localV = (lensV - 0.5) / Math.max(params.magnify(), SDF_EPS) + 0.5;
                 double mapX = offsetX + localU * boxW;
                 double mapY = offsetY + localV * boxH;
-                // The shader adds its UV offset to the refracted sample position; the WebGL
-                // capture's Y flip cancels out on a JavaFX (top-down) capture, so both axes add.
-                double refrX = mapX + offU * boxW;
-                double refrY = mapY + offV * boxH;
+                double refrX = mapX + (offU - tiltOffsetX) * boxW;
+                double refrY = mapY + (offV - tiltOffsetY) * boxH;
 
                 Color refrCol;
                 if (params.frost() > 0.0) {
@@ -402,19 +492,8 @@ public final class GlassRefraction {
     // ------------------------------------------------------------------
 
     /**
-     * Builds the nikdelvin displacement field exactly: navy base, screen-blended linear
-     * gradients (insets {@code 0.15 * radius} on each axis), and the gray rounded rect inset by
-     * {@code depth} whose screen blend neutralizes the centre; the SVG {@code blur(2px)} group
-     * and {@code blur(depth)} rect filter are approximated with box-blur passes of radius
-     * {@code max(1, round(depth))} and 2. DisplacementMap scale = {@code strength} (their
-     * {@code scale} attribute), identical on both axes.
-     *
-     * @param width   pane width in px
-     * @param height  pane height in px
-     * @param radius  corner radius in px
-     * @param depth   bezel depth in px (gray rect inset + blur radius)
-     * @param strength displacement scale in px (their {@code scale} attribute)
-     * @return the field with per-axis scales equal to {@code strength}
+     * Builds the nikdelvin displacement field: navy base, screen-blended linear
+     * gradients, and the gray rounded rect inset by {@code depth}.
      */
     public static DisplacementField buildNikdelvinField(double width, double height,
                                                         double radius, double depth,
@@ -425,23 +504,22 @@ public final class GlassRefraction {
         double[][] rMasked = channels[0];
         double[][] gMasked = channels[1];
         FloatMap map = new FloatMap(w, h);
+        double halfW = width / 2.0;
+        double halfH = height / 2.0;
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
-                map.setSamples(x, y, (float) rMasked[y][x], (float) gMasked[y][x], 0.0f, 1.0f);
+                double dx = (rMasked[y][x] - 0.5) * (strength / Math.max(1.0, width));
+                double dy = (gMasked[y][x] - 0.5) * (strength / Math.max(1.0, height));
+                double d = sdfRoundBox(x + 0.5 - halfW, y + 0.5 - halfH, halfW, halfH, radius);
+                double inShape = 1.0 - smoothstep(-0.5, 0.5, d);
+                map.setSamples(x, y, (float) (dx * inShape), (float) (dy * inShape), 0.0f, (float) inShape);
             }
         }
-        return new DisplacementField(map, Math.max(1.0, strength), Math.max(1.0, strength));
+        return new DisplacementField(map, 1.0, 1.0);
     }
 
     /**
      * The raw nikdelvin displacement channels (R = x field, G = y field), values in [0,1].
-     * Exposed package-private so tests can assert the construction without reading a FloatMap.
-     *
-     * @param width  pane width in px
-     * @param height pane height in px
-     * @param radius corner radius in px
-     * @param depth  bezel depth in px (gray rect inset + blur radius)
-     * @return {@code {rField, gField}} at pixel resolution
      */
     static double[][][] nikdelvinChannels(double width, double height, double radius,
                                           double depth) {
@@ -455,13 +533,10 @@ public final class GlassRefraction {
             double gY = 1.0 - clamp01((y + 0.5 - yInset) / Math.max(1.0, height - 2.0 * yInset));
             for (int x = 0; x < w; x++) {
                 double rX = 1.0 - clamp01((x + 0.5 - xInset) / Math.max(1.0, width - 2.0 * xInset));
-                // Base #000080 (R=0,G=0) screened with the Y gradient (R=0, G=gY) then the X
-                // gradient (R=rX, G=0): screen(a,b) = a + b - ab.
                 rField[y][x] = rX;
                 gField[y][x] = gY;
             }
         }
-        // Gray rounded rect inset by `depth`: screen(prev, 128/255) inside, then blurred.
         double halfW = width / 2.0;
         double halfH = height / 2.0;
         double innerHalfW = Math.max(0.0, halfW - depth);
@@ -484,7 +559,6 @@ public final class GlassRefraction {
                 }
             }
         }
-        // Approximate the SVG blur(2px) group + blur(depth) rect with two box passes.
         int blurRadius = Math.max(1, (int) Math.round(depth));
         rMasked = boxBlur(rMasked, blurRadius);
         gMasked = boxBlur(gMasked, blurRadius);
@@ -531,12 +605,6 @@ public final class GlassRefraction {
 
     /**
      * Returns the shape's effective corner radius in px, clamped to half the smaller side.
-     *
-     * @param shape glass silhouette
-     * @param cornerRadius corner radius (RECT)
-     * @param width pane width in px
-     * @param height pane height in px
-     * @return effective radius (&ge; 0)
      */
     public static double effectiveRadius(GlassShape shape, double cornerRadius, double width,
                                          double height) {
