@@ -36,7 +36,6 @@ gradle/wrapper/gradle-wrapper.jar
 !.idea/misc.xml
 *.iws
 *.iml
-!submission/submission.iml
 *.ipr
 
 # Eclipse
