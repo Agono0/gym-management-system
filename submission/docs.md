@@ -146,9 +146,10 @@ member gets suspended, all his active plans freeze automatically. Renewing exten
 date, and renewing a cancelled plan is refused.
 
 About sessions: a session can only move forward in its life. A request becomes confirmed,
-a confirmed one becomes completed, no-show or cancelled. Nothing jumps backwards. Cancelling
+a confirmed one becomes completed, no-show or cancelled, and a request that won't happen can
+be declined (cancelled) too. Nothing jumps backwards. Cancelling
 2 hours or more before the start is free, later cancellations are still recorded with the
-reason. A no-show is a real state and it counts in the trainer's statistics. Slot occupancy
+reason. A member can hold only one seat in the same slot. A no-show is a real state and it counts in the trainer's statistics. Slot occupancy
 only counts confirmed sessions, so when someone cancels, the seat frees up for the next person.
 
 About payments: a payment belongs to exactly one of membership, subscription or session,

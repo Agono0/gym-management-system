@@ -1159,6 +1159,17 @@ class GymOperations {
                 .isBefore(LocalDate.now())) {
             throw new ValidationException("Cannot book a slot in the past (" + slot.getDate() + ")");
         }
+        // One member takes one seat: refuse a second live booking of the same slot
+        List<Session> slotSessions = sessionDao.findAll();
+        for (int i = 0; i < slotSessions.size(); i++) {
+            Session other = slotSessions.get(i);
+            if (other.getCustomerId() == customerId && other.getAvailabilityId() != null
+                    && other.getAvailabilityId().intValue() == availabilityId
+                    && (other.getStatus() == SessionStatus.CONFIRMED || other.getStatus() == SessionStatus.REQUESTED)) {
+                throw new ValidationException("Member #" + customerId + " is already booked in slot #"
+                        + availabilityId + " (session #" + other.getId() + ")");
+            }
+        }
         int booked = countConfirmedInSlot(availabilityId);
         if (booked >= slot.getMaxCustomers()) {
             throw new ValidationException("Slot #" + availabilityId + " is FULL ("
@@ -1256,14 +1267,25 @@ class GymOperations {
         sessionDao.update(s);
     }
 
-    // Cancel CONFIRMED session, computing the 2h notice status
+    // Cancel a CONFIRMED session (computing the 2h notice status) or decline a REQUESTED one
     public String cancelSession(int sessionId, String cancelReason) throws DatabaseException, ValidationException {
         Session s = sessionDao.findById(sessionId);
         if (s == null) {
             throw new ValidationException("Session not found with id: " + sessionId);
         }
+        if (s.getStatus() != SessionStatus.CONFIRMED && s.getStatus() != SessionStatus.REQUESTED) {
+            throw new ValidationException("Only CONFIRMED or REQUESTED sessions can be cancelled (current: "
+                    + s.getStatus() + ")");
+        }
         if (cancelReason == null || cancelReason.trim().isEmpty()) {
             throw new ValidationException("Cancel reason is required");
+        }
+        if (s.getStatus() == SessionStatus.REQUESTED) {
+            // Never confirmed, so no notice period applies
+            s.setStatus(SessionStatus.CANCELLED);
+            s.setCancelReason(cancelReason.trim());
+            sessionDao.update(s);
+            return "Request declined. Session #" + sessionId + " marked CANCELLED with reason recorded.";
         }
         LocalDateTime startDateTime = LocalDateTime.of(
                 parseStoredDate(s.getDate(), "session #" + sessionId + " date"),
@@ -3187,7 +3209,7 @@ class ScheduleWorkoutCliMenu {
                 System.out.println("  [4] Confirm REQUESTED Session");
                 System.out.println("  [5] Complete CONFIRMED Session");
                 System.out.println("  [6] Mark CONFIRMED Session as NO_SHOW");
-                System.out.println("  [7] Cancel CONFIRMED Session (2h Notice Check)");
+                System.out.println("  [7] Cancel CONFIRMED (2h Notice Check) / Decline REQUESTED Session");
                 CliTheme.printFooterNav(true);
 
                 String choice = input.readLine("Select option > ");

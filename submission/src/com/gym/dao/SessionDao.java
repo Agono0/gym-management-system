@@ -242,11 +242,14 @@ public class SessionDao {
         if (newStatus == SessionStatus.CONFIRMED && oldStatus != SessionStatus.REQUESTED) {
             throw new ValidationException("Only REQUESTED sessions may become CONFIRMED");
         }
-        if ((newStatus == SessionStatus.COMPLETED
-                || newStatus == SessionStatus.NO_SHOW
-                || newStatus == SessionStatus.CANCELLED)
+        if ((newStatus == SessionStatus.COMPLETED || newStatus == SessionStatus.NO_SHOW)
                 && oldStatus != SessionStatus.CONFIRMED) {
             throw new ValidationException("Only CONFIRMED sessions may become " + newStatus);
+        }
+        // A request that will not happen can be declined, so REQUESTED may also become CANCELLED
+        if (newStatus == SessionStatus.CANCELLED
+                && oldStatus != SessionStatus.CONFIRMED && oldStatus != SessionStatus.REQUESTED) {
+            throw new ValidationException("Only CONFIRMED or REQUESTED sessions may become CANCELLED");
         }
         if (newStatus == SessionStatus.REQUESTED && oldStatus != SessionStatus.REQUESTED) {
             throw new ValidationException("Cannot revert a session back to REQUESTED");
