@@ -176,60 +176,6 @@ We block those two words explicitly now.
 When validation fails, nothing is written and the message says what was wrong. This was a
 deliberate choice: fail early, fail with a clear message, write nothing.
 
-## Bugs we faced
-
-Some of these bugs taught us more than the features did, so they deserve their own section.
-
-Old dates stored in a wrong format used to crash the program the next time they were read.
-Now a bad stored value shows a clean message instead.
-
-Pressing Enter on empty input in some number fields made the program ask again and again,
-forever. An infinite loop from the simplest input you can imagine. Fixed.
-
-The void and replace flow used to void the old payment first and only then validate the
-replacement. If the replacement failed, you ended up with a voided payment and nothing in
-its place. Now the replacement is validated first, and only then the old one is voided.
-Order matters more than we thought.
-
-SQLite sometimes refused writes with "database is locked" when another process held the
-file. We set the connection to wait up to 5 seconds instead of failing instantly. The error
-almost disappeared.
-
-An admin could change his own role to a lower one and leave the gym with no admin at all.
-The system refuses that now.
-
-And a general one: some delete operations used to say "deleted" even when nothing was
-actually deleted. Every update and delete now checks that a row really changed.
-
-## How we tested
-
-We built a fixed sample dataset that covers every state the gym can be in: active, suspended
-and inactive members; active, expired, frozen and cancelled plans; confirmed, requested,
-completed and no-show sessions; a voided payment with its replacement; equipment in
-maintenance. Because the dataset is always the same, testing a rule gives the same result
-every time.
-
-During development we also wrote an automated pass of 22 test cases, one group for each
-family of rules: field validation, login and roles, slot capacity, subscriptions, the session
-life cycle, check-in, freezing, medical profiles, program versions, payments, delete guards.
-All 22 passed against a separate test database, not against the real one.
-
-Some things we check by hand: check-in refused for an expired plan, unfreezing a plan frozen
-for 10 days moves its end date exactly 10 days forward, cancelling less than 2 hours before
-the start still gets recorded with a reason, "123" as a phone number gets rejected with a
-clear message, a deactivated staff account can't log in.
-
-## What is still missing
-
-We prefer to say this openly.
-
-There are no multi-table transactions. Most writes touch one table so it's fine, but a flow
-like void-and-replace touches two, and a crash in the middle could leave it half done.
-Passwords are stored as plain text because this is a demo. A real gym must hash them, we
-know that. Two overlapping availability slots can both be booked, the cap is per slot and
-there is no check across slots. A member can hold more than one active membership at the
-same time and the system just uses the latest one. And if a status value in the database
-gets corrupted somehow, the system falls back to a default instead of complaining about it.
 
 ## Who did what
 
