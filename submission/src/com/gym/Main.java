@@ -28,16 +28,21 @@ import com.gym.model.TrainerAvailability;
 import com.gym.model.TrainerSubscription;
 import com.gym.model.WorkoutProgram;
 import com.gym.util.DatabaseConnection;
-import com.gym.util.SerializationUtil;
 
-import java.io.File;
-import java.io.Serializable;
+import org.jline.reader.EndOfFileException;
+import org.jline.reader.LineReader;
+import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.UserInterruptException;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
+import org.jline.utils.InfoCmp;
+
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -50,17 +55,15 @@ import java.util.Scanner;
 
 // ===== Main (entry point, was GymCliApp) =====
 
-// Terminal UI entry point for Gym-OS: initializes the database, then shows login + dashboard
+// Terminal UI entry point for the GYM Management System: initializes the database, then shows login + dashboard
 public class Main {
 
-    private final Scanner scanner;
     private final CliInput input;
     private final CliSession session;
     private final GymOperations ops;
 
     public Main() {
-        this.scanner = new Scanner(System.in);
-        this.input = new CliInput(scanner);
+        this.input = new CliInput();
         this.session = new CliSession();
         this.ops = new GymOperations();
     }
@@ -82,9 +85,6 @@ public class Main {
             return;
         }
 
-        // Show the real database file location so data is never "lost" in another folder
-        System.out.println("Using database file: " + new File("gym.db").getAbsolutePath());
-
         while (!session.isExitRequested()) {
             Administrator loggedIn = showLoginGate();
             if (loggedIn == null || session.isExitRequested()) {
@@ -95,14 +95,13 @@ public class Main {
             runMainDashboardLoop();
         }
 
-        System.out.println("\nGoodbye! Closed Gym-OS Terminal Workflow Console cleanly.");
+        System.out.println("\nGoodbye! Closed GYM Management System cleanly.");
+        input.close();
     }
 
     private Administrator showLoginGate() {
         while (!session.isExitRequested()) {
-            CliTheme.printHeader("GYM-OS TERMINAL WORKFLOW CONSOLE",
-                    "Not signed in", DatabaseConnection.getDbUrl(),
-                    "Login Gate");
+            CliTheme.printHeader("GYM MANAGEMENT SYSTEM", "", "Login Gate");
 
             System.out.println("  Seeded Accounts (admin / manager active, oldstaff inactive):");
             System.out.println("    1) admin    / admin123   [ADMIN]   (active = true)");
@@ -126,9 +125,10 @@ public class Main {
             try {
                 if ("1".equals(choice)) {
                     String username = input.readRawString("Username: ");
-                    String password = input.readRawString("Password: ");
+                    String password = input.readPassword("Password: ");
                     Administrator user = ops.authenticate(username, password);
                     CliTheme.printSuccess("Welcome back, " + user.getFullName() + " [" + user.getRole() + "]!");
+                    input.pause();
                     return user;
                 } else if ("2".equals(choice)) {
                     return ops.authenticate("admin", "admin123");
@@ -137,7 +137,7 @@ public class Main {
                 } else if ("4".equals(choice)) {
                     return ops.authenticate("staff", "staff123");
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -156,12 +156,11 @@ public class Main {
         MembershipBillingCliMenu billingMenu = new MembershipBillingCliMenu(input, session);
         ScheduleWorkoutCliMenu scheduleMenu = new ScheduleWorkoutCliMenu(input, session);
         FacilityAdminCliMenu facilityMenu = new FacilityAdminCliMenu(input, session);
-        ValidationSuiteRunner validationRunner = new ValidationSuiteRunner(input, session);
 
         while (!session.isLogoutRequested() && !session.isExitRequested()) {
             session.setReturnHome(false);
-            CliTheme.printHeader("GYM-OS MAIN DASHBOARD",
-                    session.userLabel(), DatabaseConnection.getDbUrl(),
+            CliTheme.printHeader("GYM MANAGEMENT SYSTEM - MAIN DASHBOARD",
+                    session.userLabel(),
                     "Main Menu");
 
             printLiveKpiBanner();
@@ -175,8 +174,6 @@ public class Main {
             System.out.println("  [7] Payments, Void/Replace Ledger & Outstanding Balance");
             System.out.println("  [8] Equipment Inventory & ASCII Facility Floor Map");
             System.out.println("  [9] Staff & Admin Controls [ADMIN Only]");
-            System.out.println(" [10] Serialization (.ser Backup/Load) & Database Tools");
-            System.out.println("  [V] Validation & Exception Test Suite");
             CliTheme.printSingleLine();
             System.out.println("  [L] Logout / Switch User    [0] Exit Application");
             CliTheme.printSingleLine();
@@ -211,15 +208,11 @@ public class Main {
                     facilityMenu.openEquipmentMenu();
                 } else if ("9".equals(choice)) {
                     facilityMenu.openStaffAdminMenu();
-                } else if ("10".equals(choice)) {
-                    facilityMenu.openBackupAndDbMenu();
-                } else if ("V".equalsIgnoreCase(choice)) {
-                    validationRunner.openMenu();
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (Exception e) {
-                System.out.println("[!] Unexpected error: "
+                CliTheme.printWarning("[!] Unexpected error: "
                         + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
                 System.out.println("    The app recovered - you are back on the dashboard.");
                 input.pause();
@@ -291,7 +284,44 @@ class CliTheme {
 
     public static final int LINE_WIDTH = 80;
 
+    // ANSI color codes: red text, then reset back to the normal color
+    private static final String RED = "\u001B[31m";
+    private static final String RESET = "\u001B[0m";
+
+    // The real console (JLine), or null when input is piped from a file (no colors / no clearing then)
+    private static Terminal terminal;
+
     private CliTheme() {
+    }
+
+    public static void setTerminal(Terminal realTerminal) {
+        terminal = realTerminal;
+    }
+
+    // Clears the whole console so every screen starts clean
+    public static void clearScreen() {
+        if (terminal == null) {
+            System.out.println();
+            return;
+        }
+        System.out.flush();
+        terminal.puts(InfoCmp.Capability.clear_screen);
+        terminal.flush();
+    }
+
+    // Prints one line in red (plain text when there is no real console)
+    public static void printRed(String line) {
+        if (terminal == null) {
+            System.out.println(line);
+            return;
+        }
+        System.out.flush();
+        terminal.writer().println(RED + line + RESET);
+        terminal.flush();
+    }
+
+    public static void printWarning(String message) {
+        printRed(safeText(message));
     }
 
     public static void printDoubleLine() {
@@ -302,14 +332,14 @@ class CliTheme {
         System.out.println("+" + repeat('-', LINE_WIDTH - 2) + "+");
     }
 
-    public static void printHeader(String title, String userLabel, String dbUrl, String breadcrumb) {
-        System.out.println();
+    public static void printHeader(String title, String userLabel, String breadcrumb) {
+        clearScreen();
         printDoubleLine();
         String left = " " + safeText(title);
-        String right = safeText(userLabel) + " | " + shortDbName(dbUrl) + " ";
+        String right = safeText(userLabel).isEmpty() ? "" : safeText(userLabel) + " ";
         int gap = (LINE_WIDTH - 2) - left.length() - right.length();
         if (gap < 1) {
-            String combined = truncate(left + " | " + right, LINE_WIDTH - 2);
+            String combined = truncate(left + "  " + right, LINE_WIDTH - 2);
             System.out.println("|" + padRight(combined, LINE_WIDTH - 2) + "|");
         } else {
             System.out.println("|" + left + repeat(' ', gap) + right + "|");
@@ -341,12 +371,12 @@ class CliTheme {
 
     public static void printValidationError(String message) {
         System.out.println();
-        System.out.println("[! VALIDATION ERROR] " + safeText(message));
+        printRed("[! VALIDATION ERROR] " + safeText(message));
     }
 
     public static void printDatabaseError(String message) {
         System.out.println();
-        System.out.println("[! DATABASE ERROR] " + safeText(message));
+        printRed("[! DATABASE ERROR] " + safeText(message));
     }
 
     public static void printNotice(String message) {
@@ -424,17 +454,6 @@ class CliTheme {
         }
         return sb.toString();
     }
-
-    private static String shortDbName(String dbUrl) {
-        if (dbUrl == null || dbUrl.isEmpty()) {
-            return "gym.db";
-        }
-        int prefix = dbUrl.lastIndexOf(':');
-        if (prefix >= 0 && prefix < dbUrl.length() - 1) {
-            return dbUrl.substring(prefix + 1);
-        }
-        return dbUrl;
-    }
 }
 
 // ===== CliInput =====
@@ -442,18 +461,70 @@ class CliTheme {
 // Safe console input helpers using java.util.Scanner
 class CliInput {
 
+    // Used when input is piped from a file (no real console)
     private final Scanner scanner;
+    // Used in a real console: JLine can show '*' while a password is typed
+    private Terminal terminal;
+    private LineReader reader;
 
-    public CliInput(Scanner scanner) {
-        this.scanner = scanner;
+    public CliInput() {
+        this.scanner = new Scanner(System.in);
+        if (System.console() != null) {
+            try {
+                Terminal realTerminal = TerminalBuilder.builder().system(true).dumb(false).build();
+                LineReader lineReader = LineReaderBuilder.builder().terminal(realTerminal).build();
+                // Without this, typing '!' would be treated as a JLine history command
+                lineReader.setOpt(LineReader.Option.DISABLE_EVENT_EXPANSION);
+                this.terminal = realTerminal;
+                this.reader = lineReader;
+                CliTheme.setTerminal(realTerminal);
+            } catch (IOException | RuntimeException e) {
+                // No usable console: keep the simple Scanner input
+                this.terminal = null;
+                this.reader = null;
+            }
+        }
     }
 
     public String readLine(String prompt) {
+        if (reader != null) {
+            try {
+                System.out.flush();
+                return reader.readLine(prompt).trim();
+            } catch (UserInterruptException | EndOfFileException e) {
+                // Ctrl+C or Ctrl+D behaves like "no more input"
+                return null;
+            }
+        }
         System.out.print(prompt);
         if (!scanner.hasNextLine()) {
             return null;
         }
         return scanner.nextLine().trim();
+    }
+
+    // Reads a password and shows one '*' for every typed character
+    public String readPassword(String prompt) {
+        if (reader != null) {
+            try {
+                System.out.flush();
+                return reader.readLine(prompt, '*').trim();
+            } catch (UserInterruptException | EndOfFileException e) {
+                return null;
+            }
+        }
+        return readLine(prompt);
+    }
+
+    // Releases the console when the app exits
+    public void close() {
+        if (terminal != null) {
+            try {
+                terminal.close();
+            } catch (IOException e) {
+                // Nothing else to do while the program is closing
+            }
+        }
     }
 
     public String readRequiredString(String prompt) {
@@ -465,7 +536,7 @@ class CliInput {
             if (!value.isEmpty()) {
                 return value;
             }
-            System.out.println("[!] Input cannot be empty (or enter a valid value).");
+            CliTheme.printWarning("[!] Input cannot be empty (or enter a valid value).");
         }
     }
 
@@ -495,12 +566,12 @@ class CliInput {
             try {
                 int parsed = Integer.parseInt(raw);
                 if (parsed < minValue) {
-                    System.out.println("[!] Please enter a number >= " + minValue + ".");
+                    CliTheme.printWarning("[!] Please enter a number >= " + minValue + ".");
                     continue;
                 }
                 return parsed;
             } catch (NumberFormatException e) {
-                System.out.println("[!] Invalid integer. Please enter digits only.");
+                CliTheme.printWarning("[!] Invalid integer. Please enter digits only.");
             }
         }
     }
@@ -514,7 +585,7 @@ class CliInput {
             try {
                 return Integer.parseInt(raw);
             } catch (NumberFormatException e) {
-                System.out.println("[!] Invalid integer. Try again or press Enter for " + defaultValue + ".");
+                CliTheme.printWarning("[!] Invalid integer. Try again or press Enter for " + defaultValue + ".");
             }
         }
     }
@@ -530,19 +601,19 @@ class CliInput {
                 return defaultValue;
             }
             if (raw.isEmpty()) {
-                System.out.println("[!] A value is required. Example: 72.5");
+                CliTheme.printWarning("[!] A value is required. Example: 72.5");
                 continue;
             }
             try {
                 double value = Double.parseDouble(raw);
                 // Java also accepts the words "NaN" and "Infinity" as numbers, so block them here
                 if (Double.isNaN(value) || Double.isInfinite(value)) {
-                    System.out.println("[!] Please enter a real number. Example: 72.5");
+                    CliTheme.printWarning("[!] Please enter a real number. Example: 72.5");
                     continue;
                 }
                 return value;
             } catch (NumberFormatException e) {
-                System.out.println("[!] Invalid decimal number. Example: 72.5");
+                CliTheme.printWarning("[!] Invalid decimal number. Example: 72.5");
             }
         }
     }
@@ -561,12 +632,12 @@ class CliInput {
                 double value = Double.parseDouble(raw);
                 // Java also accepts the words "NaN" and "Infinity" as numbers, so block them here
                 if (Double.isNaN(value) || Double.isInfinite(value)) {
-                    System.out.println("[!] Please enter a real number. Example: 68.0 (or '-' to clear).");
+                    CliTheme.printWarning("[!] Please enter a real number. Example: 68.0 (or '-' to clear).");
                     continue;
                 }
                 return value;
             } catch (NumberFormatException e) {
-                System.out.println("[!] Invalid decimal number. Example: 68.0 (or '-' to clear).");
+                CliTheme.printWarning("[!] Invalid decimal number. Example: 68.0 (or '-' to clear).");
             }
         }
     }
@@ -582,13 +653,13 @@ class CliInput {
                 return defaultValue;
             }
             if (raw.isEmpty()) {
-                System.out.println("[!] A value is required. Example: 45.00");
+                CliTheme.printWarning("[!] A value is required. Example: 45.00");
                 continue;
             }
             try {
                 return new BigDecimal(raw);
             } catch (NumberFormatException e) {
-                System.out.println("[!] Invalid money amount. Example: 45.00");
+                CliTheme.printWarning("[!] Invalid money amount. Example: 45.00");
             }
         }
     }
@@ -604,14 +675,14 @@ class CliInput {
                 return defaultDate;
             }
             if (raw.isEmpty()) {
-                System.out.println("[!] A date is required. Expected yyyy-MM-dd (e.g. 2026-11-09).");
+                CliTheme.printWarning("[!] A date is required. Expected yyyy-MM-dd (e.g. 2026-11-09).");
                 continue;
             }
             try {
                 LocalDate.parse(raw);
                 return raw;
             } catch (DateTimeParseException e) {
-                System.out.println("[!] Invalid date format. Expected yyyy-MM-dd (e.g. 2026-11-09).");
+                CliTheme.printWarning("[!] Invalid date format. Expected yyyy-MM-dd (e.g. 2026-11-09).");
             }
         }
     }
@@ -627,14 +698,14 @@ class CliInput {
                 return defaultTime;
             }
             if (raw.isEmpty()) {
-                System.out.println("[!] A time is required. Expected HH:mm (e.g. 14:30).");
+                CliTheme.printWarning("[!] A time is required. Expected HH:mm (e.g. 14:30).");
                 continue;
             }
             try {
                 LocalTime.parse(raw);
                 return raw;
             } catch (DateTimeParseException e) {
-                System.out.println("[!] Invalid time format. Expected HH:mm (e.g. 14:30).");
+                CliTheme.printWarning("[!] Invalid time format. Expected HH:mm (e.g. 14:30).");
             }
         }
     }
@@ -651,15 +722,13 @@ class CliInput {
             if ("n".equalsIgnoreCase(raw) || "no".equalsIgnoreCase(raw)) {
                 return false;
             }
-            System.out.println("[!] Enter y or n.");
+            CliTheme.printWarning("[!] Enter y or n.");
         }
     }
 
     public void pause() {
-        System.out.print("\nPress [ENTER] to continue...");
-        if (scanner.hasNextLine()) {
-            scanner.nextLine();
-        }
+        System.out.println();
+        readLine("Press [ENTER] to continue...");
     }
 }
 
@@ -1286,35 +1355,6 @@ class GymOperations {
         return old;
     }
 
-    public GymBackupSnapshot exportSnapshotToFile(String filePath, String actorUsername) throws DatabaseException {
-        GymBackupSnapshot snap = new GymBackupSnapshot();
-        snap.setCreatedAt(LocalDate.now().toString());
-        snap.setCreatedBy(actorUsername);
-        snap.setAdministrators(new ArrayList<>(adminDao.findAll()));
-        snap.setTrainers(new ArrayList<>(trainerDao.findAll()));
-        snap.setCustomers(new ArrayList<>(customerDao.findAll()));
-        snap.setMemberships(new ArrayList<>(membershipDao.findAll()));
-        snap.setWorkoutPrograms(new ArrayList<>(workoutDao.findAll()));
-        snap.setTrainerAvailabilities(new ArrayList<>(availabilityDao.findAll()));
-        snap.setTrainerSubscriptions(new ArrayList<>(subscriptionDao.findAll()));
-        snap.setSessions(new ArrayList<>(sessionDao.findAll()));
-        snap.setEquipment(new ArrayList<>(equipmentDao.findAll()));
-        snap.setAttendanceRecords(new ArrayList<>(attendanceDao.findAll()));
-        snap.setPayments(new ArrayList<>(paymentDao.findAll()));
-        snap.setProgressRecords(new ArrayList<>(progressDao.findAll()));
-        snap.setMedicalProfiles(new ArrayList<>(medicalDao.findAll()));
-        SerializationUtil.saveToFile(snap, filePath);
-        return snap;
-    }
-
-    public GymBackupSnapshot loadSnapshotFromFile(String filePath) throws DatabaseException {
-        Object loaded = SerializationUtil.loadFromFile(filePath);
-        if (!(loaded instanceof GymBackupSnapshot)) {
-            throw new DatabaseException("File does not contain a valid GymBackupSnapshot: " + filePath);
-        }
-        return (GymBackupSnapshot) loaded;
-    }
-
     private BigDecimal sumNonVoidedForMembership(List<Payment> payments, int membershipId) {
         BigDecimal sum = BigDecimal.ZERO;
         for (int i = 0; i < payments.size(); i++) {
@@ -1365,171 +1405,6 @@ class GymOperations {
     }
 }
 
-// ===== GymBackupSnapshot =====
-
-// Serializable snapshot of all 13 database tables for binary .ser backup and restore
-class GymBackupSnapshot implements Serializable {
-
-    private static final long serialVersionUID = 1L;
-
-    private String createdAt;
-    private String createdBy;
-    private ArrayList<Administrator> administrators;
-    private ArrayList<Trainer> trainers;
-    private ArrayList<Customer> customers;
-    private ArrayList<Membership> memberships;
-    private ArrayList<WorkoutProgram> workoutPrograms;
-    private ArrayList<TrainerAvailability> trainerAvailabilities;
-    private ArrayList<TrainerSubscription> trainerSubscriptions;
-    private ArrayList<Session> sessions;
-    private ArrayList<Equipment> equipment;
-    private ArrayList<Attendance> attendanceRecords;
-    private ArrayList<Payment> payments;
-    private ArrayList<ProgressRecord> progressRecords;
-    private ArrayList<MedicalProfile> medicalProfiles;
-
-    public GymBackupSnapshot() {
-    }
-
-    public String getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(String createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public String getCreatedBy() {
-        return createdBy;
-    }
-
-    public void setCreatedBy(String createdBy) {
-        this.createdBy = createdBy;
-    }
-
-    public ArrayList<Administrator> getAdministrators() {
-        return administrators;
-    }
-
-    public void setAdministrators(ArrayList<Administrator> administrators) {
-        this.administrators = administrators;
-    }
-
-    public ArrayList<Trainer> getTrainers() {
-        return trainers;
-    }
-
-    public void setTrainers(ArrayList<Trainer> trainers) {
-        this.trainers = trainers;
-    }
-
-    public ArrayList<Customer> getCustomers() {
-        return customers;
-    }
-
-    public void setCustomers(ArrayList<Customer> customers) {
-        this.customers = customers;
-    }
-
-    public ArrayList<Membership> getMemberships() {
-        return memberships;
-    }
-
-    public void setMemberships(ArrayList<Membership> memberships) {
-        this.memberships = memberships;
-    }
-
-    public ArrayList<WorkoutProgram> getWorkoutPrograms() {
-        return workoutPrograms;
-    }
-
-    public void setWorkoutPrograms(ArrayList<WorkoutProgram> workoutPrograms) {
-        this.workoutPrograms = workoutPrograms;
-    }
-
-    public ArrayList<TrainerAvailability> getTrainerAvailabilities() {
-        return trainerAvailabilities;
-    }
-
-    public void setTrainerAvailabilities(ArrayList<TrainerAvailability> trainerAvailabilities) {
-        this.trainerAvailabilities = trainerAvailabilities;
-    }
-
-    public ArrayList<TrainerSubscription> getTrainerSubscriptions() {
-        return trainerSubscriptions;
-    }
-
-    public void setTrainerSubscriptions(ArrayList<TrainerSubscription> trainerSubscriptions) {
-        this.trainerSubscriptions = trainerSubscriptions;
-    }
-
-    public ArrayList<Session> getSessions() {
-        return sessions;
-    }
-
-    public void setSessions(ArrayList<Session> sessions) {
-        this.sessions = sessions;
-    }
-
-    public ArrayList<Equipment> getEquipment() {
-        return equipment;
-    }
-
-    public void setEquipment(ArrayList<Equipment> equipment) {
-        this.equipment = equipment;
-    }
-
-    public ArrayList<Attendance> getAttendanceRecords() {
-        return attendanceRecords;
-    }
-
-    public void setAttendanceRecords(ArrayList<Attendance> attendanceRecords) {
-        this.attendanceRecords = attendanceRecords;
-    }
-
-    public ArrayList<Payment> getPayments() {
-        return payments;
-    }
-
-    public void setPayments(ArrayList<Payment> payments) {
-        this.payments = payments;
-    }
-
-    public ArrayList<ProgressRecord> getProgressRecords() {
-        return progressRecords;
-    }
-
-    public void setProgressRecords(ArrayList<ProgressRecord> progressRecords) {
-        this.progressRecords = progressRecords;
-    }
-
-    public ArrayList<MedicalProfile> getMedicalProfiles() {
-        return medicalProfiles;
-    }
-
-    public void setMedicalProfiles(ArrayList<MedicalProfile> medicalProfiles) {
-        this.medicalProfiles = medicalProfiles;
-    }
-
-    public int totalRecordsCount() {
-        int total = 0;
-        if (administrators != null) total += administrators.size();
-        if (trainers != null) total += trainers.size();
-        if (customers != null) total += customers.size();
-        if (memberships != null) total += memberships.size();
-        if (workoutPrograms != null) total += workoutPrograms.size();
-        if (trainerAvailabilities != null) total += trainerAvailabilities.size();
-        if (trainerSubscriptions != null) total += trainerSubscriptions.size();
-        if (sessions != null) total += sessions.size();
-        if (equipment != null) total += equipment.size();
-        if (attendanceRecords != null) total += attendanceRecords.size();
-        if (payments != null) total += payments.size();
-        if (progressRecords != null) total += progressRecords.size();
-        if (medicalProfiles != null) total += medicalProfiles.size();
-        return total;
-    }
-}
-
 // ===== SampleDataSeeder =====
 
 // Seeds repeatable sample gym data when the SQLite database starts empty
@@ -1542,25 +1417,6 @@ class SampleDataSeeder {
         AdministratorDao adminDao = new AdministratorDao();
         if (!adminDao.findAll().isEmpty()) {
             return;
-        }
-        seedRecords();
-    }
-
-    public static void resetAndSeed() throws DatabaseException, ValidationException {
-        String[] tables = {
-            "payments", "attendance", "sessions", "trainer_subscriptions",
-            "trainer_availability", "workout_programs", "progress_records",
-            "medical_profiles", "memberships", "equipment", "customers",
-            "trainers", "administrators"
-        };
-        try (Connection conn = DatabaseConnection.getConnection();
-             Statement stmt = conn.createStatement()) {
-            for (int i = 0; i < tables.length; i++) {
-                stmt.executeUpdate("DELETE FROM " + tables[i]);
-                stmt.executeUpdate("DELETE FROM sqlite_sequence WHERE name = '" + tables[i] + "'");
-            }
-        } catch (SQLException e) {
-            throw new DatabaseException("Failed to reset SQLite database tables", e);
         }
         seedRecords();
     }
@@ -1739,7 +1595,7 @@ class MemberCliMenu {
     public void openMenu() {
         while (!session.shouldStopSubMenu()) {
             CliTheme.printHeader("MEMBERS, PROFILES, MEDICAL & PROGRESS",
-                    session.userLabel(), DatabaseConnection.getDbUrl(),
+                    session.userLabel(),
                     "Main Menu > Members");
 
             System.out.println("  [1] List All Members");
@@ -1776,7 +1632,7 @@ class MemberCliMenu {
                 registerMember();
                 input.pause();
             } else {
-                System.out.println("[!] Unknown option: " + choice);
+                CliTheme.printWarning("[!] Unknown option: " + choice);
             }
         }
     }
@@ -1793,7 +1649,7 @@ class MemberCliMenu {
     private void searchMembers() {
         String term = input.readLine("Enter search text (name, phone, or exact ID): ");
         if (term == null || term.isEmpty()) {
-            System.out.println("[!] Search cancelled.");
+            CliTheme.printWarning("[!] Search cancelled.");
             return;
         }
         String lower = term.toLowerCase();
@@ -1861,7 +1717,7 @@ class MemberCliMenu {
                 BigDecimal owed = ops.computeOutstandingBalance(customerId);
 
                 CliTheme.printHeader("MEMBER 360 PROFILE (#" + c.getId() + ")",
-                        session.userLabel(), DatabaseConnection.getDbUrl(),
+                        session.userLabel(),
                         "Main Menu > Members > Profile #" + c.getId());
 
                 System.out.println("  Name     : " + c.getFullName() + "   | Status: " + c.getStatus());
@@ -1920,7 +1776,7 @@ class MemberCliMenu {
                 } else if ("6".equals(choice)) {
                     openProgressMenu(c);
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -1968,7 +1824,7 @@ class MemberCliMenu {
             try {
                 MedicalProfile med = medicalDao.findByCustomerId(c.getId());
                 CliTheme.printHeader("MEDICAL PROFILE - " + c.getFullName(),
-                        session.userLabel(), DatabaseConnection.getDbUrl(),
+                        session.userLabel(),
                         "Main Menu > Members > Profile #" + c.getId() + " > Medical");
 
                 if (med == null) {
@@ -2046,7 +1902,7 @@ class MemberCliMenu {
                     }
                     input.pause();
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -2063,7 +1919,7 @@ class MemberCliMenu {
             try {
                 List<ProgressRecord> records = progressDao.findByCustomerId(c.getId());
                 CliTheme.printHeader("PROGRESS RECORDS - " + c.getFullName(),
-                        session.userLabel(), DatabaseConnection.getDbUrl(),
+                        session.userLabel(),
                         "Main Menu > Members > Profile #" + c.getId() + " > Progress");
 
                 printProgressTableAndChart(records);
@@ -2116,7 +1972,7 @@ class MemberCliMenu {
                     }
                     input.pause();
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -2200,7 +2056,7 @@ class MemberCliMenu {
             try {
                 return Integer.valueOf(raw);
             } catch (NumberFormatException e) {
-                System.out.println("[!] Enter a valid numeric trainer ID, '-' for none, or Enter.");
+                CliTheme.printWarning("[!] Enter a valid numeric trainer ID, '-' for none, or Enter.");
             }
         }
     }
@@ -2227,7 +2083,7 @@ class TrainerCliMenu {
     public void openMenu() {
         while (!session.shouldStopSubMenu()) {
             CliTheme.printHeader("COACHES, AVAILABILITY SLOTS & SUBSCRIPTIONS",
-                    session.userLabel(), DatabaseConnection.getDbUrl(),
+                    session.userLabel(),
                     "Main Menu > Coaches");
 
             System.out.println("  [1] List All Coaches (with Rate & NO_SHOW Count)");
@@ -2266,7 +2122,7 @@ class TrainerCliMenu {
             } else if ("5".equals(choice)) {
                 openSubscriptionMenu();
             } else {
-                System.out.println("[!] Unknown option: " + choice);
+                CliTheme.printWarning("[!] Unknown option: " + choice);
             }
         }
     }
@@ -2333,7 +2189,7 @@ class TrainerCliMenu {
                 int noShows = ops.countTrainerNoShows(trainerId);
 
                 CliTheme.printHeader("COACH PROFILE (#" + t.getId() + ")",
-                        session.userLabel(), DatabaseConnection.getDbUrl(),
+                        session.userLabel(),
                         "Main Menu > Coaches > Profile #" + t.getId());
 
                 System.out.println("  Name         : " + t.getFullName() + " | Hourly Rate: $" + t.getHourlyRate());
@@ -2394,7 +2250,7 @@ class TrainerCliMenu {
                     }
                     input.pause();
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -2411,7 +2267,7 @@ class TrainerCliMenu {
             try {
                 List<TrainerAvailability> slots = availDao.findAll();
                 CliTheme.printHeader("TRAINER AVAILABILITY SLOTS",
-                        session.userLabel(), DatabaseConnection.getDbUrl(),
+                        session.userLabel(),
                         "Main Menu > Coaches > Availability Slots");
 
                 String[] headers = {"ID", "Coach", "Date", "Start", "End", "Booked", "Effective"};
@@ -2508,7 +2364,7 @@ class TrainerCliMenu {
                     }
                     input.pause();
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -2525,7 +2381,7 @@ class TrainerCliMenu {
             try {
                 List<TrainerSubscription> list = subDao.findAll();
                 CliTheme.printHeader("TRAINER SUBSCRIPTIONS",
-                        session.userLabel(), DatabaseConnection.getDbUrl(),
+                        session.userLabel(),
                         "Main Menu > Coaches > Subscriptions");
 
                 String[] headers = {"ID", "Member", "Coach", "Start", "End", "Rate", "Status"};
@@ -2624,7 +2480,7 @@ class TrainerCliMenu {
                     }
                     input.pause();
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -2670,7 +2526,7 @@ class MembershipBillingCliMenu {
             try {
                 List<Membership> list = membershipDao.findAll();
                 CliTheme.printHeader("MEMBERSHIPS & PLAN LIFECYCLE",
-                        session.userLabel(), DatabaseConnection.getDbUrl(),
+                        session.userLabel(),
                         "Main Menu > Memberships");
 
                 String today = LocalDate.now().toString();
@@ -2756,7 +2612,7 @@ class MembershipBillingCliMenu {
                     }
                     input.pause();
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -2773,7 +2629,7 @@ class MembershipBillingCliMenu {
             try {
                 List<Payment> list = paymentDao.findAll();
                 CliTheme.printHeader("PAYMENTS & POS BILLING LEDGER",
-                        session.userLabel(), DatabaseConnection.getDbUrl(),
+                        session.userLabel(),
                         "Main Menu > Payments");
 
                 String[] headers = {"ID", "Cust", "Target", "Amount", "Method", "Date", "Receipt", "Status"};
@@ -2852,7 +2708,7 @@ class MembershipBillingCliMenu {
                     voidAndReplaceFlow();
                     input.pause();
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -2893,7 +2749,7 @@ class MembershipBillingCliMenu {
                 defPrice = new BigDecimal("500.00");
                 break;
             }
-            System.out.println("[!] Enter 1, 2 or 3.");
+            CliTheme.printWarning("[!] Enter 1, 2 or 3.");
         }
         BigDecimal price = input.readBigDecimal("Price", defPrice);
         String start = input.readIsoDate("Start Date", LocalDate.now().toString());
@@ -2926,7 +2782,7 @@ class MembershipBillingCliMenu {
             if ("1".equals(targetType) || "2".equals(targetType) || "3".equals(targetType)) {
                 break;
             }
-            System.out.println("[!] Enter 1, 2 or 3.");
+            CliTheme.printWarning("[!] Enter 1, 2 or 3.");
         }
         Integer targetId = input.readInt("Target Record ID: ", 1);
         BigDecimal amount = input.readBigDecimal("Amount (>0)", new BigDecimal("45.00"));
@@ -3005,7 +2861,7 @@ class MembershipBillingCliMenu {
             if ("3".equals(m)) {
                 return PaymentMethod.TRANSFER;
             }
-            System.out.println("[!] Enter 1, 2 or 3.");
+            CliTheme.printWarning("[!] Enter 1, 2 or 3.");
         }
     }
 
@@ -3018,7 +2874,7 @@ class MembershipBillingCliMenu {
             try {
                 return Integer.valueOf(raw);
             } catch (NumberFormatException e) {
-                System.out.println("[!] Enter digits or press Enter for null.");
+                CliTheme.printWarning("[!] Enter digits or press Enter for null.");
             }
         }
     }
@@ -3047,7 +2903,7 @@ class ScheduleWorkoutCliMenu {
             try {
                 List<Session> list = sessionDao.findAll();
                 CliTheme.printHeader("TRAINING SCHEDULE & SESSIONS",
-                        session.userLabel(), DatabaseConnection.getDbUrl(),
+                        session.userLabel(),
                         "Main Menu > Schedule");
 
                 String[] headers = {"ID", "Cust", "Coach", "Date", "Time", "Dur", "Status", "Slot", "Price"};
@@ -3130,7 +2986,7 @@ class ScheduleWorkoutCliMenu {
                     }
                     input.pause();
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -3147,7 +3003,7 @@ class ScheduleWorkoutCliMenu {
             try {
                 List<WorkoutProgram> list = workoutDao.findAll();
                 CliTheme.printHeader("WORKOUT PROGRAMS & LIVE WORKOUT HUD",
-                        session.userLabel(), DatabaseConnection.getDbUrl(),
+                        session.userLabel(),
                         "Main Menu > Workouts & HUD");
 
                 String[] headers = {"ID", "Cust", "Coach", "Program Name", "Ver", "Date"};
@@ -3250,7 +3106,7 @@ class ScheduleWorkoutCliMenu {
                     runLiveWorkoutHudSimulator();
                     input.pause();
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -3332,7 +3188,7 @@ class ScheduleWorkoutCliMenu {
         }
         List<Equipment> gear = equipmentDao.findAll();
         CliTheme.printHeader("LIVE WORKOUT HUD SIMULATOR",
-                session.userLabel(), DatabaseConnection.getDbUrl(),
+                session.userLabel(),
                 "Main Menu > Workouts > Live HUD");
         System.out.println("  Member #" + wp.getCustomerId() + " | Routine: " + wp.getName() + " (v" + wp.getVersion() + ")");
         System.out.println("  Available Equipment Units: " + gear.size());
@@ -3373,7 +3229,7 @@ class ScheduleWorkoutCliMenu {
             try {
                 return Integer.valueOf(raw);
             } catch (NumberFormatException e) {
-                System.out.println("[!] Enter digits or press Enter for none.");
+                CliTheme.printWarning("[!] Enter digits or press Enter for none.");
             }
         }
     }
@@ -3382,10 +3238,8 @@ class ScheduleWorkoutCliMenu {
 // ===== FacilityAdminCliMenu =====
 
 // Terminal screens for Attendance, Equipment & Floor Map,
-// Staff/Admin Controls, and Serialization/DB Tools
+// and Staff/Admin Controls
 class FacilityAdminCliMenu {
-
-    private static final String DEFAULT_BACKUP_PATH = "backups" + File.separator + "gym_backup.ser";
 
     private final CliInput input;
     private final CliSession session;
@@ -3404,7 +3258,7 @@ class FacilityAdminCliMenu {
             try {
                 List<Attendance> list = attendanceDao.findAll();
                 CliTheme.printHeader("ATTENDANCE - FAST CHECK-IN / CHECK-OUT",
-                        session.userLabel(), DatabaseConnection.getDbUrl(),
+                        session.userLabel(),
                         "Main Menu > Attendance");
 
                 String[] headers = {"ID", "Member", "Date", "Check-In", "Check-Out"};
@@ -3495,7 +3349,7 @@ class FacilityAdminCliMenu {
                     }
                     input.pause();
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -3512,7 +3366,7 @@ class FacilityAdminCliMenu {
             try {
                 List<Equipment> list = equipmentDao.findAll();
                 CliTheme.printHeader("EQUIPMENT INVENTORY & ASCII FLOOR MAP",
-                        session.userLabel(), DatabaseConnection.getDbUrl(),
+                        session.userLabel(),
                         "Main Menu > Equipment");
 
                 String[] headers = {"ID", "Equipment Name", "Zone/Cat", "Condition", "Status", "Last Maint"};
@@ -3590,7 +3444,7 @@ class FacilityAdminCliMenu {
                     renderFloorMap(list);
                     input.pause();
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -3607,7 +3461,7 @@ class FacilityAdminCliMenu {
             try {
                 List<Administrator> list = adminDao.findAll();
                 CliTheme.printHeader("STAFF & ADMIN CONTROLS (Role-Based Access)",
-                        session.userLabel(), DatabaseConnection.getDbUrl(),
+                        session.userLabel(),
                         "Main Menu > Staff & Admin");
 
                 String[] headers = {"ID", "Full Name", "Username", "Role", "Active", "Created"};
@@ -3650,7 +3504,7 @@ class FacilityAdminCliMenu {
                 if ("1".equals(choice)) {
                     String name = input.readRawString("Full Name (required): ");
                     String user = input.readRawString("Username (>=3 chars, no spaces): ");
-                    String pass = input.readRawString("Password (required): ");
+                    String pass = input.readPassword("Password (required): ");
                     if (name == null || user == null || pass == null) {
                         return;
                     }
@@ -3683,7 +3537,11 @@ class FacilityAdminCliMenu {
                         if (target == null) {
                             CliTheme.printValidationError("Staff not found: #" + aid);
                         } else {
-                            target.setPasswordHash(input.readOptionalString("New Password", target.getPasswordHash()));
+                            // Typed as stars; the old password is never shown on screen
+                            String newPass = input.readPassword("New Password (Enter to keep current): ");
+                            if (newPass != null && !newPass.isEmpty()) {
+                                target.setPasswordHash(newPass);
+                            }
                             StaffRole newRole = readStaffRole(target.getRole());
                             if (target.getId() == session.getCurrentUser().getId() && newRole != StaffRole.ADMIN) {
                                 CliTheme.printValidationError("You cannot change your own role away from ADMIN "
@@ -3710,7 +3568,7 @@ class FacilityAdminCliMenu {
                     }
                     input.pause();
                 } else {
-                    System.out.println("[!] Unknown option: " + choice);
+                    CliTheme.printWarning("[!] Unknown option: " + choice);
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -3718,81 +3576,6 @@ class FacilityAdminCliMenu {
             } catch (DatabaseException e) {
                 CliTheme.printDatabaseError(e.getMessage());
                 input.pause();
-            }
-        }
-    }
-
-    public void openBackupAndDbMenu() {
-        while (!session.shouldStopSubMenu()) {
-            CliTheme.printHeader("SERIALIZATION (.SER BACKUP) & DATABASE TOOLS",
-                    session.userLabel(), DatabaseConnection.getDbUrl(),
-                    "Main Menu > Backup & DB");
-
-            System.out.println("  Active SQLite URL : " + DatabaseConnection.getDbUrl());
-            System.out.println("  Default .ser Path : " + DEFAULT_BACKUP_PATH);
-            CliTheme.printSingleLine();
-            System.out.println("  [1] Export Full 13-Table Binary Snapshot (.ser via SerializationUtil)");
-            System.out.println("  [2] Load & Inspect Existing .ser Snapshot (SerializationUtil.loadFromFile)");
-            System.out.println("  [3] Simulate Database Errors (missing .ser file / invalid DB URL)");
-            System.out.println("  [4] Reset Database & Re-Seed Fresh Sample Data");
-            CliTheme.printFooterNav(true);
-
-            String choice = input.readLine("Select option > ");
-            if (choice == null || "0".equals(choice)) {
-                return;
-            }
-            if ("H".equalsIgnoreCase(choice)) {
-                session.setReturnHome(true);
-                return;
-            }
-            if ("L".equalsIgnoreCase(choice)) {
-                session.setLogoutRequested(true);
-                return;
-            }
-
-            if ("1".equals(choice)) {
-                String path = input.readOptionalString("Backup File Path", DEFAULT_BACKUP_PATH);
-                try {
-                    GymBackupSnapshot snap = ops.exportSnapshotToFile(path, session.getCurrentUser().getUsername());
-                    CliTheme.printSuccess("Serialized " + snap.totalRecordsCount()
-                            + " total domain objects across 13 tables into " + path);
-                } catch (DatabaseException e) {
-                    CliTheme.printDatabaseError(e.getMessage());
-                }
-                input.pause();
-            } else if ("2".equals(choice)) {
-                String path = input.readOptionalString("Backup File Path to Load", DEFAULT_BACKUP_PATH);
-                try {
-                    GymBackupSnapshot snap = ops.loadSnapshotFromFile(path);
-                    CliTheme.printSuccess("Loaded .ser snapshot created at " + snap.getCreatedAt()
-                            + " by " + snap.getCreatedBy());
-                    System.out.println("    Members=" + snap.getCustomers().size()
-                            + ", Coaches=" + snap.getTrainers().size()
-                            + ", Plans=" + snap.getMemberships().size()
-                            + ", Sessions=" + snap.getSessions().size()
-                            + ", Payments=" + snap.getPayments().size()
-                            + ", Total=" + snap.totalRecordsCount());
-                } catch (DatabaseException e) {
-                    CliTheme.printDatabaseError(e.getMessage());
-                }
-                input.pause();
-            } else if ("3".equals(choice)) {
-                simulateDatabaseErrors();
-                input.pause();
-            } else if ("4".equals(choice)) {
-                if (input.readYesNo("Reset all tables and re-seed fresh sample data?")) {
-                    try {
-                        SampleDataSeeder.resetAndSeed();
-                        CliTheme.printSuccess("Database cleared and re-seeded cleanly.");
-                    } catch (ValidationException e) {
-                        CliTheme.printValidationError(e.getMessage());
-                    } catch (DatabaseException e) {
-                        CliTheme.printDatabaseError(e.getMessage());
-                    }
-                }
-                input.pause();
-            } else {
-                System.out.println("[!] Unknown option: " + choice);
             }
         }
     }
@@ -3822,31 +3605,6 @@ class FacilityAdminCliMenu {
                 System.out.println("  |  (No equipment assigned to this zone)");
             }
             System.out.println("  +" + CliTheme.repeat('-', 70) + "+");
-        }
-    }
-
-    private void simulateDatabaseErrors() {
-        CliTheme.printSectionTitle("Simulated DatabaseException Handling (errors below are expected)");
-        try {
-            SerializationUtil.loadFromFile("backups" + File.separator + "does_not_exist_999.ser");
-        } catch (DatabaseException e) {
-            CliTheme.printSuccess("Caught expected missing-file DatabaseException -> " + e.getMessage());
-        }
-
-        try {
-            SerializationUtil.saveToFile(null, DEFAULT_BACKUP_PATH);
-        } catch (DatabaseException e) {
-            CliTheme.printSuccess("Caught expected null-object DatabaseException -> " + e.getMessage());
-        }
-
-        String savedUrl = DatabaseConnection.getDbUrl();
-        try {
-            DatabaseConnection.setDbUrl("jdbc:sqlite:/nonexistent_dir_xyz/bad.db");
-            DatabaseConnection.getConnection();
-        } catch (DatabaseException e) {
-            CliTheme.printSuccess("Caught expected unreachable-DB DatabaseException -> " + e.getMessage());
-        } finally {
-            DatabaseConnection.setDbUrl(savedUrl);
         }
     }
 
@@ -3900,579 +3658,7 @@ class FacilityAdminCliMenu {
             if ("3".equals(r)) {
                 return StaffRole.STAFF;
             }
-            System.out.println("[!] Enter 1, 2, 3, or press Enter.");
+            CliTheme.printWarning("[!] Enter 1, 2, 3, or press Enter.");
         }
-    }
-}
-
-// ===== ValidationSuiteRunner =====
-
-// Automated and interactive suite verifying all entities, validations, and error handling.
-// Runs against an isolated sandbox database so real gym.db data is never touched.
-class ValidationSuiteRunner {
-
-    private static final String SANDBOX_DB_FILE = "gym_sandbox.db";
-    private static final String SANDBOX_SER_FILE = "backups" + File.separator + "sandbox_snapshot.ser";
-
-    private final CliInput input;
-    private final CliSession session;
-
-    public ValidationSuiteRunner(CliInput input, CliSession session) {
-        this.input = input;
-        this.session = session;
-    }
-
-    public void openMenu() {
-        while (!session.shouldStopSubMenu()) {
-            CliTheme.printHeader("VALIDATION & EXCEPTION SUITE",
-                    session.userLabel(), DatabaseConnection.getDbUrl(),
-                    "Main Menu > Validation Suite");
-
-            System.out.println("  Runs against an isolated sandbox DB (" + SANDBOX_DB_FILE + ") so your");
-            System.out.println("  interactive data in gym.db is never modified or lost.");
-            CliTheme.printSingleLine();
-            System.out.println("  [1] Run Full 22-Scenario End-to-End Verification Suite (Auto Pass/Fail Report)");
-            System.out.println("  [2] Run Individual Scenario Category (Pick #1 - #11)");
-            CliTheme.printFooterNav(true);
-
-            String choice = input.readLine("Select option > ");
-            if (choice == null || "0".equals(choice)) {
-                return;
-            }
-            if ("H".equalsIgnoreCase(choice)) {
-                session.setReturnHome(true);
-                return;
-            }
-            if ("L".equalsIgnoreCase(choice)) {
-                session.setLogoutRequested(true);
-                return;
-            }
-
-            if ("1".equals(choice)) {
-                runAllScenarios();
-                input.pause();
-            } else if ("2".equals(choice)) {
-                runSingleCategoryMenu();
-            } else {
-                System.out.println("[!] Unknown option: " + choice);
-            }
-        }
-    }
-
-    private void runSingleCategoryMenu() {
-        while (!session.shouldStopSubMenu()) {
-            CliTheme.printHeader("PICK A SCENARIO CATEGORY",
-                    session.userLabel(), DatabaseConnection.getDbUrl(),
-                    "Main Menu > Validation Suite > Picker");
-            System.out.println("  [1]  Customer / Trainer / Staff Field Validation (blank, email, rate, dup user)");
-            System.out.println("  [2]  Login Inactive Block & ADMIN RBAC");
-            System.out.println("  [3]  Availability Cap, Open Slot Booking & Derived FULL");
-            System.out.println("  [4]  Subscription Trainer Match & Zero-Price Session");
-            System.out.println("  [5]  Session State Machine, Cancel 2h Check & NO_SHOW");
-            System.out.println("  [6]  Check-In Active Plan Guard & Same-Day Row Reuse");
-            System.out.println("  [7]  Freeze / Unfreeze Date Shift, Cancelled Renew Block & Suspend Cascade");
-            System.out.println("  [8]  Medical Profile Single Record & Trainer Access");
-            System.out.println("  [9]  Workout Version Uniqueness & Progress Range Checks");
-            System.out.println("  [10] Payment XOR, Customer Match, Void/Replace & Balance");
-            System.out.println("  [11] Hard-Delete Guard + Serialization .ser & DatabaseException Handling");
-            CliTheme.printFooterNav(true);
-
-            String choice = input.readLine("Select scenario [1-11] > ");
-            if (choice == null || "0".equals(choice)) {
-                return;
-            }
-            if ("H".equalsIgnoreCase(choice)) {
-                session.setReturnHome(true);
-                return;
-            }
-            if ("L".equalsIgnoreCase(choice)) {
-                session.setLogoutRequested(true);
-                return;
-            }
-
-            runCategoryByChoice(choice);
-            input.pause();
-        }
-    }
-
-    private void runAllScenarios() {
-        String previousUrl = DatabaseConnection.getDbUrl();
-        int passed = 0;
-        int total = 22;
-
-        CliTheme.printHeader("22-SCENARIO END-TO-END SUITE",
-                session.userLabel(), SANDBOX_DB_FILE,
-                "Main Menu > Validation Suite > Automated Run");
-
-        try {
-            prepareSandbox();
-            // runCheck keeps one broken scenario from skipping the rest of the scoreboard
-            if (runCheck("#01", this::test01CustomerValidation)) passed++;
-            if (runCheck("#02", this::test02CustomerBadFormat)) passed++;
-            if (runCheck("#03", this::test03TrainerNegativeRate)) passed++;
-            if (runCheck("#04", this::test04DuplicateUsername)) passed++;
-            if (runCheck("#05", this::test05InactiveLoginBlocked)) passed++;
-            if (runCheck("#06", this::test06NonAdminBlocked)) passed++;
-            if (runCheck("#07", this::test07InvalidAvailabilitySlot)) passed++;
-            if (runCheck("#08", this::test08SlotCapAndFullStatus)) passed++;
-            if (runCheck("#09", this::test09SubscriptionTrainerMismatch)) passed++;
-            if (runCheck("#10", this::test10SubscriptionZeroPriceSession)) passed++;
-            if (runCheck("#11", this::test11SessionTransitionsAndNoShow)) passed++;
-            if (runCheck("#12", this::test12SessionCancel2hCheck)) passed++;
-            if (runCheck("#13", this::test13AdminOverrideBypass)) passed++;
-            if (runCheck("#14", this::test14CheckInDeniedForInvalidMember)) passed++;
-            if (runCheck("#15", this::test15CheckInSameDayReuse)) passed++;
-            if (runCheck("#16", this::test16MembershipFreezeUnfreezeRenew)) passed++;
-            if (runCheck("#17", this::test17SuspendCascadesFreeze)) passed++;
-            if (runCheck("#18", this::test18MedicalProfileChecks)) passed++;
-            if (runCheck("#19", this::test19WorkoutAndProgressValidation)) passed++;
-            if (runCheck("#20", this::test20PaymentsXorVoidBalance)) passed++;
-            if (runCheck("#21", this::test21HardDeleteGuard)) passed++;
-            if (runCheck("#22", this::test22SerializationAndDatabaseException)) passed++;
-        } catch (DatabaseException e) {
-            System.out.println("  [FAIL] Sandbox setup failed: " + e.getMessage());
-        } catch (ValidationException e) {
-            System.out.println("  [FAIL] Sandbox setup failed: " + e.getMessage());
-        } finally {
-            cleanupSandbox(previousUrl);
-        }
-
-        CliTheme.printSingleLine();
-        System.out.println("  SCOREBOARD: " + passed + " / " + total + " verification checks PASSED.");
-        CliTheme.printSingleLine();
-    }
-
-    private void runCategoryByChoice(String choice) {
-        String previousUrl = DatabaseConnection.getDbUrl();
-        int passed = 0;
-        int ran = 0;
-        try {
-            prepareSandbox();
-            if ("1".equals(choice)) {
-                ran = 4;
-                if (runCheck("#01", this::test01CustomerValidation)) passed++;
-                if (runCheck("#02", this::test02CustomerBadFormat)) passed++;
-                if (runCheck("#03", this::test03TrainerNegativeRate)) passed++;
-                if (runCheck("#04", this::test04DuplicateUsername)) passed++;
-            } else if ("2".equals(choice)) {
-                ran = 2;
-                if (runCheck("#05", this::test05InactiveLoginBlocked)) passed++;
-                if (runCheck("#06", this::test06NonAdminBlocked)) passed++;
-            } else if ("3".equals(choice)) {
-                ran = 3;
-                if (runCheck("#07", this::test07InvalidAvailabilitySlot)) passed++;
-                if (runCheck("#08", this::test08SlotCapAndFullStatus)) passed++;
-                if (runCheck("#13", this::test13AdminOverrideBypass)) passed++;
-            } else if ("4".equals(choice)) {
-                ran = 2;
-                if (runCheck("#09", this::test09SubscriptionTrainerMismatch)) passed++;
-                if (runCheck("#10", this::test10SubscriptionZeroPriceSession)) passed++;
-            } else if ("5".equals(choice)) {
-                ran = 2;
-                if (runCheck("#11", this::test11SessionTransitionsAndNoShow)) passed++;
-                if (runCheck("#12", this::test12SessionCancel2hCheck)) passed++;
-            } else if ("6".equals(choice)) {
-                ran = 2;
-                if (runCheck("#14", this::test14CheckInDeniedForInvalidMember)) passed++;
-                if (runCheck("#15", this::test15CheckInSameDayReuse)) passed++;
-            } else if ("7".equals(choice)) {
-                ran = 2;
-                if (runCheck("#16", this::test16MembershipFreezeUnfreezeRenew)) passed++;
-                if (runCheck("#17", this::test17SuspendCascadesFreeze)) passed++;
-            } else if ("8".equals(choice)) {
-                ran = 1;
-                if (runCheck("#18", this::test18MedicalProfileChecks)) passed++;
-            } else if ("9".equals(choice)) {
-                ran = 1;
-                if (runCheck("#19", this::test19WorkoutAndProgressValidation)) passed++;
-            } else if ("10".equals(choice)) {
-                ran = 1;
-                if (runCheck("#20", this::test20PaymentsXorVoidBalance)) passed++;
-            } else if ("11".equals(choice)) {
-                ran = 2;
-                if (runCheck("#21", this::test21HardDeleteGuard)) passed++;
-                if (runCheck("#22", this::test22SerializationAndDatabaseException)) passed++;
-            } else {
-                System.out.println("[!] Unknown scenario choice.");
-                return;
-            }
-            System.out.println("  Category Result: " + passed + " / " + ran + " passed.");
-        } catch (DatabaseException e) {
-            System.out.println("  [FAIL] Sandbox setup failed: " + e.getMessage());
-        } catch (ValidationException e) {
-            System.out.println("  [FAIL] Sandbox setup failed: " + e.getMessage());
-        } finally {
-            cleanupSandbox(previousUrl);
-        }
-    }
-
-    // One scenario crashes or errors -> it is counted as FAIL and the suite keeps going
-    private boolean runCheck(String code, ScenarioStep step) {
-        try {
-            return step.run();
-        } catch (DatabaseException e) {
-            return fail(code, "Unexpected DatabaseException: " + e.getMessage());
-        } catch (ValidationException e) {
-            return fail(code, "Unexpected ValidationException: " + e.getMessage());
-        } catch (RuntimeException e) {
-            return fail(code, "Unexpected error: " + e);
-        }
-    }
-
-    private interface ScenarioStep {
-        boolean run() throws DatabaseException, ValidationException;
-    }
-
-    private void prepareSandbox() throws DatabaseException, ValidationException {
-        deleteFileIfExists(SANDBOX_DB_FILE);
-        DatabaseConnection.setDbUrl("jdbc:sqlite:" + SANDBOX_DB_FILE);
-        DatabaseConnection.initializeDatabase();
-        SampleDataSeeder.resetAndSeed();
-    }
-
-    private void cleanupSandbox(String previousUrl) {
-        DatabaseConnection.setDbUrl(previousUrl);
-        deleteFileIfExists(SANDBOX_DB_FILE);
-        deleteFileIfExists(SANDBOX_SER_FILE);
-    }
-
-    private void deleteFileIfExists(String path) {
-        File file = new File(path);
-        if (file.exists() && !file.delete()) {
-            System.out.println("[!] Could not delete sandbox file: " + path);
-        }
-    }
-
-    private boolean test01CustomerValidation() throws DatabaseException {
-        try {
-            new CustomerDao().insert(new Customer());
-            return fail("#01", "Blank Customer should fail");
-        } catch (ValidationException e) {
-            return pass("#01", "Blank Customer rejected -> " + e.getMessage());
-        }
-    }
-
-    private boolean test02CustomerBadFormat() throws DatabaseException {
-        try {
-            Customer bad = new Customer(0, "Bad User", "123", "not-an-email", "Cairo",
-                    "1999-99-99", "Male", "Em", "123", CustomerStatus.ACTIVE, "2026-11-09", null);
-            new CustomerDao().insert(bad);
-            return fail("#02", "Invalid email/phone/DOB should fail");
-        } catch (ValidationException e) {
-            return pass("#02", "Bad Customer format rejected -> " + e.getMessage());
-        }
-    }
-
-    private boolean test03TrainerNegativeRate() throws DatabaseException {
-        try {
-            Trainer t = new Trainer(0, "Bad Coach", "01012345678", "bad@gym.com", "Strength",
-                    2, "Cert", "2026-01-01", new BigDecimal("-10.00"));
-            new TrainerDao().insert(t);
-            return fail("#03", "Negative hourlyRate should fail");
-        } catch (ValidationException e) {
-            return pass("#03", "Negative Trainer rate rejected -> " + e.getMessage());
-        }
-    }
-
-    private boolean test04DuplicateUsername() throws DatabaseException {
-        try {
-            Administrator dup = new Administrator(0, "Dup Admin", "admin", "pw",
-                    StaffRole.STAFF, "01000001111", "dup@gym.com", true, "2026-11-09");
-            new AdministratorDao().insert(dup);
-            return fail("#04", "Duplicate username should fail");
-        } catch (ValidationException e) {
-            return pass("#04", "Duplicate username rejected -> " + e.getMessage());
-        }
-    }
-
-    private boolean test05InactiveLoginBlocked() throws DatabaseException {
-        try {
-            new GymOperations().authenticate("oldstaff", "old123");
-            return fail("#05", "Inactive login should fail");
-        } catch (ValidationException e) {
-            return pass("#05", "Inactive account login blocked -> " + e.getMessage());
-        }
-    }
-
-    private boolean test06NonAdminBlocked() throws DatabaseException {
-        try {
-            GymOperations helper = new GymOperations();
-            Administrator staff = helper.authenticate("staff", "staff123");
-            helper.adminReserve(staff, 1, 1, LocalDate.now().plusDays(1).toString(),
-                    "21:00", 60, null, BigDecimal.TEN, "Unauthorized");
-            return fail("#06", "Non-ADMIN adminReserve should fail");
-        } catch (ValidationException e) {
-            return pass("#06", "STAFF blocked on ADMIN action -> " + e.getMessage());
-        }
-    }
-
-    private boolean test07InvalidAvailabilitySlot() throws DatabaseException {
-        try {
-            TrainerAvailability bad = new TrainerAvailability(0, 1, LocalDate.now().plusDays(1).toString(),
-                    "14:00", "13:00", 2, AvailabilityStatus.OPEN);
-            new TrainerAvailabilityDao().insert(bad);
-            return fail("#07", "Start time >= End time should fail");
-        } catch (ValidationException e) {
-            return pass("#07", "Invalid availability time order rejected -> " + e.getMessage());
-        }
-    }
-
-    private boolean test08SlotCapAndFullStatus() throws DatabaseException, ValidationException {
-        GymOperations helper = new GymOperations();
-        TrainerAvailabilityDao slotDao = new TrainerAvailabilityDao();
-        // Slot #2 has maxCustomers=1 and 0 booked initially
-        TrainerAvailability slot = slotDao.findById(2);
-        if (slot == null) {
-            return fail("#08", "Seed data missing: Slot #2 not found");
-        }
-        helper.bookOpenSlot(2, 2, 60, null, new BigDecimal("45.00"), "Take last spot");
-        AvailabilityStatus eff = helper.effectiveSlotStatus(slotDao.findById(2));
-        if (eff != AvailabilityStatus.FULL) {
-            return fail("#08", "Slot #2 expected derived FULL status");
-        }
-        try {
-            helper.bookOpenSlot(1, 2, 60, null, new BigDecimal("45.00"), "Overflow");
-            return fail("#08", "Overflow booking into FULL slot should fail");
-        } catch (ValidationException e) {
-            return pass("#08", "Slot FULL derived & overflow rejected -> " + e.getMessage());
-        }
-    }
-
-    private boolean test09SubscriptionTrainerMismatch() throws DatabaseException {
-        try {
-            // Customer #1 is assigned to Trainer #1; attempting Trainer #2 breaks the trainer-match validation
-            TrainerSubscription badSub = new TrainerSubscription(0, 1, 2,
-                    LocalDate.now().toString(), LocalDate.now().plusDays(30).toString(),
-                    new BigDecimal("100.00"), SubscriptionStatus.ACTIVE);
-            new TrainerSubscriptionDao().insert(badSub);
-            return fail("#09", "Trainer mismatch in subscription should fail");
-        } catch (ValidationException e) {
-            return pass("#09", "Subscription trainer mismatch blocked -> " + e.getMessage());
-        }
-    }
-
-    private boolean test10SubscriptionZeroPriceSession() throws DatabaseException {
-        try {
-            Session nonZero = new Session(0, 1, 1, LocalDate.now().plusDays(2).toString(),
-                    "11:00", 60, SessionStatus.REQUESTED, null, 1, new BigDecimal("25.00"), null, "Double bill");
-            new SessionDao().insert(nonZero);
-            return fail("#10", "Subscription session with price > 0 should fail");
-        } catch (ValidationException e) {
-            return pass("#10", "Double-billing prevented (sub price > 0 blocked) -> " + e.getMessage());
-        }
-    }
-
-    private boolean test11SessionTransitionsAndNoShow() throws DatabaseException, ValidationException {
-        GymOperations helper = new GymOperations();
-        // Session #2 is REQUESTED
-        try {
-            helper.completeSession(2);
-            return fail("#11", "REQUESTED -> COMPLETED without CONFIRMED should fail");
-        } catch (ValidationException expected) {
-            helper.confirmSession(2);
-            helper.markNoShow(2);
-            int noShows = helper.countTrainerNoShows(2);
-            if (noShows < 2) {
-                return fail("#11", "Trainer #2 NO_SHOW count should reflect marked session");
-            }
-            return pass("#11", "Illegal session transition caught & Trainer #2 NO_SHOWs=" + noShows);
-        }
-    }
-
-    private boolean test12SessionCancel2hCheck() throws DatabaseException, ValidationException {
-        GymOperations helper = new GymOperations();
-        // Session #1 is tomorrow -> >= 2h notice -> free cancellation
-        String notice = helper.cancelSession(1, "Work travel conflict");
-        Session cancelled = new SessionDao().findById(1);
-        if (cancelled == null) {
-            return fail("#12", "Seed data missing: Session #1 not found");
-        }
-        if (cancelled.getStatus() != SessionStatus.CANCELLED || notice.indexOf("Free cancellation") < 0) {
-            return fail("#12", "Expected free cancellation status message for tomorrow session");
-        }
-        return pass("#12", notice);
-    }
-
-    private boolean test13AdminOverrideBypass() throws DatabaseException, ValidationException {
-        GymOperations helper = new GymOperations();
-        Administrator admin = helper.authenticate("admin", "admin123");
-        // Slot #2 is FULL; adminReserve succeeds anyway (admin override)
-        Session vip = helper.adminReserve(admin, 1, 1, LocalDate.now().plusDays(1).toString(),
-                "12:00", 60, 2, new BigDecimal("80.00"), "VIP Admin Override");
-        if (vip.getStatus() != SessionStatus.CONFIRMED) {
-            return fail("#13", "Admin override expected CONFIRMED session");
-        }
-        return pass("#13", "ADMIN override booked FULL Slot #2 as Session #" + vip.getId() + " (admin override)");
-    }
-
-    private boolean test14CheckInDeniedForInvalidMember() throws DatabaseException {
-        GymOperations helper = new GymOperations();
-        String today = LocalDate.now().toString();
-        try {
-            // Customer #3 has EXPIRED membership
-            helper.checkIn(3, today, "10:00");
-            return fail("#14", "Expired membership check-in should fail");
-        } catch (ValidationException expected) {
-            return pass("#14", "Expired membership check-in blocked -> " + expected.getMessage());
-        }
-    }
-
-    private boolean test15CheckInSameDayReuse() throws DatabaseException, ValidationException {
-        GymOperations helper = new GymOperations();
-        String today = LocalDate.now().toString();
-        AttendanceDao attDao = new AttendanceDao();
-        int beforeCount = attDao.findByCustomerId(1).size();
-        Attendance reused = helper.checkIn(1, today, "09:15");
-        int afterCount = attDao.findByCustomerId(1).size();
-        if (beforeCount != afterCount || !"09:15".equals(reused.getCheckIn())) {
-            return fail("#15", "Second check-in today should reuse existing row instead of duplicating");
-        }
-        return pass("#15", "Same-day check-in reused Attendance #" + reused.getId() + " (same-day reuse)");
-    }
-
-    private boolean test16MembershipFreezeUnfreezeRenew() throws DatabaseException, ValidationException {
-        GymOperations helper = new GymOperations();
-        Membership before = new MembershipDao().findById(4); // c4 FROZEN 10 days
-        if (before == null) {
-            return fail("#16", "Seed data missing: Membership #4 not found");
-        }
-        String oldEnd = before.getEndDate();
-        Membership unfrozen = helper.unfreezeMembership(4);
-        String expectedEnd = LocalDate.parse(oldEnd).plusDays(10).toString();
-        if (!expectedEnd.equals(unfrozen.getEndDate()) || unfrozen.getFrozenDays() != 0) {
-            return fail("#16", "Unfreeze failed to shift endDate by 10 days");
-        }
-        try {
-            helper.renewMembership(5); // CANCELLED plan
-            return fail("#16", "Renewing CANCELLED membership should fail");
-        } catch (ValidationException expected) {
-            return pass("#16", "Unfreeze shifted endDate (+10d -> " + unfrozen.getEndDate() + ") & CANCELLED renew blocked");
-        }
-    }
-
-    private boolean test17SuspendCascadesFreeze() throws DatabaseException, ValidationException {
-        GymOperations helper = new GymOperations();
-        int frozenCount = helper.suspendCustomer(2); // Customer #2 has 1 ACTIVE plan
-        Membership m2 = new MembershipDao().findById(2);
-        if (m2 == null) {
-            return fail("#17", "Seed data missing: Membership #2 not found");
-        }
-        if (frozenCount != 1 || m2.getStatus() != MembershipStatus.FROZEN) {
-            return fail("#17", "Expected Customer #2 suspension to freeze active Membership #2");
-        }
-        return pass("#17", "Suspend Member #2 cascaded FROZEN to " + frozenCount + " active membership");
-    }
-
-    private boolean test18MedicalProfileChecks() throws DatabaseException, ValidationException {
-        GymOperations helper = new GymOperations();
-        MedicalProfileDao medDao = new MedicalProfileDao();
-        try {
-            // Customer #1 already has MedicalProfile #1
-            medDao.insert(new MedicalProfile(0, 1, "A+", "None", "None", "None", "None",
-                    "Dr", "01000000000", "Dup", LocalDate.now().toString()));
-            return fail("#18", "Second medical profile for same customer should fail");
-        } catch (ValidationException expected) {
-            try {
-                // Trainer #2 is NOT assigned to Customer #1
-                helper.getMedicalProfileForTrainer(2, 1);
-                return fail("#18", "Unassigned trainer read medical profile should fail");
-            } catch (ValidationException denied) {
-                MedicalProfile allowed = helper.getMedicalProfileForTrainer(1, 1);
-                return pass("#18", "Single medical profile enforced & trainer access check ok (Blood="
-                        + allowed.getBloodType() + ")");
-            }
-        }
-    }
-
-    private boolean test19WorkoutAndProgressValidation() throws DatabaseException {
-        WorkoutProgramDao wpDao = new WorkoutProgramDao();
-        ProgressRecordDao prDao = new ProgressRecordDao();
-        try {
-            // Customer #1 already has version 1
-            wpDao.insert(new WorkoutProgram(0, 1, 1, "Dup Ver", "Squat", 1, LocalDate.now().toString()));
-            return fail("#19", "Duplicate workout version per customer should fail");
-        } catch (ValidationException wpEx) {
-            try {
-                prDao.insert(new ProgressRecord(0, 1, LocalDate.now().toString(), 75.0, 120.0, null, null, "Bad"));
-                return fail("#19", "bodyFatPct > 100 should fail");
-            } catch (ValidationException prEx) {
-                return pass("#19", "Duplicate workout version & invalid bodyFatPct caught cleanly");
-            }
-        }
-    }
-
-    private boolean test20PaymentsXorVoidBalance() throws DatabaseException, ValidationException {
-        PaymentDao payDao = new PaymentDao();
-        GymOperations helper = new GymOperations();
-        try {
-            // 0 target links breaks the exactly-one-link payment validation
-            payDao.insert(new Payment(0, 1, null, null, null, new BigDecimal("50.00"),
-                    PaymentMethod.CASH, LocalDate.now().toString(), "REC-BAD-0", false));
-            return fail("#20", "0-link payment should be rejected");
-        } catch (ValidationException expected) {
-            try {
-                // Mismatched customerId breaks the owner check (Membership #2 belongs to Customer #2, not #1)
-                payDao.insert(Payment.forMembership(1, 2, new BigDecimal("60.00"),
-                        PaymentMethod.CASH, LocalDate.now().toString(), "REC-BAD-OWNER"));
-                return fail("#20", "Mismatched owner payment should be rejected");
-            } catch (ValidationException ownerEx) {
-                // Void existing Payment #4 and check the outstanding balance increases
-                BigDecimal beforeVoidOwed = helper.computeOutstandingBalance(2);
-                helper.voidAndReplacePayment(4, "Card chargeback", LocalDate.now().toString(),
-                        null, null, null);
-                BigDecimal afterVoidOwed = helper.computeOutstandingBalance(2);
-                if (afterVoidOwed.compareTo(beforeVoidOwed) <= 0) {
-                    return fail("#20", "Voided payment must not count toward balance");
-                }
-                return pass("#20", "Payment link + void + balance verified ($"
-                        + beforeVoidOwed.toPlainString() + " -> $" + afterVoidOwed.toPlainString() + ")");
-            }
-        }
-    }
-
-    private boolean test21HardDeleteGuard() throws DatabaseException, ValidationException {
-        GymOperations helper = new GymOperations();
-        Administrator admin = helper.authenticate("admin", "admin123");
-        try {
-            helper.hardDeleteCustomer(admin, 1);
-            return fail("#21", "Hard delete of Customer #1 with child records should fail");
-        } catch (ValidationException expected) {
-            Equipment standalone = new EquipmentDao().insert(new Equipment(0, "Temp Rope", "RECOVERY",
-                    LocalDate.now().toString(), EquipmentCondition.NEW, EquipmentStatus.AVAILABLE,
-                    LocalDate.now().toString()));
-            new EquipmentDao().delete(standalone.getId());
-            return pass("#21", "Hard delete refused referenced member (#1); standalone delete succeeded");
-        }
-    }
-
-    private boolean test22SerializationAndDatabaseException() {
-        GymOperations helper = new GymOperations();
-        try {
-            GymBackupSnapshot snap = helper.exportSnapshotToFile(SANDBOX_SER_FILE, "admin");
-            GymBackupSnapshot loaded = helper.loadSnapshotFromFile(SANDBOX_SER_FILE);
-            if (loaded.totalRecordsCount() != snap.totalRecordsCount() || loaded.totalRecordsCount() < 15) {
-                return fail("#22", ".ser round-trip record count mismatch");
-            }
-            try {
-                SerializationUtil.loadFromFile("backups" + File.separator + "missing_xyz.ser");
-                return fail("#22", "Missing .ser file should throw DatabaseException");
-            } catch (DatabaseException expected) {
-                List<Customer> customers = loaded.getCustomers();
-                return pass("#22", ".ser round-trip restored " + loaded.totalRecordsCount()
-                        + " objects (" + customers.size() + " customers) & caught DatabaseException");
-            }
-        } catch (DatabaseException e) {
-            return fail("#22", "Unexpected serialization DatabaseException: " + e.getMessage());
-        }
-    }
-
-    private boolean pass(String code, String msg) {
-        System.out.println("  [PASS] " + code + " " + msg);
-        return true;
-    }
-
-    private boolean fail(String code, String msg) {
-        System.out.println("  [FAIL] " + code + " " + msg);
-        return false;
     }
 }

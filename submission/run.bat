@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title Gym-OS Terminal Workflow Console
+title GYM Management System
 cd /d "%~dp0"
 
 if not exist "out" mkdir "out"
@@ -17,7 +17,7 @@ if errorlevel 1 (
 java --enable-native-access=ALL-UNNAMED -Dfile.encoding=UTF-8 -cp "out;lib\*" com.gym.Main
 if errorlevel 1 (
     echo.
-    echo [ERROR] Gym-OS CLI exited with code %errorlevel%.
+    echo [ERROR] GYM Management System exited with code %errorlevel%.
     pause
     exit /b %errorlevel%
 )
