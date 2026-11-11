@@ -355,6 +355,7 @@ class CliTheme {
     public static final int LINE_WIDTH = 80;
 
     private static final String RED = "\u001B[31m";
+    private static final String GREEN = "\u001B[32m";
     private static final String RESET = "\u001B[0m";
 
     // The real console (JLine), or null when input is piped from a file (no colors / no clearing then)
@@ -384,6 +385,17 @@ class CliTheme {
         }
         System.out.flush();
         terminal.writer().println(RED + line + RESET);
+        terminal.flush();
+    }
+
+    // Prints one line in green (plain text when there is no real console)
+    public static void printGreen(String line) {
+        if (terminal == null) {
+            System.out.println(line);
+            return;
+        }
+        System.out.flush();
+        terminal.writer().println(GREEN + line + RESET);
         terminal.flush();
     }
 
@@ -433,7 +445,7 @@ class CliTheme {
 
     public static void printSuccess(String message) {
         System.out.println();
-        System.out.println("[OK] " + safeText(message));
+        printGreen("[OK] " + safeText(message));
     }
 
     public static void printValidationError(String message) {
@@ -2986,6 +2998,7 @@ class ScheduleWorkoutCliMenu {
     private final GymOperations ops = new GymOperations();
     private final SessionDao sessionDao = new SessionDao();
     private final TrainerAvailabilityDao availDao = new TrainerAvailabilityDao();
+    private final TrainerSubscriptionDao subDao = new TrainerSubscriptionDao();
     private final WorkoutProgramDao workoutDao = new WorkoutProgramDao();
     private final EquipmentDao equipmentDao = new EquipmentDao();
 
@@ -3227,20 +3240,64 @@ class ScheduleWorkoutCliMenu {
         }
         Integer cid = input.readInt("Customer ID: ", 1);
         Integer slotId = input.readInt("Availability Slot ID: ", 1);
-        Integer subId = readNullableInt("TrainerSubscription ID (Enter for pay-per-session, or ID for free): ");
-        BigDecimal price = BigDecimal.ZERO;
-        if (subId == null) {
-            price = input.readBigDecimal("Session Price", new BigDecimal("45.00"));
-        } else {
-            price = input.readBigDecimal("Session Price (0 if covered by subscription)", BigDecimal.ZERO);
-        }
-        String notes = input.readOptionalString("Notes", "Open slot booking");
-        if (price == null) {
+        if (cid == null || slotId == null) {
             return;
         }
-        if (cid != null && slotId != null) {
-            Session saved = ops.bookOpenSlot(cid.intValue(), slotId.intValue(), 60, subId, price, notes);
-            CliTheme.printSuccess("Booked CONFIRMED Session #" + saved.getId() + " in Slot #" + slotId);
+        BigDecimal price;
+        Integer subId = pickCustomerSubscription(cid.intValue());
+        if (subId != null) {
+            price = BigDecimal.ZERO;
+        } else {
+            price = input.readBigDecimal("Pay-per-session Price", new BigDecimal("45.00"));
+            if (price == null) {
+                return;
+            }
+        }
+        String notes = input.readOptionalString("Notes", "Open slot booking");
+        Session saved = ops.bookOpenSlot(cid.intValue(), slotId.intValue(), 60, subId, price, notes);
+        String payInfo = subId != null ? "covered by subscription SUB#" + subId
+                : "pay-per-session, EGP " + price.toPlainString();
+        CliTheme.printSuccess("Booked CONFIRMED Session #" + saved.getId() + " in Slot #" + slotId
+                + " (" + payInfo + ")");
+    }
+
+    // Shows the member's active trainer subscriptions and lets one cover the session;
+    // returns the chosen subscription id, or null when paying per session
+    private Integer pickCustomerSubscription(int customerId) throws DatabaseException {
+        List<TrainerSubscription> subs = subDao.findByCustomerId(customerId);
+        List<TrainerSubscription> usable = new ArrayList<>();
+        for (int i = 0; i < subs.size(); i++) {
+            if (subs.get(i).getStatus() == SubscriptionStatus.ACTIVE) {
+                usable.add(subs.get(i));
+            }
+        }
+        if (usable.isEmpty()) {
+            System.out.println("  This member has no active trainer subscription, so the session is pay-per-session.");
+            return null;
+        }
+        System.out.println("  Trainer subscriptions of this member:");
+        for (int i = 0; i < usable.size(); i++) {
+            TrainerSubscription s = usable.get(i);
+            System.out.println("    SUB#" + s.getId() + " | Coach #" + s.getTrainerId()
+                    + " | " + s.getStartDate() + " to " + s.getEndDate() + " | " + s.getStatus());
+        }
+        System.out.println("  Using a subscription covers the session for free (EGP 0).");
+        while (true) {
+            String raw = input.readLine("Use a subscription? Enter its ID, or press Enter to pay per session: ");
+            if (raw == null || raw.isEmpty()) {
+                return null;
+            }
+            try {
+                int chosen = Integer.parseInt(raw);
+                for (int i = 0; i < usable.size(); i++) {
+                    if (usable.get(i).getId() == chosen) {
+                        return chosen;
+                    }
+                }
+                CliTheme.printWarning("[!] That subscription is not in the list above. Enter a listed ID, or press Enter.");
+            } catch (NumberFormatException e) {
+                CliTheme.printWarning("[!] Enter digits only, or press Enter to pay per session.");
+            }
         }
     }
 
