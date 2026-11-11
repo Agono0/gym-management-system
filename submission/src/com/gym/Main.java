@@ -1,19 +1,8 @@
 package com.gym;
 
-import com.gym.dao.AdministratorDao;
-import com.gym.dao.AttendanceDao;
-import com.gym.dao.CustomerDao;
-import com.gym.dao.EquipmentDao;
-import com.gym.dao.MedicalProfileDao;
-import com.gym.dao.MembershipDao;
-import com.gym.dao.PaymentDao;
-import com.gym.dao.ProgressRecordDao;
-import com.gym.dao.SessionDao;
-import com.gym.dao.TrainerAvailabilityDao;
-import com.gym.dao.TrainerDao;
-import com.gym.dao.TrainerSubscriptionDao;
-import com.gym.dao.WorkoutProgramDao;
-import com.gym.exception.DatabaseException;
+import com.gym.dao.*;
+
+import com.gym.exception.*;
 import com.gym.exception.ValidationException;
 import com.gym.model.Administrator;
 import com.gym.model.Attendance;
@@ -545,7 +534,13 @@ class CliInput {
                 continue;
             }
             try {
-                return Double.parseDouble(raw);
+                double value = Double.parseDouble(raw);
+                // Java also accepts the words "NaN" and "Infinity" as numbers, so block them here
+                if (Double.isNaN(value) || Double.isInfinite(value)) {
+                    System.out.println("[!] Please enter a real number. Example: 72.5");
+                    continue;
+                }
+                return value;
             } catch (NumberFormatException e) {
                 System.out.println("[!] Invalid decimal number. Example: 72.5");
             }
@@ -563,7 +558,13 @@ class CliInput {
                 return null;
             }
             try {
-                return Double.parseDouble(raw);
+                double value = Double.parseDouble(raw);
+                // Java also accepts the words "NaN" and "Infinity" as numbers, so block them here
+                if (Double.isNaN(value) || Double.isInfinite(value)) {
+                    System.out.println("[!] Please enter a real number. Example: 68.0 (or '-' to clear).");
+                    continue;
+                }
+                return value;
             } catch (NumberFormatException e) {
                 System.out.println("[!] Invalid decimal number. Example: 68.0 (or '-' to clear).");
             }
@@ -910,6 +911,9 @@ class GymOperations {
         if (m.getStatus() == MembershipStatus.CANCELLED) {
             throw new ValidationException("Renewing a CANCELLED membership is refused");
         }
+        if (m.getStatus() == MembershipStatus.FROZEN) {
+            throw new ValidationException("Membership #" + membershipId + " is FROZEN - unfreeze it first, then renew");
+        }
         int days = daysForPlan(m.getPlan());
         if (m.getEndDate() == null) {
             throw new ValidationException("Membership #" + membershipId + " has no end date stored");
@@ -1013,6 +1017,14 @@ class GymOperations {
     public Session requestOutsideSlots(int customerId, int trainerId, String date, String startTime,
                                        int durationMin, Integer subscriptionId, BigDecimal price, String notes)
             throws DatabaseException, ValidationException {
+        // Same member check as bookOpenSlot: only ACTIVE members may request sessions
+        Customer cust = customerDao.findById(customerId);
+        if (cust == null) {
+            throw new ValidationException("Customer not found with id: " + customerId);
+        }
+        if (cust.getStatus() != CustomerStatus.ACTIVE) {
+            throw new ValidationException("Session request denied because member status is " + cust.getStatus());
+        }
         int finalDuration = durationMin > 0 ? durationMin : 60;
         BigDecimal finalPrice = subscriptionId != null ? BigDecimal.ZERO : (price != null ? price : BigDecimal.ZERO);
         Session s = new Session(0, customerId, trainerId, date, startTime, finalDuration,
@@ -1893,10 +1905,13 @@ class MemberCliMenu {
                     }
                     input.pause();
                 } else if ("3".equals(choice)) {
-                    ops.hardDeleteCustomer(session.getCurrentUser(), c.getId());
-                    CliTheme.printSuccess("Member #" + c.getId() + " permanently deleted.");
+                    if (input.readYesNo("PERMANENTLY delete member #" + c.getId() + " (" + c.getFullName() + ")?")) {
+                        ops.hardDeleteCustomer(session.getCurrentUser(), c.getId());
+                        CliTheme.printSuccess("Member #" + c.getId() + " permanently deleted.");
+                        input.pause();
+                        return;
+                    }
                     input.pause();
-                    return;
                 } else if ("4".equals(choice)) {
                     toggleSuspendCustomer(c);
                     input.pause();
@@ -1933,6 +1948,10 @@ class MemberCliMenu {
     }
 
     private void toggleSuspendCustomer(Customer c) throws DatabaseException, ValidationException {
+        if (c.getStatus() == CustomerStatus.INACTIVE) {
+            throw new ValidationException("Member #" + c.getId()
+                    + " is INACTIVE (soft-deleted). Only ACTIVE members can be suspended.");
+        }
         if (c.getStatus() == CustomerStatus.SUSPENDED) {
             c.setStatus(CustomerStatus.ACTIVE);
             customerDao.update(c);
@@ -2367,10 +2386,13 @@ class TrainerCliMenu {
                     }
                     input.pause();
                 } else if ("3".equals(choice)) {
-                    ops.hardDeleteTrainer(session.getCurrentUser(), t.getId());
-                    CliTheme.printSuccess("Coach #" + t.getId() + " deleted.");
+                    if (input.readYesNo("PERMANENTLY delete coach #" + t.getId() + " (" + t.getFullName() + ")?")) {
+                        ops.hardDeleteTrainer(session.getCurrentUser(), t.getId());
+                        CliTheme.printSuccess("Coach #" + t.getId() + " deleted.");
+                        input.pause();
+                        return;
+                    }
                     input.pause();
-                    return;
                 } else {
                     System.out.println("[!] Unknown option: " + choice);
                 }
@@ -2590,12 +2612,14 @@ class TrainerCliMenu {
                     Integer subId = input.readInt("Subscription ID to cancel: ", 1);
                     if (subId != null) {
                         TrainerSubscription s = subDao.findById(subId.intValue());
-                        if (s != null) {
+                        if (s == null) {
+                            CliTheme.printValidationError("Subscription not found: #" + subId);
+                        } else if (s.getStatus() == SubscriptionStatus.CANCELLED) {
+                            CliTheme.printValidationError("Subscription #" + subId + " is already CANCELLED.");
+                        } else if (input.readYesNo("Cancel subscription #" + subId + "?")) {
                             s.setStatus(SubscriptionStatus.CANCELLED);
                             subDao.update(s);
                             CliTheme.printSuccess("Cancelled Subscription #" + s.getId());
-                        } else {
-                            CliTheme.printValidationError("Subscription not found: #" + subId);
                         }
                     }
                     input.pause();
@@ -2722,7 +2746,9 @@ class MembershipBillingCliMenu {
                         Membership m = membershipDao.findById(mid.intValue());
                         if (m == null) {
                             CliTheme.printValidationError("Membership not found: #" + mid);
-                        } else {
+                        } else if (m.getStatus() == MembershipStatus.CANCELLED) {
+                            CliTheme.printValidationError("Membership #" + mid + " is already CANCELLED.");
+                        } else if (input.readYesNo("Cancel membership #" + mid + "? (a cancelled plan can never be renewed)")) {
                             m.setStatus(MembershipStatus.CANCELLED);
                             membershipDao.update(m);
                             CliTheme.printSuccess("Cancelled Membership #" + m.getId());
@@ -2844,15 +2870,30 @@ class MembershipBillingCliMenu {
             return;
         }
         System.out.println("  Plan Types: [1] MONTHLY ($60 / 30d)  [2] QUARTERLY ($150 / 90d)  [3] YEARLY ($500 / 365d)");
-        String pChoice = input.readLine("Select Plan Type [1-3]: ");
-        PlanType plan = PlanType.MONTHLY;
-        BigDecimal defPrice = new BigDecimal("60.00");
-        if ("2".equals(pChoice)) {
-            plan = PlanType.QUARTERLY;
-            defPrice = new BigDecimal("150.00");
-        } else if ("3".equals(pChoice)) {
-            plan = PlanType.YEARLY;
-            defPrice = new BigDecimal("500.00");
+        PlanType plan;
+        BigDecimal defPrice;
+        // Keep asking until the user picks a real plan (no silent MONTHLY default)
+        while (true) {
+            String pChoice = input.readLine("Select Plan Type [1-3]: ");
+            if (pChoice == null) {
+                return;
+            }
+            if ("1".equals(pChoice)) {
+                plan = PlanType.MONTHLY;
+                defPrice = new BigDecimal("60.00");
+                break;
+            }
+            if ("2".equals(pChoice)) {
+                plan = PlanType.QUARTERLY;
+                defPrice = new BigDecimal("150.00");
+                break;
+            }
+            if ("3".equals(pChoice)) {
+                plan = PlanType.YEARLY;
+                defPrice = new BigDecimal("500.00");
+                break;
+            }
+            System.out.println("[!] Enter 1, 2 or 3.");
         }
         BigDecimal price = input.readBigDecimal("Price", defPrice);
         String start = input.readIsoDate("Start Date", LocalDate.now().toString());
@@ -2875,7 +2916,18 @@ class MembershipBillingCliMenu {
             return;
         }
         System.out.println("  Link Target (exactly one): [1] Membership  [2] TrainerSubscription  [3] Session");
-        String targetType = input.readLine("Target Type [1-3]: ");
+        // Keep asking until the user picks a real target type (no silent Membership default)
+        String targetType;
+        while (true) {
+            targetType = input.readLine("Target Type [1-3]: ");
+            if (targetType == null) {
+                return;
+            }
+            if ("1".equals(targetType) || "2".equals(targetType) || "3".equals(targetType)) {
+                break;
+            }
+            System.out.println("[!] Enter 1, 2 or 3.");
+        }
         Integer targetId = input.readInt("Target Record ID: ", 1);
         BigDecimal amount = input.readBigDecimal("Amount (>0)", new BigDecimal("45.00"));
         PaymentMethod method = readPaymentMethod();
@@ -2938,14 +2990,23 @@ class MembershipBillingCliMenu {
 
     private PaymentMethod readPaymentMethod() {
         System.out.println("  Method: [1] CASH  [2] CARD  [3] TRANSFER");
-        String m = input.readLine("Select [1-3]: ");
-        if ("2".equals(m)) {
-            return PaymentMethod.CARD;
+        // Keep asking until the user picks a real method (no silent CASH default)
+        while (true) {
+            String m = input.readLine("Select [1-3]: ");
+            if (m == null) {
+                return null;
+            }
+            if ("1".equals(m)) {
+                return PaymentMethod.CASH;
+            }
+            if ("2".equals(m)) {
+                return PaymentMethod.CARD;
+            }
+            if ("3".equals(m)) {
+                return PaymentMethod.TRANSFER;
+            }
+            System.out.println("[!] Enter 1, 2 or 3.");
         }
-        if ("3".equals(m)) {
-            return PaymentMethod.TRANSFER;
-        }
-        return PaymentMethod.CASH;
     }
 
     private Integer readNullableInt(String prompt) {
@@ -3422,8 +3483,12 @@ class FacilityAdminCliMenu {
                             CliTheme.printValidationError("Attendance record not found: #" + aid);
                         } else {
                             a.setCheckIn(input.readIsoTime("Corrected Check-In", a.getCheckIn()));
-                            String out = input.readOptionalString("Corrected Check-Out (or blank)", a.getCheckOut());
-                            a.setCheckOut(out != null && out.isEmpty() ? null : out);
+                            String out = input.readOptionalString("Corrected Check-Out (Enter to keep, '-' to clear)",
+                                    a.getCheckOut());
+                            if ("-".equals(out) || (out != null && out.isEmpty())) {
+                                out = null;
+                            }
+                            a.setCheckOut(out);
                             attendanceDao.update(a);
                             CliTheme.printSuccess("Corrected Attendance #" + a.getId());
                         }
@@ -3589,7 +3654,7 @@ class FacilityAdminCliMenu {
                     if (name == null || user == null || pass == null) {
                         return;
                     }
-                    StaffRole role = readStaffRole();
+                    StaffRole role = readStaffRole(StaffRole.STAFF);
                     String defaultEmail = user.isEmpty() ? "" : user + "@gymos.local";
                     String email = input.readOptionalString("Email", defaultEmail);
                     Administrator saved = adminDao.insert(new Administrator(0, name, user, pass,
@@ -3619,7 +3684,7 @@ class FacilityAdminCliMenu {
                             CliTheme.printValidationError("Staff not found: #" + aid);
                         } else {
                             target.setPasswordHash(input.readOptionalString("New Password", target.getPasswordHash()));
-                            StaffRole newRole = readStaffRole();
+                            StaffRole newRole = readStaffRole(target.getRole());
                             if (target.getId() == session.getCurrentUser().getId() && newRole != StaffRole.ADMIN) {
                                 CliTheme.printValidationError("You cannot change your own role away from ADMIN "
                                         + "while logged in. Ask another ADMIN to do it.");
@@ -3638,7 +3703,7 @@ class FacilityAdminCliMenu {
                             CliTheme.printValidationError("Cannot delete the currently logged-in admin account.");
                         } else if (adminDao.findById(aid.intValue()) == null) {
                             CliTheme.printValidationError("Staff not found: #" + aid);
-                        } else {
+                        } else if (input.readYesNo("PERMANENTLY delete staff account #" + aid + "?")) {
                             adminDao.delete(aid.intValue());
                             CliTheme.printSuccess("Deleted Staff Account #" + aid);
                         }
@@ -3734,15 +3799,18 @@ class FacilityAdminCliMenu {
 
     private void renderFloorMap(List<Equipment> list) {
         CliTheme.printSectionTitle("GYM FLOOR ZONE MAP (ASCII BLUEPRINT)");
-        String[] zones = {"CARDIO", "STRENGTH", "FREE WEIGHTS", "RECOVERY"};
+        // "OTHER" collects equipment whose category is not one of the 4 named zones
+        String[] zones = {"CARDIO", "STRENGTH", "FREE WEIGHTS", "RECOVERY", "OTHER"};
         for (int z = 0; z < zones.length; z++) {
             String zone = zones[z];
             System.out.println("  +--- ZONE: " + zone + " " + CliTheme.repeat('-', 58 - zone.length()) + "+");
             int found = 0;
             for (int i = 0; i < list.size(); i++) {
                 Equipment eq = list.get(i);
-                String cat = eq.getCategory() != null ? eq.getCategory().toUpperCase() : "";
-                if (cat.equals(zone)) {
+                String cat = eq.getCategory() != null ? eq.getCategory().trim().toUpperCase() : "";
+                boolean known = cat.equals("CARDIO") || cat.equals("STRENGTH")
+                        || cat.equals("FREE WEIGHTS") || cat.equals("RECOVERY");
+                if (cat.equals(zone) || (zone.equals("OTHER") && !known)) {
                     found++;
                     String badge = eq.getStatus() == EquipmentStatus.AVAILABLE ? "[OK]"
                             : (eq.getStatus() == EquipmentStatus.IN_MAINTENANCE ? "[MAINT]" : "[RET]");
@@ -3815,16 +3883,25 @@ class FacilityAdminCliMenu {
         return current;
     }
 
-    private StaffRole readStaffRole() {
+    // Pressing Enter keeps the current role, so editing only a password never changes the role
+    private StaffRole readStaffRole(StaffRole current) {
         System.out.println("  Role: [1] ADMIN  [2] MANAGER  [3] STAFF");
-        String r = input.readLine("Select [1-3]: ");
-        if ("1".equals(r)) {
-            return StaffRole.ADMIN;
+        while (true) {
+            String r = input.readLine("Select [1-3] (Enter to keep " + current + "): ");
+            if (r == null || r.isEmpty()) {
+                return current;
+            }
+            if ("1".equals(r)) {
+                return StaffRole.ADMIN;
+            }
+            if ("2".equals(r)) {
+                return StaffRole.MANAGER;
+            }
+            if ("3".equals(r)) {
+                return StaffRole.STAFF;
+            }
+            System.out.println("[!] Enter 1, 2, 3, or press Enter.");
         }
-        if ("2".equals(r)) {
-            return StaffRole.MANAGER;
-        }
-        return StaffRole.STAFF;
     }
 }
 
