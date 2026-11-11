@@ -69,8 +69,8 @@ the same day just updates the row instead of duplicating it.
 **Payments.** Every payment has a unique receipt number and is linked to exactly one thing:
 a membership, a subscription, or a session. When a payment is wrong we don't delete it.
 We void it with a written reason and record a replacement, so the money history stays
-complete. The system can also calculate the outstanding balance: memberships and confirmed
-sessions that were given but not paid yet.
+complete. The system can also calculate the outstanding balance: memberships, trainer
+subscriptions and confirmed sessions that were given but not paid yet.
 
 **Equipment.** The machines and gear with their condition (new, good, fair, poor), their
 status (available, in maintenance, retired) and last maintenance date.
@@ -80,8 +80,8 @@ sees a trend and not just single numbers.
 
 **Staff accounts.** Three roles: ADMIN, MANAGER, STAFF. Only ADMIN creates accounts or
 changes roles, and an account that was deactivated cannot log in at all. The system can
-remember the last username between runs so nobody types it every morning. It stores the
-username only, never the password.
+also remember the last staff member and skip the login on the next run, which saves typing
+the username every morning. It stores the username only, never the password.
 
 ## How we built it
 
@@ -175,7 +175,6 @@ We block those two words explicitly now.
 
 When validation fails, nothing is written and the message says what was wrong. This was a
 deliberate choice: fail early, fail with a clear message, write nothing.
-
 
 ## Who did what
 
