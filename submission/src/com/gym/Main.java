@@ -56,12 +56,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
-// ===== Main (entry point, was GymCliApp) =====
 
-// Terminal UI entry point for the GYM Management System: initializes the database, then shows login + dashboard
+
+
 public class Main {
 
-    // "Remember me" file next to gym.db. It holds only the username, never the password.
     private static final String REMEMBER_FILE = "remember.txt";
 
     private final CliInput input;
