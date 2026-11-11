@@ -1678,13 +1678,13 @@ class MemberCliMenu {
         if (name == null) {
             return;
         }
-        String phone = input.readRawString("Phone (min 7 digits, or blank): ");
+        String phone = input.readRawString("Phone (Egyptian 11 digits, e.g. 01012345678): ");
         String email = input.readRawString("Email (example: user@mail.com, or blank): ");
         String address = input.readOptionalString("Address", "Cairo");
         String dob = input.readRawString("Date of Birth yyyy-MM-dd (or blank): ");
         String gender = input.readOptionalString("Gender", "Male");
         String emName = input.readOptionalString("Emergency Contact Name", "Parent");
-        String emPhone = input.readRawString("Emergency Phone (min 7 digits, or blank): ");
+        String emPhone = input.readRawString("Emergency Phone (Egyptian 11 digits, e.g. 01012345678): ");
         Integer trainerId = readOptionalTrainerId(null);
 
         Customer c = new Customer(0, name, phone, email, address, dob, gender,
@@ -2157,7 +2157,7 @@ class TrainerCliMenu {
         if (name == null) {
             return;
         }
-        String phone = input.readRawString("Phone (min 7 digits, or blank): ");
+        String phone = input.readRawString("Phone (Egyptian 11 digits, e.g. 01012345678): ");
         String email = input.readRawString("Email (example: coach@gymos.local, or blank): ");
         String spec = input.readOptionalString("Specialization", "Strength & Conditioning");
         int exp = input.readIntOrDefault("Experience Years", 3);

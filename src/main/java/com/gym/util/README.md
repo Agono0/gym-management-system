@@ -103,6 +103,20 @@ SerializationUtil.saveToFile(customer, "backups/customer.ser");
 Customer loaded = (Customer) SerializationUtil.loadFromFile("backups/customer.ser");
 ```
 
+### `PhoneUtil.java` — Egyptian mobile number rule (owner: Abdelrhman)
+
+**Status:** done (`32` lines). **Canonical:** `docs/DECISIONS.md` 79.
+
+**What it does:** One shared rule for every phone field: exactly 11 digits matching `01[0125]\d{8}`
+(prefixes 010, 011, 012, 015). `isValid(String)` returns `true`/`false` for inline UI errors;
+`requireValid(String, String)` throws `ValidationException` (blank or wrong format) for the DAOs.
+
+```java
+// Sketch — DAO validate(...) and controller usage
+PhoneUtil.requireValid(c.getPhone(), "Customer phone");   // DAO: throws ValidationException
+boolean phoneOk = PhoneUtil.isValid(phoneField.getText()); // controller: inline field error
+```
+
 ## 6. How this layer connects to the others
 
 | Package / Class | Depends on | Used by |
@@ -110,6 +124,7 @@ Customer loaded = (Customer) SerializationUtil.loadFromFile("backups/customer.se
 | `com.gym.exception` | Standard `java.lang.Exception` | `com.gym.util`, `com.gym.dao`, and Milestone 3 controllers |
 | `com.gym.util.DatabaseConnection` | `java.sql.*`, `sqlite-jdbc`, `DatabaseException` | All 13 classes in `com.gym.dao` (and startup initialization in Milestone 3) |
 | `com.gym.util.SerializationUtil` | `java.io.*`, `DatabaseException` | Backup/export utilities and Milestone 3 callers |
+| `com.gym.util.PhoneUtil` | `ValidationException` | `CustomerDao`, `TrainerDao`, `AdministratorDao`, `MedicalProfileDao`, `CustomerListController`, `CustomerProfileController` |
 
 ## 7. Common mistakes and review checklist
 
@@ -161,6 +176,7 @@ Checklist:
 |---|---|---|---|
 | `DatabaseConnection.java` | SQLite URL, `getConnection()`, 13-table `CREATE TABLE IF NOT EXISTS` DDL | Abdelrhman | Done (Milestone 2) |
 | `SerializationUtil.java` | Binary object I/O (`saveToFile`, `loadFromFile`) | Abdelrhman | Done (Milestone 2) |
+| `PhoneUtil.java` | Egyptian 11-digit mobile rule (`isValid`, `requireValid`) | Abdelrhman | Done |
 | `GymException.java`, `ValidationException.java`, `DatabaseException.java` | Checked backend exceptions | Abdelrhman | Done (Milestone 2) |
 
 `swing` branch rule: both `com.gym.util` and `com.gym.exception` are pure Java with zero UI toolkit

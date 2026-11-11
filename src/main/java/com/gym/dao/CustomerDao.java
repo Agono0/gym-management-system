@@ -5,6 +5,7 @@ import com.gym.exception.ValidationException;
 import com.gym.model.Customer;
 import com.gym.model.CustomerStatus;
 import com.gym.util.DatabaseConnection;
+import com.gym.util.PhoneUtil;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -166,12 +167,8 @@ public class CustomerDao {
         if (c.getEmail() != null && !c.getEmail().trim().isEmpty() && !isValidEmail(c.getEmail())) {
             throw new ValidationException("Invalid customer email format: " + c.getEmail());
         }
-        if (c.getPhone() != null && !c.getPhone().trim().isEmpty() && countDigits(c.getPhone()) < 7) {
-            throw new ValidationException("Customer phone must contain at least 7 digits");
-        }
-        if (c.getEmergencyPhone() != null && !c.getEmergencyPhone().trim().isEmpty() && countDigits(c.getEmergencyPhone()) < 7) {
-            throw new ValidationException("Emergency phone must contain at least 7 digits");
-        }
+        PhoneUtil.requireValid(c.getPhone(), "Customer phone");
+        PhoneUtil.requireValid(c.getEmergencyPhone(), "Emergency phone");
         if (c.getDateOfBirth() != null && !c.getDateOfBirth().trim().isEmpty() && !isValidDate(c.getDateOfBirth())) {
             throw new ValidationException("Date of birth must be in yyyy-MM-dd format");
         }
@@ -203,16 +200,6 @@ public class CustomerDao {
         int atPos = trimmed.indexOf('@');
         int dotPos = trimmed.lastIndexOf('.');
         return atPos > 0 && dotPos > atPos + 1 && dotPos < trimmed.length() - 1 && !trimmed.contains(" ");
-    }
-
-    private int countDigits(String text) {
-        int digits = 0;
-        for (int i = 0; i < text.length(); i++) {
-            if (Character.isDigit(text.charAt(i))) {
-                digits++;
-            }
-        }
-        return digits;
     }
 
     private boolean isValidDate(String value) {

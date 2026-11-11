@@ -113,7 +113,7 @@ public class TrainerCliMenu {
         if (name == null) {
             return;
         }
-        String phone = input.readRawString("Phone (min 7 digits, or blank): ");
+        String phone = input.readRawString("Phone (Egyptian 11 digits, e.g. 01012345678): ");
         String email = input.readRawString("Email (example: coach@gymos.local, or blank): ");
         String spec = input.readOptionalString("Specialization", "Strength & Conditioning");
         int exp = input.readIntOrDefault("Experience Years", 3);

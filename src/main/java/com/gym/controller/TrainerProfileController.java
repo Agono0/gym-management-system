@@ -264,7 +264,7 @@ public class TrainerProfileController implements ScreenController {
         contactFlow.setAlignment(Pos.CENTER_LEFT);
         lblEmail = new Label("e.rostova@cybercoregym.io");
         lblEmail.getStyleClass().add("body-medium");
-        lblPhone = new Label("+1 (555) 392-8819");
+        lblPhone = new Label("01012345678");
         lblPhone.getStyleClass().add("body-medium");
         lblExperience = new Label("Experience: 8 Years");
         lblExperience.getStyleClass().add("body-medium");

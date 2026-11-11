@@ -603,3 +603,11 @@
     `SerializationUtil` alongside intentional `DatabaseException` trap demonstrations.
     (5) **Launchers:** Added Gradle `runCli` (`standardInput = System.in`, `-Dfile.encoding=UTF-8`) in
     `build.gradle` and `run-cli.bat` at the repository root.
+
+79. **Egyptian mobile phone rule via one shared `PhoneUtil` (Nov 2026).** The old ">= 7 digits" check (and
+    the controllers' looser `01\d{9}`) accepted numbers that cannot exist in Egypt. Every phone field —
+    customer phone and emergency phone, trainer phone, staff phone and medical doctor phone — now goes
+    through `com.gym.util.PhoneUtil`: exactly 11 digits matching `01[0125]\d{8}` (010 / 011 / 012 / 015).
+    The fields are now required, so a blank phone is a `ValidationException`. The DAOs call
+    `PhoneUtil.requireValid`, and the JavaFX controllers call `PhoneUtil.isValid` for inline field errors.
+    The same class is copied into the standalone `submission/` build so both code trees enforce one rule.

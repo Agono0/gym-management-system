@@ -5,6 +5,7 @@ import com.gym.exception.ValidationException;
 import com.gym.model.Administrator;
 import com.gym.model.StaffRole;
 import com.gym.util.DatabaseConnection;
+import com.gym.util.PhoneUtil;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -167,6 +168,7 @@ public class AdministratorDao {
         if (a.getRole() == null) {
             throw new ValidationException("Staff role is required");
         }
+        PhoneUtil.requireValid(a.getPhone(), "Staff phone");
         if (a.getEmail() != null && !a.getEmail().trim().isEmpty() && !isValidEmail(a.getEmail())) {
             throw new ValidationException("Invalid staff email format: " + a.getEmail());
         }

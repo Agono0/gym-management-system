@@ -1,5 +1,6 @@
 package com.gym.controller;
 
+import com.gym.util.PhoneUtil;
 import io.m3fx.controls.appbar.M3TopAppBar;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
@@ -304,7 +305,7 @@ public class CustomerProfileController implements ScreenController {
         dossierContent.setPadding(new Insets(16));
         dossierContent.getChildren().add(styledLabel("BIOGRAPHICAL DOSSIER", "title-small"));
         txtFullName = outlinedField("Full Name", "Required");
-        txtPhone = outlinedField("Phone Number", "Format: 01xxxxxxxxx");
+        txtPhone = outlinedField("Phone Number", "11 digits starting 010, 011, 012 or 015");
         txtEmail = outlinedField("Email Address", "Used for session reminders");
         txtAddress = outlinedField("Physical Address", "Street, city");
         txtDateOfBirth = outlinedField("Date of Birth", "YYYY-MM-DD");
@@ -432,7 +433,7 @@ public class CustomerProfileController implements ScreenController {
         String name = txtFullName.getText() == null ? "" : txtFullName.getText().trim();
         String phone = txtPhone.getText() == null ? "" : txtPhone.getText().trim();
         boolean nameOk = !name.isEmpty();
-        boolean phoneOk = phone.matches("01\\d{9}");
+        boolean phoneOk = PhoneUtil.isValid(phone);
         txtFullName.setError(!nameOk);
         txtPhone.setError(!phoneOk);
         if (!nameOk || !phoneOk) {

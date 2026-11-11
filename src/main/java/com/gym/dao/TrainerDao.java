@@ -4,6 +4,7 @@ import com.gym.exception.DatabaseException;
 import com.gym.exception.ValidationException;
 import com.gym.model.Trainer;
 import com.gym.util.DatabaseConnection;
+import com.gym.util.PhoneUtil;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -138,9 +139,7 @@ public class TrainerDao {
         if (t.getEmail() != null && !t.getEmail().trim().isEmpty() && !isValidEmail(t.getEmail())) {
             throw new ValidationException("Invalid trainer email format: " + t.getEmail());
         }
-        if (t.getPhone() != null && !t.getPhone().trim().isEmpty() && countDigits(t.getPhone()) < 7) {
-            throw new ValidationException("Trainer phone must contain at least 7 digits");
-        }
+        PhoneUtil.requireValid(t.getPhone(), "Trainer phone");
         if (t.getExperienceYears() < 0) {
             throw new ValidationException("Experience years cannot be negative");
         }
@@ -157,16 +156,6 @@ public class TrainerDao {
         int atPos = trimmed.indexOf('@');
         int dotPos = trimmed.lastIndexOf('.');
         return atPos > 0 && dotPos > atPos + 1 && dotPos < trimmed.length() - 1 && !trimmed.contains(" ");
-    }
-
-    private int countDigits(String text) {
-        int digits = 0;
-        for (int i = 0; i < text.length(); i++) {
-            if (Character.isDigit(text.charAt(i))) {
-                digits++;
-            }
-        }
-        return digits;
     }
 
     private boolean isValidDate(String value) {

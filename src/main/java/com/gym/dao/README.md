@@ -72,11 +72,11 @@ and `validate`:
 
 | DAO File | Table (`DatabaseConnection`) | Public Methods Beyond `insert`/`update`/`delete`/`findById`/`findAll` | Key `validate(...)` Checks |
 |---|---|---|---|
-| `CustomerDao.java` | `customers` | — | Non-null, non-blank `fullName`, `@`/`.` email, `>= 7` digits on phone/emergencyPhone, ISO `yyyy-MM-dd` DOB/joinDate, nullable `trainerId` FK check |
-| `TrainerDao.java` | `trainers` | — | Non-null, non-blank `fullName`, `@`/`.` email, `>= 7` digits phone, `experienceYears >= 0`, ISO `hireDate`, non-null `hourlyRate >= 0` |
-| `AdministratorDao.java` | `administrators` | `findByUsername(String)` | Non-null, `fullName`, `username` (`>= 3` chars, no spaces, unique), non-blank `passwordHash`, non-null `role`, email, ISO `createdDate` |
+| `CustomerDao.java` | `customers` | — | Non-null, non-blank `fullName`, `@`/`.` email, required Egyptian mobile phone/emergencyPhone via `PhoneUtil` (11 digits, `010`/`011`/`012`/`015`), ISO `yyyy-MM-dd` DOB/joinDate, nullable `trainerId` FK check |
+| `TrainerDao.java` | `trainers` | — | Non-null, non-blank `fullName`, `@`/`.` email, required Egyptian mobile phone via `PhoneUtil`, `experienceYears >= 0`, ISO `hireDate`, non-null `hourlyRate >= 0` |
+| `AdministratorDao.java` | `administrators` | `findByUsername(String)` | Non-null, `fullName`, `username` (`>= 3` chars, no spaces, unique), non-blank `passwordHash`, non-null `role`, required Egyptian mobile phone via `PhoneUtil`, email, ISO `createdDate` |
 | `EquipmentDao.java` | `equipment` | — | Non-null, non-blank `name`, ISO `purchaseDate`/`lastMaintenance` with `lastMaintenance >= purchaseDate` |
-| `MedicalProfileDao.java` | `medical_profiles` | `findByCustomerId(int)` | Non-null, existing `customerId`, ISO `updatedDate`, max one profile per customer (rule 3) |
+| `MedicalProfileDao.java` | `medical_profiles` | `findByCustomerId(int)` | Non-null, existing `customerId`, required Egyptian mobile `doctorPhone` via `PhoneUtil`, ISO `updatedDate`, max one profile per customer (rule 3) |
 | `MembershipDao.java` | `memberships` | `findByCustomerId(int)` | Non-null, existing `customerId`, non-null `plan`/`price >= 0`, `frozenDays >= 0`, ISO `startDate <= endDate`, refuses reactivating/renewing `CANCELLED` (rule 7) |
 | `WorkoutProgramDao.java` | `workout_programs` | `findByCustomerId(int)` | Non-null, existing `customerId`/`creatorTrainerId`, `name`, `version >= 1`, unique `(customerId, version)`, ISO `createdDate` |
 | `TrainerAvailabilityDao.java` | `trainer_availability` | `findByTrainerId(int)` | Non-null, existing `trainerId`, ISO `date`, `HH:mm` `startTime < endTime` (rule 8), `maxCustomers > 0` (rule 8) |

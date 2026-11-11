@@ -4,6 +4,7 @@ import com.gym.exception.DatabaseException;
 import com.gym.exception.ValidationException;
 import com.gym.model.MedicalProfile;
 import com.gym.util.DatabaseConnection;
+import com.gym.util.PhoneUtil;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -164,6 +165,7 @@ public class MedicalProfileDao {
         if (mp.getCustomerId() <= 0 || !customerExists(mp.getCustomerId())) {
             throw new ValidationException("Customer does not exist with id: " + mp.getCustomerId());
         }
+        PhoneUtil.requireValid(mp.getDoctorPhone(), "Doctor phone");
         if (mp.getUpdatedDate() != null && !mp.getUpdatedDate().trim().isEmpty() && !isValidDate(mp.getUpdatedDate())) {
             throw new ValidationException("Updated date must be in yyyy-MM-dd format");
         }

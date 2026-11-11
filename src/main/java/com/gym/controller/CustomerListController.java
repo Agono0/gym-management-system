@@ -1,5 +1,6 @@
 package com.gym.controller;
 
+import com.gym.util.PhoneUtil;
 import io.m3fx.controls.appbar.M3TopAppBar;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
@@ -405,8 +406,8 @@ public class CustomerListController implements ScreenController {
     /** Opens the Add Member dialog; confirming inserts the athlete into the roster. */
     public void onAdd() {
         M3TextField nameField = new M3TextField("Full name", TextFieldVariant.OUTLINED);
-        M3TextField phoneField = new M3TextField("Phone (01xxxxxxxxx)", TextFieldVariant.OUTLINED);
-        phoneField.setSupportingText("Digits only, e.g. 01005558877");
+        M3TextField phoneField = new M3TextField("Phone (010/011/012/015 + 8 digits)", TextFieldVariant.OUTLINED);
+        phoneField.setSupportingText("11 digits, e.g. 01005558877");
         Label hint = new Label("New members start on the Monthly Standard plan with Active status.");
         hint.setWrapText(true);
 
@@ -419,7 +420,7 @@ public class CustomerListController implements ScreenController {
             String name = nameField.getText().trim();
             String phone = phoneField.getText().trim();
             boolean nameOk = !name.isEmpty();
-            boolean phoneOk = phone.matches("01\\d{9}");
+            boolean phoneOk = PhoneUtil.isValid(phone);
             nameField.setError(!nameOk);
             phoneField.setError(!phoneOk);
             if (!nameOk || !phoneOk) {
