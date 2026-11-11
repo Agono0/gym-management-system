@@ -25,71 +25,63 @@ how we designed it, what went wrong while building it, and what is still missing
 
 The system covers the daily work of a gym from the staff side. Here is what it handles.
 
-### Members and their health record
-
-Every member has a record: name, contact info, address, birth date, gender, and an
-emergency contact. Phone numbers have to be real Egyptian mobile numbers, 11 digits
+**Members.** Every member has a record: name, contact info, address, birth date, gender,
+and an emergency contact. Phone numbers have to be real Egyptian mobile numbers, 11 digits
 starting with 010, 011, 012 or 015. We made this a shared rule because every phone field in
 the system follows it. Each member also has a status (active, suspended, inactive) and can
 be assigned to one trainer.
 
-A member can also have one medical record: blood type, chronic conditions, allergies,
-medications, injuries, doctor name and phone. It gets created only when someone actually
-needs it, not automatically for every member. The assigned trainer can read it, which is a
-safety thing, you want to know your client has a heart condition before pushing him. Other
-staff can't open it.
+**Medical profile.** A member can have one medical record: blood type, chronic conditions,
+allergies, medications, injuries, doctor name and phone. It gets created only when someone
+actually needs it, not automatically for every member. The member's assigned trainer can
+read it (that's a safety thing, you want to know your client has a heart condition before
+pushing him), other staff cannot.
 
-### Trainers, plans and booking
+**Trainers.** Coaches are stored with their specialization, experience, certifications, hire
+date and hourly rate. The member's assigned trainer is what builds the trainer's roster,
+so moving a member to another trainer moves him from one roster to the other.
 
-Coaches are stored with their specialization, experience, certifications, hire date and
-hourly rate. The member's assigned trainer is what builds the trainer's roster, so moving
-a member to another trainer moves him from one roster to the other.
+**Memberships.** Monthly, quarterly or yearly plans, with start date, end date and status.
+Staff can sell, renew, cancel, freeze and unfreeze. Freezing is the feature we get asked
+about most, so here is how it works: a member travels for a month or gets injured, the plan
+is paused for a number of days, and when it comes back the end date moves forward by exactly
+those days. The member doesn't lose a single day he paid for. No refund, no penalty, just
+the date shifting.
 
-Members buy monthly, quarterly or yearly plans, each with a start date, end date and
-status. Staff can sell, renew, cancel, freeze and unfreeze. Freezing is the feature we get
-asked about most, so here is how it works. A member travels for a month or gets injured,
-the plan is paused for a number of days, and when it comes back the end date moves forward
-by exactly those days. The member doesn't lose a single day he paid for. No refund, no
-penalty, just the date shifting.
-
-For the training itself, coaches publish availability slots, hour ranges with a maximum
-number of customers per slot. A member can book a published slot directly, or request a
+**Sessions and booking.** Trainers publish availability slots (hour ranges with a maximum
+number of customers per slot). A member can book a published slot directly, or request a
 session at another time and wait for the trainer to confirm, or in special cases an admin
-reserves it by hand. After that the session moves step by step. It starts as requested or
-confirmed, and it ends as completed, no-show or cancelled.
+reserves it by hand. After that the session lives its life: requested, confirmed, then
+completed, no-show or cancelled.
 
-Separately from the gym membership, a member can pay for a period of training with a
-specific coach. A session covered by that subscription costs zero, so the member never
-pays twice for the same hour.
+**Trainer subscriptions.** Separately from the gym membership, a member can pay for a
+period of training with a specific coach. A session covered by a subscription costs zero,
+so the member never pays twice for the same hour.
 
-Trainers also write workout routines for their members. When a routine changes we don't
-overwrite it, we store a new version. The old versions stay, because training history is
-useful.
+**Workout programs.** The trainer writes a routine for the member. When the routine changes
+we don't overwrite it, we store a new version. The old versions stay, because training
+history is useful.
 
-### Money
+**Attendance.** Check-in and check-out. A member can only check in if his account is active
+and he holds a membership that hasn't expired. One row per member per day, a second check-in
+the same day just updates the row instead of duplicating it.
 
-Every payment has a unique receipt number and points at exactly one thing, either a
-membership, a subscription or a session. When a payment is wrong we don't delete it. We
-void it with a written reason and record a replacement, so the money history stays
+**Payments.** Every payment has a unique receipt number and is linked to exactly one thing:
+a membership, a subscription, or a session. When a payment is wrong we don't delete it.
+We void it with a written reason and record a replacement, so the money history stays
 complete. The system can also calculate the outstanding balance: memberships and confirmed
 sessions that were given but not paid yet.
 
-### Day-to-day operations
+**Equipment.** The machines and gear with their condition (new, good, fair, poor), their
+status (available, in maintenance, retired) and last maintenance date.
 
-Attendance is check-in and check-out. A member can only check in if his account is active
-and he holds a membership that hasn't expired. There is one row per member per day, and a
-second check-in the same day just updates the row instead of duplicating it.
+**Progress tracking.** Weight, body fat and measurements recorded over time, so the member
+sees a trend and not just single numbers.
 
-The gym's machines and gear are stored with their condition (new, good, fair, poor), their
-status (available, in maintenance, retired) and the last maintenance date.
-
-Progress records keep weight, body fat and measurements over time, so the member sees a
-trend and not just single numbers.
-
-And staff accounts come with three roles: ADMIN, MANAGER, STAFF. Only ADMIN creates
-accounts or changes roles, and an account that was deactivated cannot log in at all. The
-system can remember the last username between runs so nobody types it every morning. It
-stores the username only, never the password.
+**Staff accounts.** Three roles: ADMIN, MANAGER, STAFF. Only ADMIN creates accounts or
+changes roles, and an account that was deactivated cannot log in at all. The system can
+remember the last username between runs so nobody types it every morning. It stores the
+username only, never the password.
 
 ## How we built it
 
@@ -145,31 +137,30 @@ use the same username, the second one fails with a clean message and not with a 
 
 ## The rules we enforce
 
-Before writing any code we sat together and wrote the business rules as a list. We ended
-up with 19 of them. These are the main ones, in plain words.
+Before writing the code we sat and wrote the business rules as a list. It ended up being
+19 rules. Here are the important ones in normal words.
 
-With memberships, a plan can only be frozen while it is active. Freezing saves how many
-days the plan will stay paused. Later, when you unfreeze it, the end date moves forward by
-those same days and the counter goes back to zero. If a member gets suspended, his active
-plans freeze on their own. Renewing pushes the end date forward, and a cancelled plan can't
-be renewed at all.
+About memberships: only an active plan can be frozen, and freezing stores the number of
+days. Unfreezing shifts the end date forward by those days and clears the counter. If a
+member gets suspended, all his active plans freeze automatically. Renewing extends the end
+date, and renewing a cancelled plan is refused.
 
-Sessions move in one direction only. A request gets confirmed. A confirmed one ends as
-completed, no-show or cancelled. Nothing goes backwards. Cancelling 2 hours or more before
-the start time costs nothing. Later than that, the cancel is still saved, with the reason
-written next to it. A no-show counts against the trainer's stats. And a seat is only taken
-while the session is confirmed, so once someone cancels, that seat is free again.
+About sessions: a session can only move forward in its life. A request becomes confirmed,
+a confirmed one becomes completed, no-show or cancelled. Nothing jumps backwards. Cancelling
+2 hours or more before the start is free, later cancellations are still recorded with the
+reason. A no-show is a real state and it counts in the trainer's statistics. Slot occupancy
+only counts confirmed sessions, so when someone cancels, the seat frees up for the next person.
 
-Payments are strict about their links. One payment points at one thing only, a membership,
-a subscription or a session, and it has to belong to the same customer as that thing. A
-wrong payment is never deleted. It gets voided with a reason, and a new payment is recorded
-in its place. The outstanding balance only counts unpaid memberships, subscriptions and
-confirmed sessions. We had a bug here once where requested sessions were counted too, so
-the balance showed money owed for sessions nobody ever confirmed. That is fixed now.
+About payments: a payment belongs to exactly one of membership, subscription or session,
+and it must belong to that item's customer. Corrections go through void and replace, never
+through delete. The outstanding balance counts unpaid memberships, subscriptions and
+confirmed sessions only. We actually had a bug here at some point where requested sessions
+were counted too, which means the balance could show money owed for sessions that were
+never confirmed. Fixed.
 
-The last group is about keeping the data sane. The system refuses to delete a customer or
-a trainer while other records still point at them. The normal way to remove someone is to
-turn their account off. Staff accounts are handled by ADMIN only.
+About data integrity: deleting a customer or trainer is refused while other records still
+point to them. The normal way to remove someone is to deactivate the account. And only
+ADMIN manages staff accounts.
 
 ## Validation
 
@@ -182,8 +173,8 @@ One funny thing we discovered: Java accepts the words "NaN" and "Infinity" as nu
 So someone could type Infinity as his body fat percentage and Java would happily store it.
 We block those two words explicitly now.
 
-When validation fails, nothing is written and the message says what was wrong. We chose
-this on purpose. Better to stop early with a clear message than to write bad data.
+When validation fails, nothing is written and the message says what was wrong. This was a
+deliberate choice: fail early, fail with a clear message, write nothing.
 
 ## Bugs we faced
 
@@ -212,24 +203,21 @@ actually deleted. Every update and delete now checks that a row really changed.
 
 ## How we tested
 
-Most of the testing runs on a fixed set of sample data. The data tries to cover all the
-normal situations a gym can have. Some members are active, some are suspended, some left.
-Some plans are running, some expired, one is frozen and one is cancelled. The sessions
-cover every stage as well. One is confirmed, one is still a request, one finished, and one
-ended as a no-show. There is a payment that got voided and replaced, and a machine sitting
-in maintenance. Since this data never changes, running the same check twice gives the same
-answer.
+We built a fixed sample dataset that covers every state the gym can be in: active, suspended
+and inactive members; active, expired, frozen and cancelled plans; confirmed, requested,
+completed and no-show sessions; a voided payment with its replacement; equipment in
+maintenance. Because the dataset is always the same, testing a rule gives the same result
+every time.
 
-While building, we also put together 22 automatic test cases. Each family of rules got its
-own set. Input validation, login and roles, slot capacity, subscriptions, the life of a
-session, check-in, freezing, medical profiles, program versions, payments, delete guards.
-All 22 passed, and we ran them on a separate test database, not on the real one.
+During development we also wrote an automated pass of 22 test cases, one group for each
+family of rules: field validation, login and roles, slot capacity, subscriptions, the session
+life cycle, check-in, freezing, medical profiles, program versions, payments, delete guards.
+All 22 passed against a separate test database, not against the real one.
 
-A few things we still check by hand, just to see them with our eyes. A member with an
-expired plan can't check in. A plan that was frozen for 10 days ends exactly 10 days later
-after unfreezing. A cancel made less than 2 hours before the start still gets saved, with
-the reason. "123" as a phone number is rejected with a clear message. And a staff account
-that was turned off can't log in.
+Some things we check by hand: check-in refused for an expired plan, unfreezing a plan frozen
+for 10 days moves its end date exactly 10 days forward, cancelling less than 2 hours before
+the start still gets recorded with a reason, "123" as a phone number gets rejected with a
+clear message, a deactivated staff account can't log in.
 
 ## What is still missing
 
