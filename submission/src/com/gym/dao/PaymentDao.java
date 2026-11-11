@@ -278,6 +278,108 @@ public class PaymentDao {
         } else if (p.getSessionId() != null) {
             verifyLinkedOwner("sessions", p.getSessionId().intValue(), p.getCustomerId());
         }
+
+        // A voided payment is history only, so the remaining-balance rule applies to live payments
+        if (!p.isVoided()) {
+            requireWithinRemaining(p, p.getId());
+        }
+    }
+
+    // Refuses a live payment for a cancelled/unconfirmed item, or one larger than what is still owed.
+    // ignorePaymentId is left out of the "already paid" total (the payment itself, or one about to be voided).
+    public void requireWithinRemaining(Payment p, int ignorePaymentId) throws ValidationException, DatabaseException {
+        if (p.getAmount() != null && p.getAmount().stripTrailingZeros().scale() > 2) {
+            throw new ValidationException("Payment amount can have at most 2 decimal places: "
+                    + p.getAmount().toPlainString());
+        }
+        String table;
+        String priceColumn;
+        String linkColumn;
+        String label;
+        int targetId;
+        if (p.getMembershipId() != null) {
+            table = "memberships";
+            priceColumn = "price";
+            linkColumn = "membership_id";
+            label = "membership";
+            targetId = p.getMembershipId().intValue();
+        } else if (p.getSubscriptionId() != null) {
+            table = "trainer_subscriptions";
+            priceColumn = "rate_per_period";
+            linkColumn = "subscription_id";
+            label = "subscription";
+            targetId = p.getSubscriptionId().intValue();
+        } else if (p.getSessionId() != null) {
+            table = "sessions";
+            priceColumn = "price";
+            linkColumn = "session_id";
+            label = "session";
+            targetId = p.getSessionId().intValue();
+        } else {
+            return;
+        }
+
+        BigDecimal price;
+        String status;
+        String itemSql = "SELECT " + priceColumn + ", status FROM " + table + " WHERE id = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(itemSql)) {
+            ps.setInt(1, targetId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new ValidationException("Linked record does not exist in " + table + " with id " + targetId);
+                }
+                price = rs.getBigDecimal(1);
+                status = rs.getString(2);
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to read the price of " + label + " #" + targetId, e);
+        }
+
+        if ("CANCELLED".equals(status)) {
+            throw new ValidationException("Cannot take a payment for CANCELLED " + label + " #" + targetId);
+        }
+        if ("sessions".equals(table) && "REQUESTED".equals(status)) {
+            throw new ValidationException("Session #" + targetId + " is only REQUESTED - confirm it before taking payment");
+        }
+        if (price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("There is nothing to pay for " + label + " #" + targetId + " (price EGP 0)");
+        }
+
+        // Sum in Java with BigDecimal, so the total stays exact
+        BigDecimal paid = BigDecimal.ZERO;
+        String paidSql = "SELECT amount FROM payments WHERE " + linkColumn + " = ? AND voided = 0 AND id <> ? AND id <> ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(paidSql)) {
+            ps.setInt(1, targetId);
+            ps.setInt(2, p.getId());
+            ps.setInt(3, ignorePaymentId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    BigDecimal amount = rs.getBigDecimal(1);
+                    if (amount != null) {
+                        paid = paid.add(amount);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to total the payments for " + label + " #" + targetId, e);
+        }
+
+        BigDecimal remaining = price.subtract(paid);
+        if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException(capitalize(label) + " #" + targetId + " is already fully paid (EGP "
+                    + paid.toPlainString() + " of EGP " + price.toPlainString() + ")");
+        }
+        if (p.getAmount() != null && p.getAmount().compareTo(remaining) > 0) {
+            throw new ValidationException("Payment of EGP " + p.getAmount().toPlainString()
+                    + " is more than the remaining EGP " + remaining.toPlainString()
+                    + " for " + label + " #" + targetId);
+        }
+    }
+
+    private String capitalize(String text) {
+        return Character.toUpperCase(text.charAt(0)) + text.substring(1);
     }
 
     private boolean customerExists(int customerId) throws DatabaseException {

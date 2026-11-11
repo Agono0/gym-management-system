@@ -169,6 +169,11 @@ public class Main {
             } catch (DatabaseException e) {
                 CliTheme.printDatabaseError(e.getMessage());
                 input.pause();
+            } catch (RuntimeException e) {
+                // Same safety net as the dashboard: an unexpected error must not close the app
+                CliTheme.printWarning("[!] Unexpected error: "
+                        + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
+                input.pause();
             }
         }
         return null;
@@ -1159,6 +1164,7 @@ class GymOperations {
                 .isBefore(LocalDate.now())) {
             throw new ValidationException("Cannot book a slot in the past (" + slot.getDate() + ")");
         }
+        requireNotStarted(slot.getDate(), slot.getStartTime(), "Slot #" + availabilityId);
         // One member takes one seat: refuse a second live booking of the same slot
         List<Session> slotSessions = sessionDao.findAll();
         for (int i = 0; i < slotSessions.size(); i++) {
@@ -1177,6 +1183,8 @@ class GymOperations {
         }
         int finalDuration = durationMin > 0 ? durationMin : 60;
         BigDecimal finalPrice = subscriptionId != null ? BigDecimal.ZERO : (price != null ? price : BigDecimal.ZERO);
+        requireNoTimeClash(customerId, slot.getTrainerId(), slot.getDate(), slot.getStartTime(),
+                finalDuration, availabilityId, 0);
 
         Session s = new Session(0, customerId, slot.getTrainerId(), slot.getDate(),
                 slot.getStartTime(), finalDuration, SessionStatus.CONFIRMED,
@@ -1200,8 +1208,10 @@ class GymOperations {
                 || parseStoredDate(date, "requested session date").isBefore(LocalDate.now())) {
             throw new ValidationException("Session request denied - the date cannot be in the past (" + date + ")");
         }
+        requireNotStarted(date, startTime, "The requested time");
         int finalDuration = durationMin > 0 ? durationMin : 60;
         BigDecimal finalPrice = subscriptionId != null ? BigDecimal.ZERO : (price != null ? price : BigDecimal.ZERO);
+        requireNoTimeClash(customerId, trainerId, date, startTime, finalDuration, null, 0);
         Session s = new Session(0, customerId, trainerId, date, startTime, finalDuration,
                 SessionStatus.REQUESTED, null, subscriptionId, finalPrice, null, notes);
         return sessionDao.insert(s);
@@ -1212,6 +1222,17 @@ class GymOperations {
                                 String startTime, int durationMin, Integer availabilityId,
                                 BigDecimal price, String notes) throws DatabaseException, ValidationException {
         requireAdmin(actor);
+        // The override ignores capacity and clashes, but a linked slot must really be this trainer's slot that day
+        if (availabilityId != null) {
+            TrainerAvailability slot = availabilityDao.findById(availabilityId.intValue());
+            if (slot == null) {
+                throw new ValidationException("Availability slot not found with id: " + availabilityId);
+            }
+            if (slot.getTrainerId() != trainerId || date == null || !date.trim().equals(slot.getDate())) {
+                throw new ValidationException("Slot #" + availabilityId + " belongs to coach #" + slot.getTrainerId()
+                        + " on " + slot.getDate() + " - it does not match coach #" + trainerId + " on " + date);
+            }
+        }
         int finalDuration = durationMin > 0 ? durationMin : 60;
         BigDecimal finalPrice = price != null ? price : BigDecimal.ZERO;
         Session s = new Session(0, customerId, trainerId, date, startTime, finalDuration,
@@ -1228,6 +1249,15 @@ class GymOperations {
         if (s.getStatus() != SessionStatus.REQUESTED) {
             throw new ValidationException("Only REQUESTED sessions can be confirmed (current: " + s.getStatus() + ")");
         }
+        LocalDateTime start = LocalDateTime.of(
+                parseStoredDate(s.getDate(), "session #" + sessionId + " date"),
+                parseStoredTime(s.getStartTime(), "session #" + sessionId + " start time"));
+        if (start.isBefore(LocalDateTime.now())) {
+            throw new ValidationException("Session #" + sessionId + " was requested for " + s.getDate() + " "
+                    + s.getStartTime() + ", which has already passed - decline it instead");
+        }
+        requireNoTimeClash(s.getCustomerId(), s.getTrainerId(), s.getDate(), s.getStartTime(),
+                s.getDurationMin(), s.getAvailabilityId(), s.getId());
         if (s.getAvailabilityId() != null) {
             TrainerAvailability slot = availabilityDao.findById(s.getAvailabilityId().intValue());
             if (slot != null && slot.getStatus() == AvailabilityStatus.CLOSED) {
@@ -1240,6 +1270,83 @@ class GymOperations {
         }
         s.setStatus(SessionStatus.CONFIRMED);
         sessionDao.update(s);
+    }
+
+    // Refuses a booking whose start time today has already gone by
+    private void requireNotStarted(String date, String startTime, String what) throws ValidationException {
+        LocalDateTime start = LocalDateTime.of(parseStoredDate(date, what + " date"),
+                parseStoredTime(startTime, what + " start time"));
+        if (start.isBefore(LocalDateTime.now())) {
+            throw new ValidationException(what + " starts at " + date + " " + startTime + ", which has already passed");
+        }
+    }
+
+    // Refuses a session overlapping another live (CONFIRMED or REQUESTED) session of the same coach or member.
+    // Members sharing one group slot (same availabilityId) are not a clash for the coach.
+    private void requireNoTimeClash(int customerId, int trainerId, String date, String startTime, int durationMin,
+                                    Integer availabilityId, int excludeSessionId)
+            throws DatabaseException, ValidationException {
+        int newStart = parseStoredTime(startTime, "session start time").toSecondOfDay() / 60;
+        int newEnd = newStart + durationMin;
+        List<Session> all = sessionDao.findAll();
+        for (int i = 0; i < all.size(); i++) {
+            Session other = all.get(i);
+            if (other.getId() == excludeSessionId || other.getDate() == null || !other.getDate().trim().equals(date.trim())) {
+                continue;
+            }
+            if (other.getStatus() != SessionStatus.CONFIRMED && other.getStatus() != SessionStatus.REQUESTED) {
+                continue;
+            }
+            int otherStart;
+            try {
+                otherStart = LocalTime.parse(other.getStartTime().trim()).toSecondOfDay() / 60;
+            } catch (RuntimeException e) {
+                continue;
+            }
+            int otherEnd = otherStart + other.getDurationMin();
+            if (newStart >= otherEnd || otherStart >= newEnd) {
+                continue;
+            }
+            boolean sameGroupSlot = availabilityId != null && availabilityId.equals(other.getAvailabilityId());
+            if (other.getTrainerId() == trainerId && !sameGroupSlot) {
+                throw new ValidationException("Coach #" + trainerId + " already has session #" + other.getId()
+                        + " on " + other.getDate() + " at " + other.getStartTime() + " (" + other.getDurationMin()
+                        + " min, " + other.getStatus() + ")");
+            }
+            if (other.getCustomerId() == customerId) {
+                throw new ValidationException("Member #" + customerId + " already has session #" + other.getId()
+                        + " on " + other.getDate() + " at " + other.getStartTime() + " (" + other.getStatus() + ")");
+            }
+        }
+    }
+
+    // Sells a plan to an ACTIVE member, refusing dates that overlap another live plan of the same member
+    public Membership sellMembership(int customerId, PlanType plan, BigDecimal price, String start, String end)
+            throws DatabaseException, ValidationException {
+        Customer cust = customerDao.findById(customerId);
+        if (cust == null) {
+            throw new ValidationException("Customer not found with id: " + customerId);
+        }
+        if (cust.getStatus() != CustomerStatus.ACTIVE) {
+            throw new ValidationException("Cannot sell a plan - member #" + customerId + " is " + cust.getStatus());
+        }
+        LocalDate newStart = parseStoredDate(start, "start date");
+        LocalDate newEnd = parseStoredDate(end, "end date");
+        List<Membership> existing = membershipDao.findByCustomerId(customerId);
+        for (int i = 0; i < existing.size(); i++) {
+            Membership m = existing.get(i);
+            if (m.getStatus() == MembershipStatus.CANCELLED || m.getStartDate() == null || m.getEndDate() == null) {
+                continue;
+            }
+            LocalDate oldStart = parseStoredDate(m.getStartDate(), "membership #" + m.getId() + " start date");
+            LocalDate oldEnd = parseStoredDate(m.getEndDate(), "membership #" + m.getId() + " end date");
+            if (!newStart.isAfter(oldEnd) && !oldStart.isAfter(newEnd)) {
+                throw new ValidationException("Member #" + customerId + " already has membership #" + m.getId()
+                        + " (" + m.getStartDate() + " to " + m.getEndDate() + ", " + m.getStatus()
+                        + ") on those dates - renew it, or start the new plan after " + m.getEndDate());
+            }
+        }
+        return membershipDao.insert(new Membership(0, customerId, plan, price, start, end, MembershipStatus.ACTIVE, 0));
     }
 
     public void completeSession(int sessionId) throws DatabaseException, ValidationException {
@@ -1460,6 +1567,11 @@ class GymOperations {
                 throw new ValidationException("Replacement receipt number already exists: "
                         + replacementReceiptNo.trim());
             }
+            // Check the replacement amount as if the old payment were already voided
+            Payment candidate = new Payment(0, old.getCustomerId(), old.getMembershipId(),
+                    old.getSubscriptionId(), old.getSessionId(), replacementAmount,
+                    replacementMethod, todayIso, replacementReceiptNo.trim(), false);
+            paymentDao.requireWithinRemaining(candidate, paymentId);
         }
         old.setPreviousAmount(old.getAmount());
         old.setVoided(true);
@@ -2919,8 +3031,7 @@ class MembershipBillingCliMenu {
         if (end == null) {
             return;
         }
-        Membership m = membershipDao.insert(new Membership(0, cid.intValue(), plan, price,
-                start, end, MembershipStatus.ACTIVE, 0));
+        Membership m = ops.sellMembership(cid.intValue(), plan, price, start, end);
         CliTheme.printSuccess("Sold Membership #" + m.getId() + " (" + plan + ") for Customer #" + cid);
     }
 

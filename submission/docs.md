@@ -147,13 +147,25 @@ date, and renewing a cancelled plan is refused.
 
 About sessions: a session can only move forward in its life. A request becomes confirmed,
 a confirmed one becomes completed, no-show or cancelled, and a request that won't happen can
-be declined (cancelled) too. Nothing jumps backwards. Cancelling
-2 hours or more before the start is free, later cancellations are still recorded with the
-reason. A member can hold only one seat in the same slot. A no-show is a real state and it counts in the trainer's statistics. Slot occupancy
-only counts confirmed sessions, so when someone cancels, the seat frees up for the next person.
+be declined (cancelled) too. Nothing jumps backwards. Cancelling 2 hours or more before the
+start is free, later cancellations are still recorded with the reason. A no-show is a real
+state and it counts in the trainer's statistics. Slot occupancy only counts confirmed
+sessions, so when someone cancels, the seat frees up for the next person.
+
+About time clashes: a member holds only one seat in a slot, and nobody can be in two places
+at once. A coach or a member cannot get two live (requested or confirmed) sessions that
+overlap, except members sharing the same group slot, and a coach cannot publish overlapping
+slots. Times that have already passed cannot be booked, requested or confirmed. Only an
+ADMIN override skips the capacity and clash checks, and even then a linked slot has to be
+that coach's slot on that day.
+
+About selling plans: only an active member can buy one, and a new plan cannot overlap a plan
+the member already holds (renew that one instead).
 
 About payments: a payment belongs to exactly one of membership, subscription or session,
-and it must belong to that item's customer. Corrections go through void and replace, never
+and it must belong to that item's customer. It cannot be more than what is still owed on
+that item, so nothing gets paid twice, and cancelled items or sessions that are only
+requested cannot take payments. Corrections go through void and replace, never
 through delete. The outstanding balance counts unpaid memberships, subscriptions and
 confirmed sessions only. We actually had a bug here at some point where requested sessions
 were counted too, which means the balance could show money owed for sessions that were

@@ -174,6 +174,22 @@ public class TrainerAvailabilityDao {
         if (!start.isBefore(end)) {
             throw new ValidationException("Slot start time must precede end time");
         }
+        // A coach cannot publish two slots that overlap on the same day
+        List<TrainerAvailability> sameCoach = findByTrainerId(s.getTrainerId());
+        for (int i = 0; i < sameCoach.size(); i++) {
+            TrainerAvailability other = sameCoach.get(i);
+            if (other.getId() == s.getId() || other.getDate() == null
+                    || !other.getDate().trim().equals(s.getDate().trim())
+                    || !isValidTime(other.getStartTime()) || !isValidTime(other.getEndTime())) {
+                continue;
+            }
+            LocalTime otherStart = LocalTime.parse(other.getStartTime().trim());
+            LocalTime otherEnd = LocalTime.parse(other.getEndTime().trim());
+            if (start.isBefore(otherEnd) && otherStart.isBefore(end)) {
+                throw new ValidationException("Coach #" + s.getTrainerId() + " already has slot #" + other.getId()
+                        + " on " + other.getDate() + " from " + other.getStartTime() + " to " + other.getEndTime());
+            }
+        }
         if (s.getMaxCustomers() <= 0) {
             throw new ValidationException("Slot maxCustomers must be greater than zero");
         }
