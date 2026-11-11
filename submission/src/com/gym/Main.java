@@ -247,7 +247,7 @@ public class Main {
             System.out.println("  [5] Workout Programs & Live Workout HUD Simulator");
             System.out.println("  [6] Attendance Fast Check-In / Check-Out & Daily Report");
             System.out.println("  [7] Payments, Void/Replace Ledger & Outstanding Balance");
-            System.out.println("  [8] Equipment Inventory & ASCII Facility Floor Map");
+            System.out.println("  [8] Equipment Inventory");
             System.out.println("  [9] Staff & Admin Controls [ADMIN Only]");
             CliTheme.printSingleLine();
             System.out.println("  [L] Logout / Switch User    [0] Exit Application");
@@ -345,7 +345,7 @@ public class Main {
             System.out.println("  LIVE KPIs: Members " + customers.size() + " (" + activeCustomers + " Active) | "
                     + "Coaches: " + coaches + " | Active Plans: " + activePlans);
             System.out.println("             Today Check-Ins: " + todayCheckIns + " | Sessions: " + sessionsCount
-                    + " | Revenue: $" + netRevenue.toPlainString() + " | Gear Maint: " + gearMaint + "/" + gear.size());
+                    + " | Revenue: EGP " + netRevenue.toPlainString() + " | Gear Maint: " + gearMaint + "/" + gear.size());
         } catch (DatabaseException e) {
             System.out.println("  LIVE KPIs: [Unable to read KPI counters: " + e.getMessage() + "]");
         }
@@ -359,7 +359,6 @@ class CliTheme {
 
     public static final int LINE_WIDTH = 80;
 
-    // ANSI color codes: red text, then reset back to the normal color
     private static final String RED = "\u001B[31m";
     private static final String RESET = "\u001B[0m";
 
@@ -373,7 +372,6 @@ class CliTheme {
         terminal = realTerminal;
     }
 
-    // Clears the whole console so every screen starts clean
     public static void clearScreen() {
         if (terminal == null) {
             System.out.println();
@@ -384,7 +382,6 @@ class CliTheme {
         terminal.flush();
     }
 
-    // Prints one line in red (plain text when there is no real console)
     public static void printRed(String line) {
         if (terminal == null) {
             System.out.println(line);
@@ -585,7 +582,6 @@ class CliInput {
         return scanner.nextLine().trim();
     }
 
-    // Reads a password and shows one '*' for every typed character
     public String readPassword(String prompt) {
         if (reader != null) {
             try {
@@ -606,7 +602,6 @@ class CliInput {
             try {
                 terminal.close();
             } catch (IOException e) {
-                // Nothing else to do while the program is closing
             }
         }
     }
@@ -897,7 +892,6 @@ class GymOperations {
     private final ProgressRecordDao progressDao = new ProgressRecordDao();
     private final MedicalProfileDao medicalDao = new MedicalProfileDao();
 
-    // Authenticate user and reject inactive accounts
     public Administrator authenticate(String username, String password) throws DatabaseException, ValidationException {
         if (username == null || username.trim().isEmpty()) {
             throw new ValidationException("Username is required");
@@ -915,7 +909,6 @@ class GymOperations {
         return admin;
     }
 
-    // Enforce ADMIN role for restricted actions
     public void requireAdmin(Administrator actor) throws ValidationException {
         if (actor == null || actor.getRole() != StaffRole.ADMIN) {
             String current = actor != null && actor.getRole() != null ? actor.getRole().name() : "NONE";
@@ -1015,8 +1008,7 @@ class GymOperations {
         membershipDao.update(m);
     }
 
-    // Safely parse an ISO date stored in the database so bad stored data shows a clean
-    // validation message instead of crashing the whole app with DateTimeParseException
+    // Bad stored dates must show a clean message, not a crash
     private LocalDate parseStoredDate(String value, String what) throws ValidationException {
         try {
             return LocalDate.parse(value);
@@ -1216,7 +1208,6 @@ class GymOperations {
         sessionDao.update(s);
     }
 
-    // Complete a CONFIRMED session
     public void completeSession(int sessionId) throws DatabaseException, ValidationException {
         Session s = sessionDao.findById(sessionId);
         if (s == null) {
@@ -1229,7 +1220,7 @@ class GymOperations {
         sessionDao.update(s);
     }
 
-    // Mark CONFIRMED session as NO_SHOW (counted in trainer stats)
+    // Counts toward trainer stats
     public void markNoShow(int sessionId) throws DatabaseException, ValidationException {
         Session s = sessionDao.findById(sessionId);
         if (s == null) {
@@ -1808,7 +1799,7 @@ class MemberCliMenu {
                 System.out.println("  Phone    : " + CliTheme.safeText(c.getPhone()) + " | Email: " + CliTheme.safeText(c.getEmail()));
                 System.out.println("  DOB      : " + CliTheme.safeText(c.getDateOfBirth()) + " | Joined: " + CliTheme.safeText(c.getJoinDate()));
                 System.out.println("  Trainer  : " + (assigned != null ? "#" + assigned.getId() + " " + assigned.getFullName() : "None"));
-                System.out.println("  Balance  : $" + owed.toPlainString() + " outstanding");
+                System.out.println("  Balance  : EGP " + owed.toPlainString() + " outstanding");
                 System.out.println("  Plans    : " + plans.size() + " | Workouts: " + workouts.size()
                         + " | Progress Logs: " + progress.size()
                         + " | Medical Profile: " + (med != null ? "Present (" + CliTheme.safeText(med.getBloodType()) + ")" : "Not created yet"));
@@ -2215,7 +2206,7 @@ class TrainerCliMenu {
         try {
             List<Trainer> list = trainerDao.findAll();
             String[] headers = {"ID", "Coach Name", "Specialty", "Exp", "Rate", "NO_SHOWs"};
-            int[] widths = {4, 20, 22, 4, 8, 8};
+            int[] widths = {4, 20, 22, 4, 10, 8};
             List<String[]> rows = new ArrayList<>();
             for (int i = 0; i < list.size(); i++) {
                 Trainer t = list.get(i);
@@ -2225,7 +2216,7 @@ class TrainerCliMenu {
                     t.getFullName(),
                     t.getSpecialization(),
                     t.getExperienceYears() + "y",
-                    "$" + t.getHourlyRate().toPlainString(),
+                    "EGP " + t.getHourlyRate().toPlainString(),
                     String.valueOf(noShows)
                 });
             }
@@ -2276,7 +2267,7 @@ class TrainerCliMenu {
                         session.userLabel(),
                         "Main Menu > Coaches > Profile #" + t.getId());
 
-                System.out.println("  Name         : " + t.getFullName() + " | Hourly Rate: $" + t.getHourlyRate());
+                System.out.println("  Name         : " + t.getFullName() + " | Hourly Rate: EGP " + t.getHourlyRate());
                 System.out.println("  Specialty    : " + CliTheme.safeText(t.getSpecialization()) + " (" + t.getExperienceYears() + " yrs)");
                 System.out.println("  Certs        : " + CliTheme.safeText(t.getCertifications()));
                 System.out.println("  Email/Phone  : " + CliTheme.safeText(t.getEmail()) + " / " + CliTheme.safeText(t.getPhone()));
@@ -2469,7 +2460,7 @@ class TrainerCliMenu {
                         "Main Menu > Coaches > Subscriptions");
 
                 String[] headers = {"ID", "Member", "Coach", "Start", "End", "Rate", "Status"};
-                int[] widths = {4, 8, 8, 10, 10, 8, 10};
+                int[] widths = {4, 8, 8, 10, 10, 11, 10};
                 List<String[]> rows = new ArrayList<>();
                 String today = LocalDate.now().toString();
                 for (int i = 0; i < list.size(); i++) {
@@ -2483,7 +2474,7 @@ class TrainerCliMenu {
                         "#" + s.getTrainerId(),
                         s.getStartDate(),
                         s.getEndDate(),
-                        "$" + s.getRatePerPeriod().toPlainString(),
+                        "EGP " + s.getRatePerPeriod().toPlainString(),
                         eff.name()
                     });
                 }
@@ -2615,7 +2606,7 @@ class MembershipBillingCliMenu {
 
                 String today = LocalDate.now().toString();
                 String[] headers = {"ID", "Member", "Plan", "Price", "Start", "End", "Effective", "Frozen"};
-                int[] widths = {4, 7, 10, 8, 10, 10, 10, 6};
+                int[] widths = {4, 7, 10, 11, 10, 10, 10, 6};
                 List<String[]> rows = new ArrayList<>();
                 for (int i = 0; i < list.size(); i++) {
                     Membership m = list.get(i);
@@ -2624,7 +2615,7 @@ class MembershipBillingCliMenu {
                         String.valueOf(m.getId()),
                         "#" + m.getCustomerId(),
                         m.getPlan().name(),
-                        "$" + m.getPrice().toPlainString(),
+                        "EGP " + m.getPrice().toPlainString(),
                         m.getStartDate(),
                         m.getEndDate(),
                         eff.name(),
@@ -2717,7 +2708,7 @@ class MembershipBillingCliMenu {
                         "Main Menu > Payments");
 
                 String[] headers = {"ID", "Cust", "Target", "Amount", "Method", "Date", "Receipt", "Status"};
-                int[] widths = {4, 5, 8, 8, 8, 10, 10, 6};
+                int[] widths = {4, 5, 8, 11, 8, 10, 10, 6};
                 List<String[]> rows = new ArrayList<>();
                 for (int i = 0; i < list.size(); i++) {
                     Payment p = list.get(i);
@@ -2733,7 +2724,7 @@ class MembershipBillingCliMenu {
                         String.valueOf(p.getId()),
                         "#" + p.getCustomerId(),
                         target,
-                        "$" + p.getAmount().toPlainString(),
+                        "EGP " + p.getAmount().toPlainString(),
                         p.getMethod().name(),
                         p.getDate(),
                         p.getReceiptNo(),
@@ -2773,7 +2764,7 @@ class MembershipBillingCliMenu {
                     if (cid != null) {
                         BigDecimal balance = ops.computeOutstandingBalance(cid.intValue());
                         CliTheme.printSuccess("Outstanding Balance for Customer #" + cid
-                                + " = $" + balance.toPlainString());
+                                + " = EGP " + balance.toPlainString());
                     }
                     input.pause();
                 } else if ("4".equals(choice)) {
@@ -2809,7 +2800,7 @@ class MembershipBillingCliMenu {
         if (cid == null) {
             return;
         }
-        System.out.println("  Plan Types: [1] MONTHLY ($60 / 30d)  [2] QUARTERLY ($150 / 90d)  [3] YEARLY ($500 / 365d)");
+        System.out.println("  Plan Types: [1] MONTHLY (EGP 60 / 30d)  [2] QUARTERLY (EGP 150 / 90d)  [3] YEARLY (EGP 500 / 365d)");
         PlanType plan;
         BigDecimal defPrice;
         // Keep asking until the user picks a real plan (no silent MONTHLY default)
@@ -2991,7 +2982,7 @@ class ScheduleWorkoutCliMenu {
                         "Main Menu > Schedule");
 
                 String[] headers = {"ID", "Cust", "Coach", "Date", "Time", "Dur", "Status", "Slot", "Price"};
-                int[] widths = {4, 5, 5, 10, 5, 4, 10, 5, 7};
+                int[] widths = {4, 5, 5, 10, 5, 4, 10, 5, 10};
                 List<String[]> rows = new ArrayList<>();
                 for (int i = 0; i < list.size(); i++) {
                     Session s = list.get(i);
@@ -3004,7 +2995,7 @@ class ScheduleWorkoutCliMenu {
                         s.getDurationMin() + "m",
                         s.getStatus().name(),
                         s.getAvailabilityId() != null ? "#" + s.getAvailabilityId() : "-",
-                        "$" + (s.getPrice() != null ? s.getPrice().toPlainString() : "0")
+                        "EGP " + (s.getPrice() != null ? s.getPrice().toPlainString() : "0")
                     });
                 }
                 CliTheme.printTable(headers, rows, widths);
@@ -3321,8 +3312,7 @@ class ScheduleWorkoutCliMenu {
 
 // ===== FacilityAdminCliMenu =====
 
-// Terminal screens for Attendance, Equipment & Floor Map,
-// and Staff/Admin Controls
+// Terminal screens for Attendance, Equipment and Staff/Admin Controls
 class FacilityAdminCliMenu {
 
     private final CliInput input;
@@ -3449,7 +3439,7 @@ class FacilityAdminCliMenu {
         while (!session.shouldStopSubMenu()) {
             try {
                 List<Equipment> list = equipmentDao.findAll();
-                CliTheme.printHeader("EQUIPMENT INVENTORY & ASCII FLOOR MAP",
+                CliTheme.printHeader("EQUIPMENT INVENTORY",
                         session.userLabel(),
                         "Main Menu > Equipment");
 
@@ -3472,7 +3462,6 @@ class FacilityAdminCliMenu {
                 System.out.println("  [1] Add Equipment");
                 System.out.println("  [2] Change Status / Condition / Log Maintenance Date");
                 System.out.println("  [3] Delete Equipment");
-                System.out.println("  [4] Open Facility Floor Zone Map (ASCII Blueprint View)");
                 CliTheme.printFooterNav(true);
 
                 String choice = input.readLine("Select option > ");
@@ -3523,9 +3512,6 @@ class FacilityAdminCliMenu {
                             CliTheme.printSuccess("Deleted Equipment #" + eid);
                         }
                     }
-                    input.pause();
-                } else if ("4".equals(choice)) {
-                    renderFloorMap(list);
                     input.pause();
                 } else {
                     CliTheme.printWarning("[!] Unknown option: " + choice);
@@ -3661,34 +3647,6 @@ class FacilityAdminCliMenu {
                 CliTheme.printDatabaseError(e.getMessage());
                 input.pause();
             }
-        }
-    }
-
-    private void renderFloorMap(List<Equipment> list) {
-        CliTheme.printSectionTitle("GYM FLOOR ZONE MAP (ASCII BLUEPRINT)");
-        // "OTHER" collects equipment whose category is not one of the 4 named zones
-        String[] zones = {"CARDIO", "STRENGTH", "FREE WEIGHTS", "RECOVERY", "OTHER"};
-        for (int z = 0; z < zones.length; z++) {
-            String zone = zones[z];
-            System.out.println("  +--- ZONE: " + zone + " " + CliTheme.repeat('-', 58 - zone.length()) + "+");
-            int found = 0;
-            for (int i = 0; i < list.size(); i++) {
-                Equipment eq = list.get(i);
-                String cat = eq.getCategory() != null ? eq.getCategory().trim().toUpperCase() : "";
-                boolean known = cat.equals("CARDIO") || cat.equals("STRENGTH")
-                        || cat.equals("FREE WEIGHTS") || cat.equals("RECOVERY");
-                if (cat.equals(zone) || (zone.equals("OTHER") && !known)) {
-                    found++;
-                    String badge = eq.getStatus() == EquipmentStatus.AVAILABLE ? "[OK]"
-                            : (eq.getStatus() == EquipmentStatus.IN_MAINTENANCE ? "[MAINT]" : "[RET]");
-                    System.out.println("  |  " + badge + " #" + eq.getId() + " " + eq.getName()
-                            + " (" + eq.getCondition() + ")");
-                }
-            }
-            if (found == 0) {
-                System.out.println("  |  (No equipment assigned to this zone)");
-            }
-            System.out.println("  +" + CliTheme.repeat('-', 70) + "+");
         }
     }
 

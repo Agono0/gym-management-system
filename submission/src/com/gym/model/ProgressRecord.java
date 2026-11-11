@@ -3,9 +3,6 @@ package com.gym.model;
 import java.io.Serializable;
 import java.util.Objects;
 
-/**
- * Represents a customer's physical progress measurement.
- */
 public class ProgressRecord implements Serializable {
 
     private static final long serialVersionUID = 1L;

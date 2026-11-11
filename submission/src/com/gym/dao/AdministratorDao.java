@@ -45,8 +45,7 @@ public class AdministratorDao {
             }
             return admin;
         } catch (SQLException e) {
-            // The username column is UNIQUE at the database level; this catch converts
-            // that rare race into the same friendly message as the app-level check
+            // UNIQUE constraint race: same message as the app-level check
             if (e.getMessage() != null && e.getMessage().contains("UNIQUE")) {
                 throw new ValidationException("Username already exists: " + admin.getUsername().trim());
             }
@@ -186,14 +185,12 @@ public class AdministratorDao {
         if (a.getCreatedDate() != null && !a.getCreatedDate().trim().isEmpty() && !isValidDate(a.getCreatedDate())) {
             throw new ValidationException("Created date must be in yyyy-MM-dd format");
         }
-        // Duplicate check ignores upper/lower case, so "Admin" and "admin" cannot both exist
         int otherId = findIdByUsernameIgnoreCase(a.getUsername().trim());
         if (otherId != -1 && (!isUpdate || otherId != a.getId())) {
             throw new ValidationException("Username already exists: " + a.getUsername().trim());
         }
     }
 
-    // Returns the id of the account with this username (any letter case), or -1 if none
     private int findIdByUsernameIgnoreCase(String username) throws DatabaseException {
         String sql = "SELECT id FROM administrators WHERE LOWER(username) = LOWER(?)";
         try (Connection conn = DatabaseConnection.getConnection();

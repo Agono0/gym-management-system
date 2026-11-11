@@ -77,8 +77,7 @@ public class TrainerDao {
     }
 
     public void delete(int id) throws DatabaseException, ValidationException {
-        // Second layer of defense against orphan rows: refuse deleting a trainer that other tables still reference,
-        // so no orphan customers/sessions/subscriptions are left behind
+        // Refuse deleting a trainer that customers, sessions or subscriptions still reference
         int refs = countReferences("customers", "trainer_id", id)
                 + countReferences("sessions", "trainer_id", id)
                 + countReferences("trainer_availability", "trainer_id", id)

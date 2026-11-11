@@ -3,9 +3,6 @@ package com.gym.model;
 import java.io.Serializable;
 import java.util.Objects;
 
-/**
- * Represents an available time slot on a trainer's schedule.
- */
 public class TrainerAvailability implements Serializable {
 
     private static final long serialVersionUID = 1L;

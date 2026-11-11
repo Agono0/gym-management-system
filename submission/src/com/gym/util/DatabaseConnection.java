@@ -31,8 +31,7 @@ public class DatabaseConnection {
     public static Connection getConnection() throws DatabaseException {
         try {
             Connection conn = DriverManager.getConnection(dbUrl);
-            // Wait up to 5 seconds if another process holds the SQLite file lock,
-            // instead of failing immediately with a confusing "database is locked" error
+            // Wait up to 5 seconds on the SQLite file lock instead of failing instantly
             try (Statement pragmaStmt = conn.createStatement()) {
                 pragmaStmt.execute("PRAGMA busy_timeout = 5000");
             } catch (SQLException e) {

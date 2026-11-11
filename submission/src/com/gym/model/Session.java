@@ -4,9 +4,6 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.Objects;
 
-/**
- * Represents a personal training session between a customer and a trainer.
- */
 public class Session implements Serializable {
 
     private static final long serialVersionUID = 1L;

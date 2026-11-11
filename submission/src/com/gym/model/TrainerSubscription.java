@@ -4,9 +4,6 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.Objects;
 
-/**
- * Represents a customer's monthly subscription with a trainer.
- */
 public class TrainerSubscription implements Serializable {
 
     private static final long serialVersionUID = 1L;

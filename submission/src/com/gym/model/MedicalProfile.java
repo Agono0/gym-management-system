@@ -3,9 +3,6 @@ package com.gym.model;
 import java.io.Serializable;
 import java.util.Objects;
 
-/**
- * Represents a customer's medical and health profile.
- */
 public class MedicalProfile implements Serializable {
 
     private static final long serialVersionUID = 1L;

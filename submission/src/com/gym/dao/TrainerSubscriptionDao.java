@@ -164,8 +164,7 @@ public class TrainerSubscriptionDao {
         if (!recordExists("trainers", s.getTrainerId())) {
             throw new ValidationException("Trainer does not exist with id: " + s.getTrainerId());
         }
-        // The trainer match is only checked when the subscription is created. If the member
-        // is later moved to a new trainer, the old subscription must still be cancellable/renewable.
+        // Trainer match applies at creation only; later reassignment keeps old subscriptions valid
         if (!isUpdate && (assignedTrainerId == null || assignedTrainerId.intValue() != s.getTrainerId())) {
             throw new ValidationException("Subscription trainerId must match customer's assigned trainerId");
         }

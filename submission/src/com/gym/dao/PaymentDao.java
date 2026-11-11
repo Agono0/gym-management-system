@@ -67,8 +67,7 @@ public class PaymentDao {
             }
             return payment;
         } catch (SQLException e) {
-            // The receipt_no column is UNIQUE at the database level; this catch converts
-            // that rare race into the same friendly message as the app-level check
+            // UNIQUE receipt race: same message as the app-level check
             if (e.getMessage() != null && e.getMessage().contains("UNIQUE")) {
                 throw new ValidationException("Duplicate receipt number: " + payment.getReceiptNo().trim());
             }

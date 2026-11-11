@@ -4,9 +4,6 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.Objects;
 
-/**
- * Represents a customer's gym membership plan.
- */
 public class Membership implements Serializable {
 
     private static final long serialVersionUID = 1L;

@@ -3,9 +3,6 @@ package com.gym.model;
 import java.io.Serializable;
 import java.util.Objects;
 
-/**
- * Represents a gym member.
- */
 public class Customer implements Serializable {
 
     private static final long serialVersionUID = 1L;

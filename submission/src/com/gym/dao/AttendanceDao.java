@@ -168,8 +168,7 @@ public class AttendanceDao {
                 throw new ValidationException("Member already checked in on " + a.getDate() + " (reuse existing row)");
             }
         } else {
-            // The same-day check also applies when correcting a row: moving a record to a date that
-            // already has another row for this member would create a duplicate day
+            // Correcting a row must not create a second row for the same member and day
             if (sameDayRowExists(a.getCustomerId(), a.getDate().trim(), a.getId())) {
                 throw new ValidationException("Member already has another attendance row on " + a.getDate());
             }

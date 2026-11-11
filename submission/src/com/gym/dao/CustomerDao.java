@@ -94,8 +94,7 @@ public class CustomerDao {
     }
 
     public void delete(int id) throws DatabaseException, ValidationException {
-        // Second layer of defense against orphan rows: refuse deleting a customer that other tables still reference,
-        // so no orphan memberships/payments/sessions are left behind
+        // Refuse deleting a customer that memberships, payments or sessions still reference
         int refs = countReferences("memberships", "customer_id", id)
                 + countReferences("payments", "customer_id", id)
                 + countReferences("sessions", "customer_id", id)

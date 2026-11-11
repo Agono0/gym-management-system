@@ -4,9 +4,6 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.Objects;
 
-/**
- * Represents a gym trainer or coach.
- */
 public class Trainer implements Serializable {
 
     private static final long serialVersionUID = 1L;

@@ -3,9 +3,6 @@ package com.gym.model;
 import java.io.Serializable;
 import java.util.Objects;
 
-/**
- * Represents a staff member or administrator account.
- */
 public class Administrator implements Serializable {
 
     private static final long serialVersionUID = 1L;
