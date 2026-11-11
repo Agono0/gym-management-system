@@ -39,6 +39,9 @@ import org.jline.utils.InfoCmp;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -57,6 +60,9 @@ import java.util.Scanner;
 
 // Terminal UI entry point for the GYM Management System: initializes the database, then shows login + dashboard
 public class Main {
+
+    // "Remember me" file next to gym.db. It holds only the username, never the password.
+    private static final String REMEMBER_FILE = "remember.txt";
 
     private final CliInput input;
     private final CliSession session;
@@ -85,14 +91,31 @@ public class Main {
             return;
         }
 
+        // If someone chose "Remember me" last time, skip the login screen once
+        Administrator remembered = loadRememberedUser();
+
         while (!session.isExitRequested()) {
-            Administrator loggedIn = showLoginGate();
+            Administrator loggedIn;
+            if (remembered != null) {
+                loggedIn = remembered;
+                remembered = null;
+                CliTheme.clearScreen();
+                CliTheme.printSuccess("Welcome back, " + loggedIn.getFullName() + " [" + loggedIn.getRole()
+                        + "] (remembered on this computer). Choose [L] Logout to forget this login.");
+                input.pause();
+            } else {
+                loggedIn = showLoginGate();
+            }
             if (loggedIn == null || session.isExitRequested()) {
                 break;
             }
             session.setCurrentUser(loggedIn);
             session.clearTransientFlags();
             runMainDashboardLoop();
+            // Logout (from any screen) forgets the remembered login; Exit keeps it
+            if (session.isLogoutRequested()) {
+                forgetUser();
+            }
         }
 
         System.out.println("\nGoodbye! Closed GYM Management System cleanly.");
@@ -123,21 +146,27 @@ public class Main {
             }
 
             try {
+                Administrator user = null;
                 if ("1".equals(choice)) {
                     String username = input.readRawString("Username: ");
                     String password = input.readPassword("Password: ");
-                    Administrator user = ops.authenticate(username, password);
-                    CliTheme.printSuccess("Welcome back, " + user.getFullName() + " [" + user.getRole() + "]!");
-                    input.pause();
-                    return user;
+                    user = ops.authenticate(username, password);
                 } else if ("2".equals(choice)) {
-                    return ops.authenticate("admin", "admin123");
+                    user = ops.authenticate("admin", "admin123");
                 } else if ("3".equals(choice)) {
-                    return ops.authenticate("manager", "mgr123");
+                    user = ops.authenticate("manager", "mgr123");
                 } else if ("4".equals(choice)) {
-                    return ops.authenticate("staff", "staff123");
+                    user = ops.authenticate("staff", "staff123");
                 } else {
                     CliTheme.printWarning("[!] Unknown option: " + choice);
+                }
+                if (user != null) {
+                    CliTheme.printSuccess("Welcome back, " + user.getFullName() + " [" + user.getRole() + "]!");
+                    if (input.readYesNo("Remember me on this computer?")) {
+                        rememberUser(user.getUsername());
+                        input.pause();
+                    }
+                    return user;
                 }
             } catch (ValidationException e) {
                 CliTheme.printValidationError(e.getMessage());
@@ -148,6 +177,52 @@ public class Main {
             }
         }
         return null;
+    }
+
+    // Reads the remembered username and returns that account, but only if it still exists and is active
+    private Administrator loadRememberedUser() {
+        Path file = Paths.get(REMEMBER_FILE);
+        if (!Files.exists(file)) {
+            return null;
+        }
+        try {
+            String username = Files.readString(file).trim();
+            Administrator admin = null;
+            if (!username.isEmpty()) {
+                admin = new AdministratorDao().findByUsername(username);
+            }
+            if (admin == null || !admin.isActive()) {
+                // Account was deleted or deactivated: forget it and show the normal login screen
+                forgetUser();
+                return null;
+            }
+            return admin;
+        } catch (IOException e) {
+            forgetUser();
+            return null;
+        } catch (DatabaseException e) {
+            CliTheme.printDatabaseError("Could not load remembered login: " + e.getMessage());
+            return null;
+        }
+    }
+
+    // Saves only the username (never the password) so the next start skips the login screen
+    private void rememberUser(String username) {
+        try {
+            Files.writeString(Paths.get(REMEMBER_FILE), username);
+            CliTheme.printNotice("You will stay signed in on this computer until you choose [L] Logout.");
+        } catch (IOException e) {
+            CliTheme.printWarning("[!] Could not save 'Remember me': " + e.getMessage());
+        }
+    }
+
+    // Deletes the remembered login (used by Logout)
+    private void forgetUser() {
+        try {
+            Files.deleteIfExists(Paths.get(REMEMBER_FILE));
+        } catch (IOException e) {
+            CliTheme.printWarning("[!] Could not delete " + REMEMBER_FILE + ": " + e.getMessage());
+        }
     }
 
     private void runMainDashboardLoop() {
@@ -478,8 +553,12 @@ class CliInput {
                 this.terminal = realTerminal;
                 this.reader = lineReader;
                 CliTheme.setTerminal(realTerminal);
-            } catch (IOException | RuntimeException e) {
+            } catch (IOException e) {
                 // No usable console: keep the simple Scanner input
+                this.terminal = null;
+                this.reader = null;
+            } catch (RuntimeException e) {
+                // JLine could not open the console: keep the simple Scanner input
                 this.terminal = null;
                 this.reader = null;
             }
@@ -491,8 +570,11 @@ class CliInput {
             try {
                 System.out.flush();
                 return reader.readLine(prompt).trim();
-            } catch (UserInterruptException | EndOfFileException e) {
-                // Ctrl+C or Ctrl+D behaves like "no more input"
+            } catch (UserInterruptException e) {
+                // Ctrl+C behaves like "no more input"
+                return null;
+            } catch (EndOfFileException e) {
+                // Ctrl+D / end of input
                 return null;
             }
         }
@@ -509,7 +591,9 @@ class CliInput {
             try {
                 System.out.flush();
                 return reader.readLine(prompt, '*').trim();
-            } catch (UserInterruptException | EndOfFileException e) {
+            } catch (UserInterruptException e) {
+                return null;
+            } catch (EndOfFileException e) {
                 return null;
             }
         }

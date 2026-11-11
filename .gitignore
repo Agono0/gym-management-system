@@ -131,3 +131,6 @@ lectures/
 .zcode/
 liquidGL-main/
 liquid-glass-main/
+
+# "Remember me" login file of the submission CLI (personal, never commit)
+submission/remember.txt
