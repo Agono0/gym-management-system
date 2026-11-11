@@ -105,6 +105,11 @@ gym.db
 gym.db-*
 *.db
 *.ser
+backups/
+
+# Keep standalone SQLite driver JARs inside submission/lib tracked
+!submission/lib/
+!submission/lib/*.jar
 
 # Testing-only sample (never commit)
 src/main/java/com/gym/M3Samples.java

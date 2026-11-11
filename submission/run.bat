@@ -14,7 +14,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-java --enable-native-access=ALL-UNNAMED -Dfile.encoding=UTF-8 -cp "out;lib\*" com.gym.cli.GymCliApp
+java --enable-native-access=ALL-UNNAMED -Dfile.encoding=UTF-8 -cp "out;lib\*" com.gym.Main
 if errorlevel 1 (
     echo.
     echo [ERROR] Gym-OS CLI exited with code %errorlevel%.
