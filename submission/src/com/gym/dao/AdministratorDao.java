@@ -184,9 +184,27 @@ public class AdministratorDao {
         if (a.getCreatedDate() != null && !a.getCreatedDate().trim().isEmpty() && !isValidDate(a.getCreatedDate())) {
             throw new ValidationException("Created date must be in yyyy-MM-dd format");
         }
-        Administrator existing = findByUsername(a.getUsername().trim());
-        if (existing != null && (!isUpdate || existing.getId() != a.getId())) {
+        // Duplicate check ignores upper/lower case, so "Admin" and "admin" cannot both exist
+        int otherId = findIdByUsernameIgnoreCase(a.getUsername().trim());
+        if (otherId != -1 && (!isUpdate || otherId != a.getId())) {
             throw new ValidationException("Username already exists: " + a.getUsername().trim());
+        }
+    }
+
+    // Returns the id of the account with this username (any letter case), or -1 if none
+    private int findIdByUsernameIgnoreCase(String username) throws DatabaseException {
+        String sql = "SELECT id FROM administrators WHERE LOWER(username) = LOWER(?)";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("id");
+                }
+            }
+            return -1;
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to check username: " + username, e);
         }
     }
 
@@ -194,7 +212,8 @@ public class AdministratorDao {
         String trimmed = email.trim();
         int atPos = trimmed.indexOf('@');
         int dotPos = trimmed.lastIndexOf('.');
-        return atPos > 0 && dotPos > atPos + 1 && dotPos < trimmed.length() - 1 && !trimmed.contains(" ");
+        boolean oneAtSign = atPos == trimmed.lastIndexOf('@');
+        return oneAtSign && atPos > 0 && dotPos > atPos + 1 && dotPos < trimmed.length() - 1 && !trimmed.contains(" ");
     }
 
     private boolean isValidDate(String value) {

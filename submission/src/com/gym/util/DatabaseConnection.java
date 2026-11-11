@@ -35,6 +35,10 @@ public class DatabaseConnection {
             // instead of failing immediately with a confusing "database is locked" error
             try (Statement pragmaStmt = conn.createStatement()) {
                 pragmaStmt.execute("PRAGMA busy_timeout = 5000");
+            } catch (SQLException e) {
+                // Close the connection we just opened so it is not left open (leaked)
+                conn.close();
+                throw e;
             }
             return conn;
         } catch (SQLException e) {

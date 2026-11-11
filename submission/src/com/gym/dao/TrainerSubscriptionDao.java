@@ -21,7 +21,7 @@ import java.util.List;
 public class TrainerSubscriptionDao {
 
     public TrainerSubscription insert(TrainerSubscription sub) throws DatabaseException, ValidationException {
-        validate(sub);
+        validate(sub, false);
         String sql = "INSERT INTO trainer_subscriptions (customer_id, trainer_id, start_date, end_date, "
                 + "rate_per_period, status) VALUES (?, ?, ?, ?, ?, ?)";
 
@@ -48,7 +48,7 @@ public class TrainerSubscriptionDao {
     }
 
     public void update(TrainerSubscription sub) throws DatabaseException, ValidationException {
-        validate(sub);
+        validate(sub, true);
         String sql = "UPDATE trainer_subscriptions SET customer_id = ?, trainer_id = ?, start_date = ?, "
                 + "end_date = ?, rate_per_period = ?, status = ? WHERE id = ?";
 
@@ -153,7 +153,7 @@ public class TrainerSubscriptionDao {
         return s;
     }
 
-    private void validate(TrainerSubscription s) throws ValidationException, DatabaseException {
+    private void validate(TrainerSubscription s, boolean isUpdate) throws ValidationException, DatabaseException {
         if (s == null) {
             throw new ValidationException("Trainer subscription cannot be null");
         }
@@ -164,7 +164,9 @@ public class TrainerSubscriptionDao {
         if (!recordExists("trainers", s.getTrainerId())) {
             throw new ValidationException("Trainer does not exist with id: " + s.getTrainerId());
         }
-        if (assignedTrainerId == null || assignedTrainerId.intValue() != s.getTrainerId()) {
+        // The trainer match is only checked when the subscription is created. If the member
+        // is later moved to a new trainer, the old subscription must still be cancellable/renewable.
+        if (!isUpdate && (assignedTrainerId == null || assignedTrainerId.intValue() != s.getTrainerId())) {
             throw new ValidationException("Subscription trainerId must match customer's assigned trainerId");
         }
         if (s.getStartDate() == null || !isValidDate(s.getStartDate()) || s.getEndDate() == null || !isValidDate(s.getEndDate())) {

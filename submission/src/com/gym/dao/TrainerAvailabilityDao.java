@@ -177,6 +177,30 @@ public class TrainerAvailabilityDao {
         if (s.getMaxCustomers() <= 0) {
             throw new ValidationException("Slot maxCustomers must be greater than zero");
         }
+        // When editing a slot, capacity cannot drop below the sessions already CONFIRMED in it
+        if (s.getId() > 0) {
+            int confirmed = countConfirmedSessions(s.getId());
+            if (s.getMaxCustomers() < confirmed) {
+                throw new ValidationException("Slot #" + s.getId() + " already has " + confirmed
+                        + " CONFIRMED session(s); maxCustomers cannot be lower than that");
+            }
+        }
+    }
+
+    private int countConfirmedSessions(int availabilityId) throws DatabaseException {
+        String sql = "SELECT COUNT(*) FROM sessions WHERE availability_id = ? AND status = 'CONFIRMED'";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, availabilityId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+            return 0;
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to count confirmed sessions in slot: " + availabilityId, e);
+        }
     }
 
     private boolean trainerExists(int trainerId) throws DatabaseException {

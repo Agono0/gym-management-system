@@ -155,6 +155,9 @@ public class EquipmentDao {
         if (hasPurchase && !isValidDate(eq.getPurchaseDate())) {
             throw new ValidationException("Purchase date must be in yyyy-MM-dd format");
         }
+        if (hasPurchase && LocalDate.parse(eq.getPurchaseDate().trim()).isAfter(LocalDate.now())) {
+            throw new ValidationException("Purchase date cannot be in the future");
+        }
         if (hasMaint && !isValidDate(eq.getLastMaintenance())) {
             throw new ValidationException("Last maintenance date must be in yyyy-MM-dd format");
         }

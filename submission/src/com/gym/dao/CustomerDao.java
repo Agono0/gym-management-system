@@ -202,14 +202,23 @@ public class CustomerDao {
         if (c.getEmail() != null && !c.getEmail().trim().isEmpty() && !isValidEmail(c.getEmail())) {
             throw new ValidationException("Invalid customer email format: " + c.getEmail());
         }
-        if (c.getPhone() != null && !c.getPhone().trim().isEmpty() && countDigits(c.getPhone()) < 7) {
-            throw new ValidationException("Customer phone must contain at least 7 digits");
+        if (c.getPhone() != null && !c.getPhone().trim().isEmpty()
+                && (countDigits(c.getPhone()) < 7 || !hasOnlyPhoneCharacters(c.getPhone()))) {
+            throw new ValidationException("Customer phone must contain at least 7 digits "
+                    + "(only digits, spaces, + - ( ) allowed)");
         }
-        if (c.getEmergencyPhone() != null && !c.getEmergencyPhone().trim().isEmpty() && countDigits(c.getEmergencyPhone()) < 7) {
-            throw new ValidationException("Emergency phone must contain at least 7 digits");
+        if (c.getEmergencyPhone() != null && !c.getEmergencyPhone().trim().isEmpty()
+                && (countDigits(c.getEmergencyPhone()) < 7 || !hasOnlyPhoneCharacters(c.getEmergencyPhone()))) {
+            throw new ValidationException("Emergency phone must contain at least 7 digits "
+                    + "(only digits, spaces, + - ( ) allowed)");
         }
-        if (c.getDateOfBirth() != null && !c.getDateOfBirth().trim().isEmpty() && !isValidDate(c.getDateOfBirth())) {
-            throw new ValidationException("Date of birth must be in yyyy-MM-dd format");
+        if (c.getDateOfBirth() != null && !c.getDateOfBirth().trim().isEmpty()) {
+            if (!isValidDate(c.getDateOfBirth())) {
+                throw new ValidationException("Date of birth must be in yyyy-MM-dd format");
+            }
+            if (LocalDate.parse(c.getDateOfBirth().trim()).isAfter(LocalDate.now())) {
+                throw new ValidationException("Date of birth cannot be in the future");
+            }
         }
         if (c.getJoinDate() != null && !c.getJoinDate().trim().isEmpty() && !isValidDate(c.getJoinDate())) {
             throw new ValidationException("Join date must be in yyyy-MM-dd format");
@@ -238,7 +247,8 @@ public class CustomerDao {
         String trimmed = email.trim();
         int atPos = trimmed.indexOf('@');
         int dotPos = trimmed.lastIndexOf('.');
-        return atPos > 0 && dotPos > atPos + 1 && dotPos < trimmed.length() - 1 && !trimmed.contains(" ");
+        boolean oneAtSign = atPos == trimmed.lastIndexOf('@');
+        return oneAtSign && atPos > 0 && dotPos > atPos + 1 && dotPos < trimmed.length() - 1 && !trimmed.contains(" ");
     }
 
     private int countDigits(String text) {
@@ -249,6 +259,17 @@ public class CustomerDao {
             }
         }
         return digits;
+    }
+
+    // A phone may only use digits, spaces and the characters + - ( )
+    private boolean hasOnlyPhoneCharacters(String text) {
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (!Character.isDigit(ch) && ch != ' ' && ch != '+' && ch != '-' && ch != '(' && ch != ')') {
+                return false;
+            }
+        }
+        return true;
     }
 
     private boolean isValidDate(String value) {

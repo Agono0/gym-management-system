@@ -171,14 +171,21 @@ public class TrainerDao {
         if (t.getEmail() != null && !t.getEmail().trim().isEmpty() && !isValidEmail(t.getEmail())) {
             throw new ValidationException("Invalid trainer email format: " + t.getEmail());
         }
-        if (t.getPhone() != null && !t.getPhone().trim().isEmpty() && countDigits(t.getPhone()) < 7) {
-            throw new ValidationException("Trainer phone must contain at least 7 digits");
+        if (t.getPhone() != null && !t.getPhone().trim().isEmpty()
+                && (countDigits(t.getPhone()) < 7 || !hasOnlyPhoneCharacters(t.getPhone()))) {
+            throw new ValidationException("Trainer phone must contain at least 7 digits "
+                    + "(only digits, spaces, + - ( ) allowed)");
         }
         if (t.getExperienceYears() < 0) {
             throw new ValidationException("Experience years cannot be negative");
         }
-        if (t.getHireDate() != null && !t.getHireDate().trim().isEmpty() && !isValidDate(t.getHireDate())) {
-            throw new ValidationException("Hire date must be in yyyy-MM-dd format");
+        if (t.getHireDate() != null && !t.getHireDate().trim().isEmpty()) {
+            if (!isValidDate(t.getHireDate())) {
+                throw new ValidationException("Hire date must be in yyyy-MM-dd format");
+            }
+            if (LocalDate.parse(t.getHireDate().trim()).isAfter(LocalDate.now())) {
+                throw new ValidationException("Hire date cannot be in the future");
+            }
         }
         if (t.getHourlyRate() == null || t.getHourlyRate().compareTo(BigDecimal.ZERO) < 0) {
             throw new ValidationException("Hourly rate must be zero or positive");
@@ -189,7 +196,8 @@ public class TrainerDao {
         String trimmed = email.trim();
         int atPos = trimmed.indexOf('@');
         int dotPos = trimmed.lastIndexOf('.');
-        return atPos > 0 && dotPos > atPos + 1 && dotPos < trimmed.length() - 1 && !trimmed.contains(" ");
+        boolean oneAtSign = atPos == trimmed.lastIndexOf('@');
+        return oneAtSign && atPos > 0 && dotPos > atPos + 1 && dotPos < trimmed.length() - 1 && !trimmed.contains(" ");
     }
 
     private int countDigits(String text) {
@@ -200,6 +208,17 @@ public class TrainerDao {
             }
         }
         return digits;
+    }
+
+    // A phone may only use digits, spaces and the characters + - ( )
+    private boolean hasOnlyPhoneCharacters(String text) {
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (!Character.isDigit(ch) && ch != ' ' && ch != '+' && ch != '-' && ch != '(' && ch != ')') {
+                return false;
+            }
+        }
+        return true;
     }
 
     private boolean isValidDate(String value) {

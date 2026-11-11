@@ -167,14 +167,18 @@ public class ProgressRecordDao {
         if (r.getDate() == null || r.getDate().trim().isEmpty() || !isValidDate(r.getDate())) {
             throw new ValidationException("Progress date must be in yyyy-MM-dd format");
         }
-        if (r.getWeightKg() <= 0) {
-            throw new ValidationException("Weight must be greater than zero");
+        // NaN and Infinity slip past the < and > checks below, so block them first
+        if (Double.isNaN(r.getWeightKg()) || Double.isInfinite(r.getWeightKg()) || r.getWeightKg() <= 0) {
+            throw new ValidationException("Weight must be a real number greater than zero");
         }
-        if (r.getBodyFatPct() < 0 || r.getBodyFatPct() > 100) {
+        if (Double.isNaN(r.getBodyFatPct()) || r.getBodyFatPct() < 0 || r.getBodyFatPct() > 100) {
             throw new ValidationException("Body fat percentage must be between 0 and 100");
         }
-        if (r.getTargetWeightKg() != null && r.getTargetWeightKg().doubleValue() <= 0) {
-            throw new ValidationException("Target weight must be greater than zero");
+        if (r.getTargetWeightKg() != null) {
+            double target = r.getTargetWeightKg().doubleValue();
+            if (Double.isNaN(target) || Double.isInfinite(target) || target <= 0) {
+                throw new ValidationException("Target weight must be a real number greater than zero");
+            }
         }
     }
 
