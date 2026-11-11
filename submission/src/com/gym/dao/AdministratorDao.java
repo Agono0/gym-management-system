@@ -1,12 +1,5 @@
 package com.gym.dao;
 
-import com.gym.exception.DatabaseException;
-import com.gym.exception.ValidationException;
-import com.gym.model.Administrator;
-import com.gym.model.StaffRole;
-import com.gym.util.DatabaseConnection;
-import com.gym.util.PhoneUtil;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -16,6 +9,13 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.gym.exception.DatabaseException;
+import com.gym.exception.ValidationException;
+import com.gym.model.Administrator;
+import com.gym.model.StaffRole;
+import com.gym.util.DatabaseConnection;
+import com.gym.util.PhoneUtil;
 
 // Database operations for staff and administrators
 public class AdministratorDao {
@@ -45,7 +45,7 @@ public class AdministratorDao {
             }
             return admin;
         } catch (SQLException e) {
-            // UNIQUE constraint race: same message as the app-level check
+            
             if (e.getMessage() != null && e.getMessage().contains("UNIQUE")) {
                 throw new ValidationException("Username already exists: " + admin.getUsername().trim());
             }

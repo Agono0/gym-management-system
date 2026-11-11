@@ -3,7 +3,6 @@ package com.gym;
 import com.gym.dao.*;
 
 import com.gym.exception.*;
-import com.gym.exception.ValidationException;
 import com.gym.model.Administrator;
 import com.gym.model.Attendance;
 import com.gym.model.AvailabilityStatus;
@@ -55,9 +54,6 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
-
-
-
 
 public class Main {
 
@@ -343,8 +339,8 @@ public class Main {
 
             System.out.println("  LIVE KPIs: Members " + customers.size() + " (" + activeCustomers + " Active) | "
                     + "Coaches: " + coaches + " | Active Plans: " + activePlans);
-            System.out.println("             Today Check-Ins: " + todayCheckIns + " | Sessions: " + sessionsCount
-                    + " | Revenue: EGP " + netRevenue.toPlainString() + " | Gear Maint: " + gearMaint + "/" + gear.size());
+            System.out.println("             Check-Ins: " + todayCheckIns + " | Sessions: " + sessionsCount
+                    + " | Revenue: EGP " + netRevenue.toPlainString() + " | Maint: " + gearMaint + "/" + gear.size());
         } catch (DatabaseException e) {
             System.out.println("  LIVE KPIs: [Unable to read KPI counters: " + e.getMessage() + "]");
         }
@@ -527,9 +523,6 @@ class CliTheme {
     }
 }
 
-// ===== CliInput =====
-
-// Safe console input helpers using java.util.Scanner
 class CliInput {
 
     // Used when input is piped from a file (no real console)
@@ -1002,6 +995,11 @@ class GymOperations {
         if (frozenDays <= 0) {
             throw new ValidationException("Freeze days must be greater than zero");
         }
+        String today = LocalDate.now().toString();
+        if (m.getEndDate() != null && m.getEndDate().compareTo(today) < 0) {
+            throw new ValidationException("Membership #" + membershipId
+                    + " has already expired (end date " + m.getEndDate() + ") - renew it instead of freezing");
+        }
         m.setStatus(MembershipStatus.FROZEN);
         m.setFrozenDays(frozenDays);
         membershipDao.update(m);
@@ -1009,8 +1007,11 @@ class GymOperations {
 
     // Bad stored dates must show a clean message, not a crash
     private LocalDate parseStoredDate(String value, String what) throws ValidationException {
+        if (value == null || value.trim().isEmpty()) {
+            throw new ValidationException("Stored " + what + " is missing");
+        }
         try {
-            return LocalDate.parse(value);
+            return LocalDate.parse(value.trim());
         } catch (DateTimeParseException e) {
             throw new ValidationException("Stored " + what + " has an invalid date format: " + value);
         }
@@ -1018,8 +1019,11 @@ class GymOperations {
 
     // Safely parse an ISO time stored in the database (same crash protection as dates)
     private LocalTime parseStoredTime(String value, String what) throws ValidationException {
+        if (value == null || value.trim().isEmpty()) {
+            throw new ValidationException("Stored " + what + " is missing");
+        }
         try {
-            return LocalTime.parse(value);
+            return LocalTime.parse(value.trim());
         } catch (DateTimeParseException e) {
             throw new ValidationException("Stored " + what + " has an invalid time format: " + value);
         }
@@ -1169,6 +1173,10 @@ class GymOperations {
         if (cust.getStatus() != CustomerStatus.ACTIVE) {
             throw new ValidationException("Session request denied because member status is " + cust.getStatus());
         }
+        if (date == null || date.trim().isEmpty()
+                || parseStoredDate(date, "requested session date").isBefore(LocalDate.now())) {
+            throw new ValidationException("Session request denied - the date cannot be in the past (" + date + ")");
+        }
         int finalDuration = durationMin > 0 ? durationMin : 60;
         BigDecimal finalPrice = subscriptionId != null ? BigDecimal.ZERO : (price != null ? price : BigDecimal.ZERO);
         Session s = new Session(0, customerId, trainerId, date, startTime, finalDuration,
@@ -1199,6 +1207,10 @@ class GymOperations {
         }
         if (s.getAvailabilityId() != null) {
             TrainerAvailability slot = availabilityDao.findById(s.getAvailabilityId().intValue());
+            if (slot != null && slot.getStatus() == AvailabilityStatus.CLOSED) {
+                throw new ValidationException("Cannot confirm session - linked slot #"
+                        + slot.getId() + " is CLOSED");
+            }
             if (slot != null && countConfirmedInSlot(slot.getId()) >= slot.getMaxCustomers()) {
                 throw new ValidationException("Cannot confirm session - linked slot is FULL");
             }
@@ -1295,6 +1307,7 @@ class GymOperations {
             Attendance row = existingList.get(i);
             if (dateIso.equals(row.getDate())) {
                 row.setCheckIn(timeIso);
+                row.setCheckOut(null);
                 attendanceDao.update(row);
                 return row;
             }
@@ -1954,7 +1967,10 @@ class MemberCliMenu {
                         med.setBloodType(input.readOptionalString("Blood Type", med.getBloodType()));
                         med.setConditions(input.readOptionalString("Conditions", med.getConditions()));
                         med.setAllergies(input.readOptionalString("Allergies", med.getAllergies()));
+                        med.setMedications(input.readOptionalString("Medications", med.getMedications()));
                         med.setInjuries(input.readOptionalString("Injuries", med.getInjuries()));
+                        med.setDoctorName(input.readOptionalString("Doctor Name", med.getDoctorName()));
+                        med.setDoctorPhone(input.readOptionalString("Doctor Phone", med.getDoctorPhone()));
                         med.setUpdatedDate(LocalDate.now().toString());
                         medicalDao.update(med);
                         CliTheme.printSuccess("Updated MedicalProfile #" + med.getId());
@@ -2060,7 +2076,7 @@ class MemberCliMenu {
 
     private void printProgressTableAndChart(List<ProgressRecord> records) {
         String[] headers = {"ID", "Date", "Weight(kg)", "BodyFat%", "Target", "Notes"};
-        int[] widths = {4, 10, 10, 8, 8, 22};
+        int[] widths = {4, 10, 10, 8, 8, 24};
         List<String[]> rows = new ArrayList<>();
         for (int i = 0; i < records.size(); i++) {
             ProgressRecord r = records.get(i);
@@ -2205,7 +2221,7 @@ class TrainerCliMenu {
         try {
             List<Trainer> list = trainerDao.findAll();
             String[] headers = {"ID", "Coach Name", "Specialty", "Exp", "Rate", "NO_SHOWs"};
-            int[] widths = {4, 20, 22, 4, 10, 8};
+            int[] widths = {4, 20, 24, 4, 10, 8};
             List<String[]> rows = new ArrayList<>();
             for (int i = 0; i < list.size(); i++) {
                 Trainer t = list.get(i);
@@ -2799,7 +2815,9 @@ class MembershipBillingCliMenu {
         if (cid == null) {
             return;
         }
-        System.out.println("  Plan Types: [1] MONTHLY (EGP 60 / 30d)  [2] QUARTERLY (EGP 150 / 90d)  [3] YEARLY (EGP 500 / 365d)");
+        System.out.println("  Plan Types: [1] MONTHLY (EGP 60 / 30d)");
+        System.out.println("              [2] QUARTERLY (EGP 150 / 90d)");
+        System.out.println("              [3] YEARLY (EGP 500 / 365d)");
         PlanType plan;
         BigDecimal defPrice;
         // Keep asking until the user picks a real plan (no silent MONTHLY default)
@@ -2911,6 +2929,10 @@ class MembershipBillingCliMenu {
             // Receipt is required when a replacement was promised, so the success
             // message below always means a replacement payment was really created
             newReceipt = input.readRequiredString("New Unique Receipt No: ");
+            if (newAmt == null || newMethod == null || newReceipt == null || newReceipt.trim().isEmpty()) {
+                CliTheme.printValidationError("Replacement was abandoned - the old payment was NOT voided.");
+                return;
+            }
         }
         Payment res = ops.voidAndReplacePayment(pid.intValue(), reason, LocalDate.now().toString(),
                 newAmt, newMethod, newReceipt);
@@ -3213,6 +3235,9 @@ class ScheduleWorkoutCliMenu {
             price = input.readBigDecimal("Session Price (0 if covered by subscription)", BigDecimal.ZERO);
         }
         String notes = input.readOptionalString("Notes", "Open slot booking");
+        if (price == null) {
+            return;
+        }
         if (cid != null && slotId != null) {
             Session saved = ops.bookOpenSlot(cid.intValue(), slotId.intValue(), 60, subId, price, notes);
             CliTheme.printSuccess("Booked CONFIRMED Session #" + saved.getId() + " in Slot #" + slotId);
@@ -3443,7 +3468,7 @@ class FacilityAdminCliMenu {
                         "Main Menu > Equipment");
 
                 String[] headers = {"ID", "Equipment Name", "Zone/Cat", "Condition", "Status", "Last Maint"};
-                int[] widths = {4, 24, 12, 9, 14, 10};
+                int[] widths = {4, 27, 12, 9, 14, 10};
                 List<String[]> rows = new ArrayList<>();
                 for (int i = 0; i < list.size(); i++) {
                     Equipment eq = list.get(i);
