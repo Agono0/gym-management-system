@@ -1723,6 +1723,7 @@ class MemberCliMenu {
                 searchMembers();
                 input.pause();
             } else if ("3".equals(choice)) {
+                listAllMembers();
                 Integer id = input.readInt("Enter Member ID (or 0 to cancel): ", 0);
                 if (id != null && id.intValue() > 0) {
                     openMemberProfile(id.intValue());
@@ -2212,6 +2213,7 @@ class TrainerCliMenu {
                 listTrainers();
                 input.pause();
             } else if ("2".equals(choice)) {
+                listTrainers();
                 Integer id = input.readInt("Enter Coach ID (or 0 to cancel): ", 0);
                 if (id != null && id.intValue() > 0) {
                     openTrainerProfile(id.intValue());
@@ -2527,14 +2529,40 @@ class TrainerCliMenu {
 
                 if ("1".equals(choice)) {
                     Integer cid = input.readInt("Customer ID: ", 1);
-                    Integer tid = input.readInt("Trainer ID (must match member's assigned trainerId): ", 1);
-                    String start = input.readIsoDate("Start Date", LocalDate.now().toString());
-                    String end = input.readIsoDate("End Date", LocalDate.now().plusDays(30).toString());
-                    BigDecimal rate = input.readBigDecimal("Rate Per Period", new BigDecimal("120.00"));
-                    if (cid != null && tid != null && start != null && end != null && rate != null) {
-                        TrainerSubscription sub = subDao.insert(new TrainerSubscription(0, cid.intValue(),
-                                tid.intValue(), start, end, rate, SubscriptionStatus.ACTIVE));
-                        CliTheme.printSuccess("Created Subscription #" + sub.getId());
+                    Customer subCustomer = cid != null ? customerDao.findById(cid.intValue()) : null;
+                    if (cid != null && subCustomer == null) {
+                        CliTheme.printValidationError("Customer not found: #" + cid);
+                    } else if (subCustomer != null) {
+                        Integer assigned = subCustomer.getTrainerId();
+                        System.out.println("  Member: " + subCustomer.getFullName() + " | Assigned trainer: "
+                                + (assigned != null ? "#" + assigned : "none - assign one first"));
+                        List<TrainerSubscription> existing = subDao.findByCustomerId(cid.intValue());
+                        if (existing.isEmpty()) {
+                            System.out.println("  This member has no trainer subscriptions yet.");
+                        } else {
+                            System.out.println("  Existing subscriptions of this member:");
+                            for (int i = 0; i < existing.size(); i++) {
+                                TrainerSubscription s = existing.get(i);
+                                System.out.println("    SUB#" + s.getId() + " | Coach #" + s.getTrainerId()
+                                        + " | " + s.getStartDate() + " to " + s.getEndDate() + " | " + s.getStatus());
+                            }
+                        }
+                        if (assigned == null) {
+                            CliTheme.printValidationError("Assign a trainer to this member first (Members > Member 360), "
+                                    + "then create the subscription.");
+                        } else {
+                            Integer tid = input.readIntOrDefault("Trainer ID (Enter = assigned trainer #" + assigned + ")",
+                                    assigned.intValue());
+                            String start = input.readIsoDate("Start Date", LocalDate.now().toString());
+                            String end = input.readIsoDate("End Date", LocalDate.now().plusDays(30).toString());
+                            BigDecimal rate = input.readBigDecimal("Rate Per Period", new BigDecimal("120.00"));
+                            if (tid != null && start != null && end != null && rate != null) {
+                                TrainerSubscription sub = subDao.insert(new TrainerSubscription(0, cid.intValue(),
+                                        tid.intValue(), start, end, rate, SubscriptionStatus.ACTIVE));
+                                CliTheme.printSuccess("Created Subscription #" + sub.getId()
+                                        + " for " + subCustomer.getFullName());
+                            }
+                        }
                     }
                     input.pause();
                 } else if ("2".equals(choice)) {
@@ -2615,8 +2643,11 @@ class MembershipBillingCliMenu {
     private final CliInput input;
     private final CliSession session;
     private final GymOperations ops = new GymOperations();
+    private final CustomerDao customerDao = new CustomerDao();
     private final MembershipDao membershipDao = new MembershipDao();
     private final PaymentDao paymentDao = new PaymentDao();
+    private final TrainerSubscriptionDao subDao = new TrainerSubscriptionDao();
+    private final SessionDao sessionDao = new SessionDao();
 
     public MembershipBillingCliMenu(CliInput input, CliSession session) {
         this.input = input;
@@ -2823,6 +2854,7 @@ class MembershipBillingCliMenu {
     }
 
     private void sellMembership() throws DatabaseException, ValidationException {
+        printMemberList();
         Integer cid = input.readInt("Customer ID: ", 1);
         if (cid == null) {
             return;
@@ -2871,6 +2903,7 @@ class MembershipBillingCliMenu {
     }
 
     private void recordValidPayment() throws DatabaseException, ValidationException {
+        printMemberList();
         Integer cid = input.readInt("Customer ID: ", 1);
         if (cid == null) {
             return;
@@ -2888,11 +2921,66 @@ class MembershipBillingCliMenu {
             }
             CliTheme.printWarning("[!] Enter 1, 2 or 3.");
         }
-        Integer targetId = input.readInt("Target Record ID: ", 1);
-        BigDecimal amount = input.readBigDecimal("Amount (>0)", new BigDecimal("45.00"));
+        List<Integer> validIds = new ArrayList<>();
+        if ("1".equals(targetType)) {
+            List<Membership> items = membershipDao.findByCustomerId(cid.intValue());
+            System.out.println("  This member's memberships:");
+            for (int i = 0; i < items.size(); i++) {
+                Membership m = items.get(i);
+                validIds.add(m.getId());
+                System.out.println("    MEM#" + m.getId() + " | " + m.getPlan() + " | " + m.getStartDate()
+                        + " to " + m.getEndDate() + " | " + m.getStatus() + " | price EGP " + m.getPrice());
+            }
+        } else if ("2".equals(targetType)) {
+            List<TrainerSubscription> items = subDao.findByCustomerId(cid.intValue());
+            System.out.println("  This member's trainer subscriptions:");
+            for (int i = 0; i < items.size(); i++) {
+                TrainerSubscription s = items.get(i);
+                validIds.add(s.getId());
+                System.out.println("    SUB#" + s.getId() + " | Coach #" + s.getTrainerId() + " | " + s.getStartDate()
+                        + " to " + s.getEndDate() + " | " + s.getStatus() + " | rate EGP " + s.getRatePerPeriod());
+            }
+        } else {
+            List<Session> sessions = sessionDao.findAll();
+            System.out.println("  This member's billable sessions (confirmed, not covered by a subscription):");
+            for (int i = 0; i < sessions.size(); i++) {
+                Session ses = sessions.get(i);
+                boolean billable = ses.getCustomerId() == cid.intValue() && ses.getSubscriptionId() == null
+                        && ses.getPrice() != null && ses.getPrice().compareTo(BigDecimal.ZERO) > 0
+                        && ses.getStatus() != SessionStatus.CANCELLED && ses.getStatus() != SessionStatus.REQUESTED;
+                if (billable) {
+                    validIds.add(ses.getId());
+                    System.out.println("    SES#" + ses.getId() + " | " + ses.getDate() + " " + ses.getStartTime()
+                            + " | " + ses.getStatus() + " | price EGP " + ses.getPrice());
+                }
+            }
+        }
+        if (validIds.isEmpty()) {
+            CliTheme.printValidationError("This member has no billable record of that type - there is nothing to link the payment to.");
+            return;
+        }
+        Integer targetId = null;
+        while (targetId == null) {
+            String raw = input.readLine("Target Record ID: ");
+            if (raw == null) {
+                return;
+            }
+            try {
+                int parsed = Integer.parseInt(raw.trim());
+                if (validIds.contains(Integer.valueOf(parsed))) {
+                    targetId = Integer.valueOf(parsed);
+                } else {
+                    CliTheme.printWarning("[!] That ID is not in the list above.");
+                }
+            } catch (NumberFormatException e) {
+                CliTheme.printWarning("[!] Enter digits only.");
+            }
+        }
+        BigDecimal itemPrice = findItemPrice(targetType, targetId.intValue(), cid.intValue());
+        BigDecimal amount = input.readBigDecimal("Amount (>0)", itemPrice != null ? itemPrice : new BigDecimal("45.00"));
         PaymentMethod method = readPaymentMethod();
         String receipt = input.readRawString("Unique Receipt No (e.g. REC-" + System.currentTimeMillis() % 10000 + "): ");
-        if (targetId == null || amount == null || receipt == null) {
+        if (amount == null || receipt == null) {
             return;
         }
         String today = LocalDate.now().toString();
@@ -2906,6 +2994,43 @@ class MembershipBillingCliMenu {
         }
         Payment saved = paymentDao.insert(p);
         CliTheme.printSuccess("Recorded Payment #" + saved.getId() + " Receipt=" + saved.getReceiptNo());
+    }
+
+    // Price of the linked record, used as the default payment amount
+    private BigDecimal findItemPrice(String targetType, int targetId, int customerId) throws DatabaseException {
+        if ("1".equals(targetType)) {
+            List<Membership> items = membershipDao.findByCustomerId(customerId);
+            for (int i = 0; i < items.size(); i++) {
+                if (items.get(i).getId() == targetId) {
+                    return items.get(i).getPrice();
+                }
+            }
+        } else if ("2".equals(targetType)) {
+            List<TrainerSubscription> items = subDao.findByCustomerId(customerId);
+            for (int i = 0; i < items.size(); i++) {
+                if (items.get(i).getId() == targetId) {
+                    return items.get(i).getRatePerPeriod();
+                }
+            }
+        } else {
+            List<Session> items = sessionDao.findAll();
+            for (int i = 0; i < items.size(); i++) {
+                if (items.get(i).getId() == targetId) {
+                    return items.get(i).getPrice();
+                }
+            }
+        }
+        return null;
+    }
+
+    // Lists members so ID prompts can be answered with a visible id
+    private void printMemberList() throws DatabaseException {
+        List<Customer> members = customerDao.findAll();
+        System.out.println("  Members:");
+        for (int i = 0; i < members.size(); i++) {
+            Customer c = members.get(i);
+            System.out.println("    #" + c.getId() + " " + c.getFullName() + " (" + c.getStatus() + ")");
+        }
     }
 
     private void recordManualPayment() throws DatabaseException, ValidationException {
@@ -2926,6 +3051,28 @@ class MembershipBillingCliMenu {
     }
 
     private void voidAndReplaceFlow() throws DatabaseException, ValidationException {
+        List<Payment> all = paymentDao.findAll();
+        List<Payment> voidable = new ArrayList<>();
+        for (int i = 0; i < all.size(); i++) {
+            if (!all.get(i).isVoided()) {
+                voidable.add(all.get(i));
+            }
+        }
+        if (voidable.isEmpty()) {
+            CliTheme.printValidationError("There are no payments available to void.");
+            return;
+        }
+        System.out.println("  Voiding cancels a payment but keeps it in the history with a reason;");
+        System.out.println("  a corrected replacement payment can be recorded right after.");
+        System.out.println("  Payments that can still be voided:");
+        for (int i = 0; i < voidable.size(); i++) {
+            Payment p = voidable.get(i);
+            String target = p.getMembershipId() != null ? "MEM#" + p.getMembershipId()
+                    : p.getSubscriptionId() != null ? "SUB#" + p.getSubscriptionId()
+                    : p.getSessionId() != null ? "SES#" + p.getSessionId() : "-";
+            System.out.println("    PAY#" + p.getId() + " | Customer #" + p.getCustomerId() + " | " + target
+                    + " | EGP " + p.getAmount().toPlainString() + " | Receipt " + p.getReceiptNo());
+        }
         Integer pid = input.readInt("Payment ID to void: ", 1);
         if (pid == null) {
             return;
@@ -3228,16 +3375,7 @@ class ScheduleWorkoutCliMenu {
     }
 
     private void bookOpenSlotFlow() throws DatabaseException, ValidationException {
-        List<TrainerAvailability> slots = availDao.findAll();
-        CliTheme.printSectionTitle("Available Coach Slots");
-        for (int i = 0; i < slots.size(); i++) {
-            TrainerAvailability s = slots.get(i);
-            int booked = ops.countConfirmedInSlot(s.getId());
-            System.out.println("  Slot #" + s.getId() + " | Coach #" + s.getTrainerId() + " | "
-                    + s.getDate() + " " + s.getStartTime() + "-" + s.getEndTime()
-                    + " | Occupancy: " + booked + "/" + s.getMaxCustomers()
-                    + " [" + ops.effectiveSlotStatus(s) + "]");
-        }
+        listCoachSlots();
         Integer cid = input.readInt("Customer ID: ", 1);
         Integer slotId = input.readInt("Availability Slot ID: ", 1);
         if (cid == null || slotId == null) {
@@ -3301,6 +3439,20 @@ class ScheduleWorkoutCliMenu {
         }
     }
 
+    // Prints every availability slot with live occupancy, for the slot-ID prompts
+    private void listCoachSlots() throws DatabaseException {
+        List<TrainerAvailability> slots = availDao.findAll();
+        CliTheme.printSectionTitle("Available Coach Slots");
+        for (int i = 0; i < slots.size(); i++) {
+            TrainerAvailability s = slots.get(i);
+            int booked = ops.countConfirmedInSlot(s.getId());
+            System.out.println("  Slot #" + s.getId() + " | Coach #" + s.getTrainerId() + " | "
+                    + s.getDate() + " " + s.getStartTime() + "-" + s.getEndTime()
+                    + " | Occupancy: " + booked + "/" + s.getMaxCustomers()
+                    + " [" + ops.effectiveSlotStatus(s) + "]");
+        }
+    }
+
     private void requestOutsideSlotFlow() throws DatabaseException, ValidationException {
         Integer cid = input.readInt("Customer ID: ", 1);
         Integer tid = input.readInt("Trainer ID: ", 1);
@@ -3318,6 +3470,7 @@ class ScheduleWorkoutCliMenu {
     }
 
     private void adminReserveFlow() throws DatabaseException, ValidationException {
+        listCoachSlots();
         Integer cid = input.readInt("Customer ID: ", 1);
         Integer tid = input.readInt("Trainer ID: ", 1);
         String date = input.readIsoDate("Date", LocalDate.now().plusDays(1).toString());
