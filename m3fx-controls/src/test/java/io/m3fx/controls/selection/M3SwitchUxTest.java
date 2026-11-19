@@ -1,6 +1,7 @@
 package io.m3fx.controls.selection;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import javafx.application.Platform;
@@ -8,6 +9,8 @@ import javafx.scene.Cursor;
 import javafx.scene.Scene;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.StackPane;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -98,5 +101,57 @@ class M3SwitchUxTest {
             toggle.setSelected(true);
             assertTrue(toggle.isSelected(), "State changes still work after the skin is detached");
         });
+    }
+
+    @Test
+    void skinSwapRemovesClickAndKeyHandlers() throws Throwable {
+        runOnFx(() -> {
+            M3Switch toggle = new M3Switch(false);
+            StackPane holder = new StackPane(toggle);
+            new Scene(holder);
+            toggle.applyCss();
+            // The framework disposes the default skin and installs ours; the disposed skin's
+            // MOUSE_CLICKED/KEY_PRESSED handlers must be gone with it.
+            toggle.setSkin(new M3Switch.SwitchSkin(toggle));
+
+            toggle.fireEvent(click());
+            assertTrue(toggle.isSelected(), "exactly one handler toggles per click");
+            toggle.fireEvent(click());
+            assertFalse(toggle.isSelected(), "no double toggle from the stale skin");
+
+            toggle.fireEvent(keyPress(KeyCode.SPACE));
+            assertTrue(toggle.isSelected(), "Space toggles once after the skin swap");
+            toggle.fireEvent(keyPress(KeyCode.ENTER));
+            assertFalse(toggle.isSelected(), "Enter toggles once after the skin swap");
+        });
+    }
+
+    @Test
+    void disposeIsIdempotentAndDetachesHandlers() throws Throwable {
+        runOnFx(() -> {
+            M3Switch toggle = new M3Switch(false);
+            StackPane holder = new StackPane(toggle);
+            new Scene(holder);
+            toggle.applyCss();
+            M3Switch.SwitchSkin skin = new M3Switch.SwitchSkin(toggle);
+            toggle.setSkin(skin);
+            skin.dispose();
+            skin.dispose(); // must be idempotent
+
+            boolean before = toggle.isSelected();
+            toggle.fireEvent(click());
+            assertEquals(before, toggle.isSelected(), "a disposed skin must not toggle on click");
+            toggle.fireEvent(keyPress(KeyCode.SPACE));
+            assertEquals(before, toggle.isSelected(), "a disposed skin must not toggle on Space");
+        });
+    }
+
+    private static MouseEvent click() {
+        return new MouseEvent(MouseEvent.MOUSE_CLICKED, 10, 10, 10, 10, MouseButton.PRIMARY, 1,
+                false, false, false, false, false, false, false, false, false, false, null);
+    }
+
+    private static KeyEvent keyPress(KeyCode code) {
+        return new KeyEvent(KeyEvent.KEY_PRESSED, "", "", code, false, false, false, false);
     }
 }

@@ -137,10 +137,15 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
     private double nodeStartY;
 
     private AnimationTimer physicsTimer;
+    private boolean physicsTimerActive;
+    private javafx.stage.Window currentWindow;
     private long lastStepNanos;
     private long animationStartNanos;
 
     private final ChangeListener<Object> invalidateListener;
+    private final ChangeListener<javafx.stage.Window> windowListener;
+    private final ChangeListener<Boolean> showingListener;
+    private final ChangeListener<Boolean> visibleListener;
     private final ChangeListener<Boolean> hoverListener;
     private final ChangeListener<Boolean> pressedListener;
     private final ChangeListener<Number> specularAngleListener;
@@ -234,6 +239,9 @@ specularLight2.setVisible(false);
         };
 
         invalidateListener = (obs, o, n) -> invalidateAll();
+        windowListener = (obs, o, n) -> attachWindow(n);
+        showingListener = (obs, o, n) -> updatePhysicsTimer();
+        visibleListener = (obs, o, n) -> updatePhysicsTimer();
         hoverListener = (obs, oldV, hover) -> {
             M3GlassPane c = getSkinnable();
             if (c == null) return;
@@ -404,6 +412,7 @@ specularLight2.setVisible(false);
         pressedListener = (obs, o, n) -> updateShadow();
         control.pressedProperty().addListener(pressedListener);
         control.hoverProperty().addListener(hoverListener);
+        control.visibleProperty().addListener(visibleListener);
         bevelFlatten.addListener(bevelFlattenListener);
         buttonScale.addListener(buttonScaleListener);
         dragElevation.addListener(dragElevationListener);
@@ -416,7 +425,45 @@ specularLight2.setVisible(false);
         attachSceneListeners(control.getScene());
 
         paintLayers();
-        physicsTimer.start();
+        // Start the physics timer only if the pane is shown right now; attachSceneListeners /
+        // attachWindow keep it in sync with the shown/visible state from here on.
+        updatePhysicsTimer();
+    }
+
+    /**
+     * Whether the continuous physics animation should run at all: the pane must be attached to
+     * a scene whose window is showing, and the whole node tree must be visible. Panes that are
+     * not on screen cost zero pulses.
+     */
+    private boolean isPhysicsWanted() {
+        M3GlassPane control = getSkinnable();
+        if (control == null || !control.isVisible() || control.getScene() == null) {
+            return false;
+        }
+        javafx.stage.Window window = control.getScene().getWindow();
+        if (window == null || !window.isShowing()) {
+            return false;
+        }
+        // isVisible() is the per-node flag, so confirm every ancestor renders too.
+        for (Node n = control; n != null; n = n.getParent()) {
+            if (!n.isVisible()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Starts/stops the physics timer to match the shown/visible state (idempotent). */
+    private void updatePhysicsTimer() {
+        if (isPhysicsWanted()) {
+            if (!physicsTimerActive) {
+                physicsTimerActive = true;
+                physicsTimer.start();
+            }
+        } else if (physicsTimerActive) {
+            physicsTimerActive = false;
+            physicsTimer.stop();
+        }
     }
 
     private void stepPhysics(double dt, double tSec) {
@@ -511,11 +558,26 @@ specularLight2.setVisible(false);
         if (currentScene == scene) return;
         if (currentScene != null) {
             currentScene.getProperties().removeListener(themeListener);
+            currentScene.windowProperty().removeListener(windowListener);
         }
         currentScene = scene;
         if (scene != null) {
             scene.getProperties().addListener(themeListener);
+            scene.windowProperty().addListener(windowListener);
         }
+        attachWindow(scene == null ? null : scene.getWindow());
+    }
+
+    private void attachWindow(javafx.stage.Window window) {
+        if (currentWindow == window) return;
+        if (currentWindow != null) {
+            currentWindow.showingProperty().removeListener(showingListener);
+        }
+        currentWindow = window;
+        if (window != null) {
+            window.showingProperty().addListener(showingListener);
+        }
+        updatePhysicsTimer();
     }
 
     @Override
@@ -806,6 +868,11 @@ specularLight2.setVisible(false);
         return Math.max(0.0, Math.min(1.0, v));
     }
 
+    /** Whether the physics timer is currently animating (package-private for tests). */
+    boolean isPhysicsTimerActive() {
+        return physicsTimerActive;
+    }
+
     @Override
     public void dispose() {
         M3GlassPane control = getSkinnable();
@@ -840,6 +907,7 @@ specularLight2.setVisible(false);
             control.specularAngleProperty().removeListener(specularAngleListener);
             control.pressedProperty().removeListener(pressedListener);
             control.hoverProperty().removeListener(hoverListener);
+            control.visibleProperty().removeListener(visibleListener);
             control.removeEventHandler(MouseEvent.MOUSE_PRESSED, pressHandler);
             control.removeEventHandler(MouseEvent.MOUSE_RELEASED, releaseHandler);
             control.removeEventHandler(MouseEvent.MOUSE_MOVED, moveHandler);
@@ -847,8 +915,13 @@ specularLight2.setVisible(false);
             control.removeEventHandler(MouseEvent.MOUSE_EXITED, exitHandler);
             if (currentScene != null) {
                 currentScene.getProperties().removeListener(themeListener);
+                currentScene.windowProperty().removeListener(windowListener);
                 currentScene = null;
             }
+        }
+        if (currentWindow != null) {
+            currentWindow.showingProperty().removeListener(showingListener);
+            currentWindow = null;
         }
         SpringAnimation.stop(bevelFlatten);
         SpringAnimation.stop(buttonScale);
@@ -856,6 +929,7 @@ specularLight2.setVisible(false);
         if (control != null) {
             SpringAnimation.stop(control.specularAngleProperty());
         }
+        physicsTimerActive = false;
         physicsTimer.stop();
         backdropImage = null;
         refractedImage = null;

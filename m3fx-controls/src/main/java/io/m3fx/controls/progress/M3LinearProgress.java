@@ -1,5 +1,6 @@
 package io.m3fx.controls.progress;
 
+import javafx.animation.Animation;
 import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
@@ -12,6 +13,7 @@ import javafx.beans.value.ChangeListener;
 import javafx.css.PseudoClass;
 import javafx.geometry.Pos;
 import javafx.scene.AccessibleRole;
+import javafx.scene.Scene;
 import javafx.scene.control.Control;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.Skin;
@@ -142,8 +144,18 @@ public class M3LinearProgress extends Control {
         private final Region secondaryBar = new Region();
         private final Rectangle clip = new Rectangle();
 
+        // Width-independent cycle fractions: the bars' pixel outputs are bound to
+        // fraction * width, so the timeline is built once and survives resizes untouched.
+        private final DoubleProperty primaryTxFraction =
+                new SimpleDoubleProperty(this, "primaryTxFraction", 0);
+        private final DoubleProperty primaryWidthFraction =
+                new SimpleDoubleProperty(this, "primaryWidthFraction", 0.08);
+        private final DoubleProperty secondaryTxFraction =
+                new SimpleDoubleProperty(this, "secondaryTxFraction", 0);
+        private final DoubleProperty secondaryWidthFraction =
+                new SimpleDoubleProperty(this, "secondaryWidthFraction", 0.08);
+
         private Timeline indeterminateLoop;
-        private double loopWidth = -1;
         private boolean inScene;
 
         private final ChangeListener<Number> progressListener =
@@ -151,10 +163,17 @@ public class M3LinearProgress extends Control {
         private final ChangeListener<Boolean> indeterminateListener = (obs, oldV, newV) ->
                 updateMode();
         private final ChangeListener<Number> widthListener = (obs, oldV, newV) -> {
-            if (getSkinnable() != null && getSkinnable().isIndeterminate()) {
-                startLoop(); // rebuild the timeline for the new width
+            // The indeterminate bars rebind automatically (fraction * width); the only width
+            // work left is the determinate layout and starting a loop that was still waiting
+            // for a real width — never a rebuild of one that is running.
+            if (getSkinnable() != null && getSkinnable().isIndeterminate() && inScene) {
+                startLoop();
             }
             layoutDeterminate();
+        };
+        private final ChangeListener<Scene> sceneListener = (obs, oldV, newV) -> {
+            inScene = newV != null;
+            updateMode();
         };
 
         LinearSkin(M3LinearProgress control) {
@@ -200,6 +219,13 @@ public class M3LinearProgress extends Control {
             secondaryBar.setVisible(false);
             indeterminateLayer.getChildren().addAll(track, primaryBar, secondaryBar);
             indeterminateLayer.setMaxWidth(Double.MAX_VALUE);
+            // Pixel outputs track fraction * width so the loop never depends on a width value.
+            primaryBar.translateXProperty().bind(primaryTxFraction.multiply(root.widthProperty()));
+            primaryBar.prefWidthProperty().bind(primaryWidthFraction.multiply(root.widthProperty()));
+            secondaryBar.translateXProperty()
+                    .bind(secondaryTxFraction.multiply(root.widthProperty()));
+            secondaryBar.prefWidthProperty()
+                    .bind(secondaryWidthFraction.multiply(root.widthProperty()));
 
             root.getStyleClass().add("m3-linear-progress-bar");
             root.getChildren().addAll(indeterminateLayer, determinateRow);
@@ -211,10 +237,10 @@ public class M3LinearProgress extends Control {
             control.progressProperty().addListener(progressListener);
             control.indeterminateProperty().addListener(indeterminateListener);
             control.widthProperty().addListener(widthListener);
-            control.sceneProperty().addListener((obs, oldV, newV) -> {
-                inScene = newV != null;
-                updateMode();
-            });
+            control.sceneProperty().addListener(sceneListener);
+            // The skin is created during CSS processing, i.e. after the control joined a scene,
+            // so the listener above cannot observe the first attach — seed the flag instead.
+            inScene = control.getScene() != null;
             updateMode();
         }
 
@@ -259,17 +285,18 @@ public class M3LinearProgress extends Control {
         }
 
         private void startLoop() {
-            double w = getSkinnable().getWidth();
-            if (w <= 0) {
+            M3LinearProgress control = getSkinnable();
+            if (control == null || control.getWidth() <= 0) {
                 return;
             }
-            if (indeterminateLoop != null && loopWidth == w) {
-                return; // already running at this width
+            if (indeterminateLoop != null
+                    && indeterminateLoop.getStatus() == Animation.Status.RUNNING) {
+                return; // reuse the running loop — width changes only rebind via the fractions
             }
-            stopLoop();
-            loopWidth = w;
-            indeterminateLoop = buildLoop(w);
-            indeterminateLoop.setCycleCount(Timeline.INDEFINITE);
+            if (indeterminateLoop == null) {
+                indeterminateLoop = buildLoop();
+                indeterminateLoop.setCycleCount(Timeline.INDEFINITE);
+            }
             indeterminateLoop.play();
         }
 
@@ -278,16 +305,21 @@ public class M3LinearProgress extends Control {
                 indeterminateLoop.stop();
                 indeterminateLoop = null;
             }
-            loopWidth = -1;
+        }
+
+        /** Returns the running indeterminate loop, or null when not animating (for tests). */
+        Timeline indeterminateLoopForTesting() {
+            return indeterminateLoop;
         }
 
         /**
-         * Builds the 2s two-bar cycle. Frame fractions and easings are taken verbatim from
+         * Builds the 2s two-bar cycle in width-independent fractions (pixel outputs are bound
+         * to fraction * root width). Frame fractions and easings are taken verbatim from
          * {@code material-web/progress/internal/_linear-progress.scss} (which ports the MDC
          * indeterminate animation); each bar animates translateX (as a fraction of the width)
          * and preferred width (the CSS {@code scaleX} of a full-width bar).
          */
-        private Timeline buildLoop(double w) {
+        private Timeline buildLoop() {
             Interpolator pTx1 = Interpolator.SPLINE(0.5, 0, 0.701732, 0.495819);
             Interpolator pTx2 = Interpolator.SPLINE(0.302435, 0.381352, 0.55, 0.956352);
             Interpolator pW1 = Interpolator.SPLINE(0.334731, 0.12482, 0.785844, 1);
@@ -296,32 +328,35 @@ public class M3LinearProgress extends Control {
             Interpolator sTx2 = Interpolator.SPLINE(0.31033, 0.284058, 0.8, 0.733712);
             Interpolator sTx3 = Interpolator.SPLINE(0.4, 0.627035, 0.6, 0.902026);
             Interpolator sW1 = Interpolator.SPLINE(0.205028, 0.057051, 0.57661, 0.453971);
-            Interpolator sW2 = Interpolator.SPLINE(0.152313, 0.196432, 0.648374, 1.00432);
-            Interpolator sW3 = Interpolator.SPLINE(0.257759, -0.003163, 0.211762, 1.38179);
+            // sW2/sW3 overshoot past [0,1] like the web cubic-bezier they were copied from;
+            // Interpolator.SPLINE rejects any control point outside [0,1] (which used to make
+            // every buildLoop call throw IllegalArgumentException and kept the loop dead).
+            Interpolator sW2 = new OvershootSpline(0.152313, 0.196432, 0.648374, 1.00432);
+            Interpolator sW3 = new OvershootSpline(0.257759, -0.003163, 0.211762, 1.38179);
 
             return new Timeline(
                     // primary-indeterminate-translate: 0, 20%: 0 -> 59.15%: 83.6714%
                     //   -> 100%: 200.611%; primary-indeterminate-scale: 0.08
                     //   -> 69.15%: 0.661479 -> 100%: 0.08
-                    frame(0, kv(primaryBar.translateXProperty(), 0, Interpolator.LINEAR),
-                            kv(primaryBar.prefWidthProperty(), 0.08 * w, Interpolator.LINEAR)),
-                    frame(0.20, kv(primaryBar.translateXProperty(), 0, Interpolator.LINEAR)),
-                    frame(0.3665, kv(primaryBar.prefWidthProperty(), 0.08 * w, Interpolator.LINEAR)),
-                    frame(0.5915, kv(primaryBar.translateXProperty(), 0.836714 * w, pTx1)),
-                    frame(0.6915, kv(primaryBar.prefWidthProperty(), 0.661479 * w, pW1)),
-                    frame(1, kv(primaryBar.translateXProperty(), 2.00611 * w, pTx2),
-                            kv(primaryBar.prefWidthProperty(), 0.08 * w, pW2)),
+                    frame(0, kv(primaryTxFraction, 0, Interpolator.LINEAR),
+                            kv(primaryWidthFraction, 0.08, Interpolator.LINEAR)),
+                    frame(0.20, kv(primaryTxFraction, 0, Interpolator.LINEAR)),
+                    frame(0.3665, kv(primaryWidthFraction, 0.08, Interpolator.LINEAR)),
+                    frame(0.5915, kv(primaryTxFraction, 0.836714, pTx1)),
+                    frame(0.6915, kv(primaryWidthFraction, 0.661479, pW1)),
+                    frame(1, kv(primaryTxFraction, 2.00611, pTx2),
+                            kv(primaryWidthFraction, 0.08, pW2)),
                     // secondary-indeterminate-translate: 0 -> 25%: 37.6519% -> 48.35%: 84.3862%
                     //   -> 100%: 160.278%; secondary-indeterminate-scale: 0.08
                     //   -> 19.15%: 0.457104 -> 44.15%: 0.72796 -> 100%: 0.08
-                    frame(0, kv(secondaryBar.translateXProperty(), 0, Interpolator.LINEAR),
-                            kv(secondaryBar.prefWidthProperty(), 0.08 * w, Interpolator.LINEAR)),
-                    frame(0.1915, kv(secondaryBar.prefWidthProperty(), 0.457104 * w, sW1)),
-                    frame(0.25, kv(secondaryBar.translateXProperty(), 0.376519 * w, sTx1)),
-                    frame(0.4415, kv(secondaryBar.prefWidthProperty(), 0.72796 * w, sW2)),
-                    frame(0.4835, kv(secondaryBar.translateXProperty(), 0.843862 * w, sTx2)),
-                    frame(1, kv(secondaryBar.translateXProperty(), 1.60278 * w, sTx3),
-                            kv(secondaryBar.prefWidthProperty(), 0.08 * w, sW3)));
+                    frame(0, kv(secondaryTxFraction, 0, Interpolator.LINEAR),
+                            kv(secondaryWidthFraction, 0.08, Interpolator.LINEAR)),
+                    frame(0.1915, kv(secondaryWidthFraction, 0.457104, sW1)),
+                    frame(0.25, kv(secondaryTxFraction, 0.376519, sTx1)),
+                    frame(0.4415, kv(secondaryWidthFraction, 0.72796, sW2)),
+                    frame(0.4835, kv(secondaryTxFraction, 0.843862, sTx2)),
+                    frame(1, kv(secondaryTxFraction, 1.60278, sTx3),
+                            kv(secondaryWidthFraction, 0.08, sW3)));
         }
 
         @SuppressWarnings({"unchecked", "rawtypes"})
@@ -335,6 +370,87 @@ public class M3LinearProgress extends Control {
             return new KeyValue(property, value, interpolator);
         }
 
+        /**
+         * Cubic-bezier easing with web {@code cubic-bezier()} semantics: the x control points
+         * must be in [0,1], but the y control points may overshoot — which
+         * {@link Interpolator#SPLINE} rejects. Solves x(t)=progress for t with Newton-Raphson
+         * and a bisection fallback, then evaluates y(t), mirroring the reference UnitBezier.
+         */
+        static final class OvershootSpline extends Interpolator {
+
+            private final double x1;
+            private final double y1;
+            private final double x2;
+            private final double y2;
+
+            OvershootSpline(double x1, double y1, double x2, double y2) {
+                this.x1 = x1;
+                this.y1 = y1;
+                this.x2 = x2;
+                this.y2 = y2;
+            }
+
+            @Override
+            protected double curve(double t) {
+                if (t <= 0) {
+                    return 0;
+                }
+                if (t >= 1) {
+                    return 1;
+                }
+                return sampleY(solveTForX(t));
+            }
+
+            private double solveTForX(double x) {
+                double cx = 3 * x1;
+                double bx = 3 * (x2 - x1) - cx;
+                double ax = 1 - cx - bx;
+                double t = x;
+                for (int i = 0; i < 8; i++) {
+                    double err = sampleX(ax, bx, cx, t) - x;
+                    if (Math.abs(err) < 1e-6) {
+                        return t;
+                    }
+                    double slope = sampleDX(ax, bx, cx, t);
+                    if (Math.abs(slope) < 1e-6) {
+                        break;
+                    }
+                    t -= err / slope;
+                }
+                double lo = 0;
+                double hi = 1;
+                t = x;
+                while (lo < hi) {
+                    double current = sampleX(ax, bx, cx, t);
+                    if (Math.abs(current - x) < 1e-6) {
+                        return t;
+                    }
+                    if (current < x) {
+                        lo = t;
+                    } else {
+                        hi = t;
+                    }
+                    t = (lo + hi) / 2;
+                }
+                return t;
+            }
+
+            private double sampleX(double ax, double bx, double cx, double t) {
+                return ((ax * t + bx) * t + cx) * t;
+            }
+
+            private double sampleDX(double ax, double bx, double cx, double t) {
+                return (3 * ax * t + 2 * bx) * t + cx;
+            }
+
+            private double sampleY(double t) {
+                double cy = 3 * y1;
+                double by = 3 * (y2 - y1) - cy;
+                double ay = 1 - cy - by;
+                return ((ay * t + by) * t + cy) * t;
+            }
+        }
+
         @Override
         public void dispose() {
             stopLoop();
@@ -343,9 +459,14 @@ public class M3LinearProgress extends Control {
                 control.progressProperty().removeListener(progressListener);
                 control.indeterminateProperty().removeListener(indeterminateListener);
                 control.widthProperty().removeListener(widthListener);
+                control.sceneProperty().removeListener(sceneListener);
             }
             clip.widthProperty().unbind();
             clip.heightProperty().unbind();
+            primaryBar.translateXProperty().unbind();
+            primaryBar.prefWidthProperty().unbind();
+            secondaryBar.translateXProperty().unbind();
+            secondaryBar.prefWidthProperty().unbind();
             super.dispose();
         }
     }

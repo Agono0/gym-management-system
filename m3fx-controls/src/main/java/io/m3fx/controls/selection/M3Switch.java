@@ -6,6 +6,7 @@ import io.m3fx.core.theme.ColorRole;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.css.PseudoClass;
+import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.scene.AccessibleRole;
 import javafx.scene.Cursor;
@@ -13,6 +14,7 @@ import javafx.scene.control.Control;
 import javafx.scene.control.Skin;
 import javafx.scene.control.SkinBase;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Background;
 import javafx.scene.layout.BackgroundFill;
@@ -140,6 +142,8 @@ public class M3Switch extends Control {
         private final javafx.beans.value.ChangeListener<Boolean> selectedListener;
         private final javafx.beans.value.ChangeListener<Boolean> showIconListener;
         private final javafx.beans.value.ChangeListener<Boolean> pressedListener;
+        private final EventHandler<MouseEvent> clickHandler;
+        private final EventHandler<KeyEvent> keyHandler;
 
         SwitchSkin(M3Switch control) {
             super(control);
@@ -174,20 +178,22 @@ public class M3Switch extends Control {
             control.selectedProperty().addListener(selectedListener);
             control.showIconProperty().addListener(showIconListener);
             control.pressedProperty().addListener(pressedListener);
-            control.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
+            // Held as fields so dispose() can remove them: anonymous handlers survive a skin
+            // swap otherwise and double-toggle the switch.
+            clickHandler = e -> {
                 if (!control.isDisabled()) {
                     control.toggle();
                 }
-            });
-            control.addEventHandler(
-                    javafx.scene.input.KeyEvent.KEY_PRESSED,
-                    e -> {
-                        if (!control.isDisabled()
-                                && (e.getCode() == KeyCode.SPACE || e.getCode() == KeyCode.ENTER)) {
-                            control.toggle();
-                            e.consume();
-                        }
-                    });
+            };
+            keyHandler = e -> {
+                if (!control.isDisabled()
+                        && (e.getCode() == KeyCode.SPACE || e.getCode() == KeyCode.ENTER)) {
+                    control.toggle();
+                    e.consume();
+                }
+            };
+            control.addEventHandler(MouseEvent.MOUSE_CLICKED, clickHandler);
+            control.addEventHandler(KeyEvent.KEY_PRESSED, keyHandler);
         }
 
         @Override
@@ -197,6 +203,8 @@ public class M3Switch extends Control {
                 control.selectedProperty().removeListener(selectedListener);
                 control.showIconProperty().removeListener(showIconListener);
                 control.pressedProperty().removeListener(pressedListener);
+                control.removeEventHandler(MouseEvent.MOUSE_CLICKED, clickHandler);
+                control.removeEventHandler(KeyEvent.KEY_PRESSED, keyHandler);
                 StateLayer.unbind(control, stateLayer);
             }
             // Kill any in-flight thumb springs even if the skinnable is already gone, so a
