@@ -63,3 +63,17 @@ Everything in `M3FX_AUDIT.md` → mapped to tasks in `QUEUE.md`.
 - Anti-slop (§3 of the prompt): no emoji icons, no lorem/fake filler, one primary action per
   region, real states (loading/empty/error/disabled), sentence-case verb copy, Material Symbols
   only, no hard-coded colors/radii/durations.
+
+## Round-2 visual findings (baseline matrix, 1280 dark, on main a7f23de)
+
+- **B11 (new lib bug)**: M3TextField resting-state label floats above an empty, unfocused field
+  (equipment/membership/schedule/staff) — spec says label sits inside at rest. Queued.
+- **C4**: live-workout emoji buttons render as tofu boxes; rep-counter minus button invisible;
+  glass visor overlap clips VBT panel title. Schedule: only Mon–Wed demo columns; left rail
+  field clipped under app bar.
+- **C5**: equipment table empty ("No content in table") while footer claims "Showing 12 of 84";
+  stock radios; emoji tofu in maintenance/delete buttons.
+- **C6**: membership floating action bar OVERLAPS roster rows (Lena Fischer hidden); carousel
+  tier title truncates ("YEARLY CYBER …", "BEST V…"); funnel is fake data.
+- **C7**: staff Role/Status/Last-Login columns truncate ("RECEPTI…", "Suspen…", "2026-10-…") —
+  pair with B6 DataTable width work; "Delete Staff" destructive text button needs error styling.

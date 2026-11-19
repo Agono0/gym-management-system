@@ -145,6 +145,17 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   done-when: screenshots at both widths show readable labels/badges, test added, suite green.
   claimed-by: — | status: READY
 
+- [ ] B11 | lane:B | deps:— | files: m3fx-controls/.../textfield/M3TextField.java + test (m3fx.css if needed)
+  goal: Resting-state label bug (found in the round-1 full-matrix screenshots, reproducible on
+  equipment/membership/schedule/staff screens): an EMPTY, unfocused M3TextField renders its
+  label floating ABOVE the field instead of inside it, contradicting the M3 text-field spec
+  (label floats only on focus or when non-empty; at rest it sits inside the field for the
+  filled variant). Investigate the `:floated` pseudo-class logic and fix; verify in the gallery
+  inputs page + equipment screen.
+  done-when: empty+unfocused field shows the label inside per spec; focused/non-empty floats;
+  test added; suite green; screenshots clean.
+  claimed-by: — | status: READY
+
 - [ ] B7 | lane:B | deps:A3 | files: m3fx-controls/.../internal/MotionUtil.java, internal/SpringAnimation.java, internal/StateLayer.java
   goal: Honor `MotionTokens.isReducedMotion()` in the controls internals: `MotionUtil.enter/exit/
   splash/shake/pressScale` degrade to ≤150 ms fades; `SpringAnimation` snaps to target; state
