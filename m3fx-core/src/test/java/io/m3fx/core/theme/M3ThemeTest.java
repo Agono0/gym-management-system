@@ -8,19 +8,37 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Verifies the ported dynamic-color engine against the M3 baseline: seed #6750A4 with TonalSpot
- * must reproduce the current color-spec baseline light theme (primary #65558f,
- * primary-container #e9ddff — see {@code docs/SPEC_NOTES/systems.md}; the #6750a4/#eaddff pair
- * was the 2021 spec and is intentionally not asserted).
+ * must reproduce the default (SPEC_2021) light theme (primary #65558f, primary-container
+ * #e9ddff — see {@code docs/SPEC_NOTES/color-system-versions.md}). The #6750a4/#eaddff pair
+ * sometimes quoted from m3.material.io comes from the spec's baseline example palette (48-chroma
+ * primary); the vendored mcu TonalSpot engine uses a 36-chroma palette and resolves the values
+ * pinned here — they are regression pins of the default resolution path, not the spec example.
  */
 class M3ThemeTest {
 
     @Test
     void baselineLightSeedReproducesSpecColors() {
-        // Seed #6750A4 is the spec's example seed. With the bundled 2026 color spec the baseline
-        // light values are #65558f / #e9ddff (the older #6750a4 / #eaddff pair was the 2021 spec).
+        // Seed #6750A4 is the spec's example seed. The default fromSeed path resolves with the
+        // SPEC_2021 definitions (DynamicScheme.DEFAULT_SPEC_VERSION); the pinned light values
+        // for that path are #65558f / #e9ddff. (The #6750a4 / #eaddff pair is the spec example's
+        // baseline palette, not this engine's output.)
         M3Theme theme = M3Theme.fromSeed(Color.web("#6750A4"), ThemeVariant.TONAL_SPOT, false);
         assertEquals("#65558f", M3Theme.toWeb(theme.get(ColorRole.PRIMARY)));
         assertEquals("#e9ddff", M3Theme.toWeb(theme.get(ColorRole.PRIMARY_CONTAINER)));
+    }
+
+    @Test
+    void defaultPathIsSpec2021AndMatchesExplicitRequest() {
+        // The default 4-arg fromSeed must keep resolving with SPEC_2021 — the guarantee behind
+        // "default rendered colors stay byte-identical" for the A1 API addition.
+        M3Theme theme = M3Theme.fromSeed(Color.web("#6750A4"), ThemeVariant.TONAL_SPOT, true);
+        assertEquals(ColorSpecVersion.SPEC_2021, theme.specVersion());
+        M3Theme explicit = M3Theme.fromSeed(
+                Color.web("#6750A4"), ThemeVariant.TONAL_SPOT, true, M3Theme.CONTRAST_STANDARD,
+                ColorSpecVersion.SPEC_2021);
+        for (ColorRole role : ColorRole.values()) {
+            assertEquals(explicit.get(role), theme.get(role), "role " + role + " diverged");
+        }
     }
 
     @Test
@@ -66,6 +84,8 @@ class M3ThemeTest {
     void allVariantsResolveEveryRole() {
         for (ThemeVariant variant : ThemeVariant.values()) {
             for (boolean dark : new boolean[] {false, true}) {
+                // The legacy overload defaults CMF to SPEC_2026 (its only defined spec) and
+                // every other variant to SPEC_2021.
                 M3Theme theme = M3Theme.fromSeed(Color.web("#6750A4"), variant, dark);
                 for (ColorRole role : ColorRole.values()) {
                     Color color = theme.get(role);

@@ -24,5 +24,11 @@ public enum ThemeVariant {
     /** Rainbow gradients. */
     RAINBOW,
     /** Fruit-salad gradients. */
-    FRUIT_SALAD
+    FRUIT_SALAD,
+    /**
+     * Color Midpoint Fusion (2026 spec): mid-point palettes derived from one or two source
+     * colors. Only defined for {@link ColorSpecVersion#SPEC_2026} — the engine rejects other
+     * spec versions for this variant.
+     */
+    CMF
 }

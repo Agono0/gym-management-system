@@ -26,8 +26,14 @@ public interface ColorSpec {
 
   /** All available spec versions. */
   public enum SpecVersion {
+    /** Original dynamic-color spec (Material 3 launch); {@link DynamicScheme}'s default. */
     SPEC_2021,
+    /** 2025 spec: remapped surfaces/background, higher default contrast curves, *dim roles. */
     SPEC_2025,
+    /**
+     * 2026 spec: role definitions written for {@link Variant#CMF} only; other variants fall
+     * back (see {@code DynamicScheme.maybeFallbackSpecVersion}).
+     */
     SPEC_2026,
   }
 

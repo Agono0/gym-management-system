@@ -20,9 +20,28 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 
-/** Named colors, otherwise known as tokens, or roles, in the Material Design system. */
+/**
+ * Named colors, otherwise known as tokens, or roles, in the Material Design system.
+ *
+ * <p>Spec-version handling: the definitions returned by the accessors below are the
+ * <em>superset</em> built from {@link ColorSpec2026} — each one embeds the 2021 base definition
+ * plus its 2025/2026 extensions (via {@code DynamicColor.Builder.extendSpecVersion}). The
+ * definition actually used at resolution time follows the scheme's declared spec version:
+ * {@code DynamicColor.getHct/getTone(scheme)} dispatch to
+ * {@code ColorSpecs.get(scheme.specVersion)}, and every embedded definition selects its branch
+ * by comparing spec versions. Requesting {@code SPEC_2021} therefore renders with the 2021
+ * definitions even though this factory builds 2026-based chains.
+ *
+ * <p>One documented exception: the four {@code *dim} roles have no 2021 definition
+ * ({@code ColorSpec2021} returns {@code null} for them); for {@code SPEC_2021} schemes they
+ * resolve through their nearest-newer (2025) definition. Callers that surface those roles (the
+ * m3fx theme layer's {@code PRIMARY_DIM}/etc.) rely on this fallback. See
+ * {@code docs/SPEC_NOTES/color-system-versions.md}.
+ */
 public final class MaterialDynamicColors {
 
+  // Superset role definitions (2021 base ⊕ 2025 ⊕ 2026 extensions); per-spec selection happens
+  // at resolution time on scheme.specVersion (see class Javadoc). Matches upstream mcu main.
   private static final ColorSpec colorSpec = new ColorSpec2026();
 
   public DynamicColor highestSurface(DynamicScheme s) {

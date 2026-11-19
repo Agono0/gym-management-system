@@ -212,6 +212,19 @@ public class DynamicScheme {
   /**
    * Returns the spec version to use for the given variant. If the variant is not supported by the
    * given spec version, the fallback spec version is returned.
+   *
+   * <p>Fallback table (requested → effective):
+   *
+   * <ul>
+   *   <li>{@link Variant#CMF}: never rewritten; {@code SchemeCmf} rejects anything but
+   *       {@link SpecVersion#SPEC_2026}.
+   *   <li>{@link Variant#EXPRESSIVE}, {@link Variant#VIBRANT}, {@link Variant#TONAL_SPOT},
+   *       {@link Variant#NEUTRAL}: requested version kept, except SPEC_2026 falls back to
+   *       SPEC_2025 (the 2026 definitions are written for CMF only — every non-CMF branch is
+   *       "undefined use case").
+   *   <li>Every other variant (FIDELITY, CONTENT, RAINBOW, FRUIT_SALAD, MONOCHROME): always
+   *       SPEC_2021, regardless of the request.
+   * </ul>
    */
   private static SpecVersion maybeFallbackSpecVersion(SpecVersion specVersion, Variant variant) {
     if (variant == Variant.CMF) {

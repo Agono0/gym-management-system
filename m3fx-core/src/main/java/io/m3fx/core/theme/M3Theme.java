@@ -1,8 +1,10 @@
 package io.m3fx.core.theme;
 
+import io.m3fx.core.color.dynamiccolor.ColorSpec;
 import io.m3fx.core.color.dynamiccolor.DynamicScheme;
 import io.m3fx.core.color.dynamiccolor.MaterialDynamicColors;
 import io.m3fx.core.color.hct.Hct;
+import io.m3fx.core.color.scheme.SchemeCmf;
 import io.m3fx.core.color.scheme.SchemeContent;
 import io.m3fx.core.color.scheme.SchemeExpressive;
 import io.m3fx.core.color.scheme.SchemeFidelity;
@@ -24,6 +26,12 @@ import javafx.scene.paint.Color;
  * every {@link ColorRole} resolves to a {@link Color}, and {@link #toCss()} emits the
  * {@code -md-sys-color-*} looked-up colors that all control stylesheets reference, so switching
  * themes restyles every control at once.
+ *
+ * <p>Schemes resolve with the {@link ColorSpecVersion#SPEC_2021} color spec unless a newer
+ * version is requested explicitly via
+ * {@link #fromSeed(Color, ThemeVariant, boolean, double, ColorSpecVersion)}; see that method
+ * and {@code docs/SPEC_NOTES/color-system-versions.md} for the variant × spec compatibility
+ * table.
  */
 public final class M3Theme {
 
@@ -34,22 +42,32 @@ public final class M3Theme {
     /** High contrast. */
     public static final double CONTRAST_HIGH = 1.0;
 
+    /** Platform every m3fx scheme is built for; watch-specific spec branches are unused. */
+    private static final DynamicScheme.Platform PLATFORM = DynamicScheme.Platform.PHONE;
+
     private final Color seed;
     private final ThemeVariant variant;
     private final boolean dark;
     private final double contrast;
+    private final ColorSpecVersion specVersion;
     private final Map<ColorRole, Color> colors;
 
-    private M3Theme(Color seed, ThemeVariant variant, boolean dark, double contrast) {
+    private M3Theme(
+            Color seed, ThemeVariant variant, boolean dark, double contrast,
+            ColorSpecVersion requestedSpecVersion) {
         this.seed = seed;
         this.variant = variant;
         this.dark = dark;
         this.contrast = contrast;
-        this.colors = resolve(seed, variant, dark, contrast);
+        DynamicScheme scheme = buildScheme(seed, variant, dark, contrast, requestedSpecVersion);
+        this.specVersion = effectiveSpecVersion(scheme.specVersion);
+        this.colors = resolve(scheme);
     }
 
     /**
-     * Creates a theme from a seed color.
+     * Creates a theme from a seed color, resolved with the variant's default spec version:
+     * {@link ColorSpecVersion#SPEC_2021} — keeping today's rendered colors — except
+     * {@link ThemeVariant#CMF}, which is only defined for {@link ColorSpecVersion#SPEC_2026}.
      *
      * @param seed source color the palettes are derived from
      * @param variant dynamic-color variant
@@ -59,13 +77,42 @@ public final class M3Theme {
      * @return the resolved theme
      */
     public static M3Theme fromSeed(Color seed, ThemeVariant variant, boolean dark, double contrast) {
+        return fromSeed(
+                seed, variant, dark, contrast,
+                variant == ThemeVariant.CMF
+                        ? ColorSpecVersion.SPEC_2026
+                        : ColorSpecVersion.SPEC_2021);
+    }
+
+    /**
+     * Creates a theme from a seed color, resolved with an explicit color-spec version.
+     *
+     * <p>Spec versions the variant does not support fall back per the table documented on
+     * {@link ColorSpecVersion} — {@link #specVersion()} returns the effective version. The
+     * {@link ThemeVariant#CMF} variant rejects every requested version other than
+     * {@link ColorSpecVersion#SPEC_2026} with an {@link IllegalArgumentException}.
+     *
+     * @param seed source color the palettes are derived from
+     * @param variant dynamic-color variant
+     * @param dark {@code true} for the dark scheme
+     * @param contrast contrast level, one of {@link #CONTRAST_STANDARD}, {@link #CONTRAST_MEDIUM},
+     *     {@link #CONTRAST_HIGH}
+     * @param specVersion color-spec version to resolve roles with
+     * @return the resolved theme
+     */
+    public static M3Theme fromSeed(
+            Color seed, ThemeVariant variant, boolean dark, double contrast,
+            ColorSpecVersion specVersion) {
         if (seed == null) {
             throw new IllegalArgumentException("seed must not be null");
         }
         if (variant == null) {
             throw new IllegalArgumentException("variant must not be null");
         }
-        return new M3Theme(seed, variant, dark, contrast);
+        if (specVersion == null) {
+            throw new IllegalArgumentException("specVersion must not be null");
+        }
+        return new M3Theme(seed, variant, dark, contrast, specVersion);
     }
 
     /**
@@ -108,6 +155,14 @@ public final class M3Theme {
     /** Returns the contrast level. */
     public double contrast() {
         return contrast;
+    }
+
+    /**
+     * Returns the effective color-spec version the roles were resolved with — the requested
+     * version after the variant fallbacks documented on {@link ColorSpecVersion}.
+     */
+    public ColorSpecVersion specVersion() {
+        return specVersion;
     }
 
     /**
@@ -209,21 +264,53 @@ public final class M3Theme {
         return Color.rgb(r, g, b, a / 255.0);
     }
 
-    private static Map<ColorRole, Color> resolve(
-            Color seed, ThemeVariant variant, boolean dark, double contrast) {
+    /**
+     * Builds the material-color-utilities scheme for the requested variant and spec version,
+     * phone platform. Spec-version fallbacks (and the CMF rejection) happen here or inside
+     * {@code DynamicScheme}.
+     */
+    private static DynamicScheme buildScheme(
+            Color seed, ThemeVariant variant, boolean dark, double contrast,
+            ColorSpecVersion requestedSpecVersion) {
+        if (variant == ThemeVariant.CMF && requestedSpecVersion != ColorSpecVersion.SPEC_2026) {
+            throw new IllegalArgumentException(
+                    "CMF variant is only defined for SPEC_2026, got " + requestedSpecVersion);
+        }
         Hct source = Hct.fromInt(toArgb(seed));
-        DynamicScheme scheme =
-                switch (variant) {
-                    case VIBRANT -> new SchemeVibrant(source, dark, contrast);
-                    case EXPRESSIVE -> new SchemeExpressive(source, dark, contrast);
-                    case NEUTRAL -> new SchemeNeutral(source, dark, contrast);
-                    case MONOCHROME -> new SchemeMonochrome(source, dark, contrast);
-                    case FIDELITY -> new SchemeFidelity(source, dark, contrast);
-                    case CONTENT -> new SchemeContent(source, dark, contrast);
-                    case RAINBOW -> new SchemeRainbow(source, dark, contrast);
-                    case FRUIT_SALAD -> new SchemeFruitSalad(source, dark, contrast);
-                    default -> new SchemeTonalSpot(source, dark, contrast);
-                };
+        ColorSpec.SpecVersion specVersion = internalSpecVersion(requestedSpecVersion);
+        return switch (variant) {
+            case VIBRANT -> new SchemeVibrant(source, dark, contrast, specVersion, PLATFORM);
+            case EXPRESSIVE -> new SchemeExpressive(source, dark, contrast, specVersion, PLATFORM);
+            case NEUTRAL -> new SchemeNeutral(source, dark, contrast, specVersion, PLATFORM);
+            case MONOCHROME -> new SchemeMonochrome(source, dark, contrast, specVersion, PLATFORM);
+            case FIDELITY -> new SchemeFidelity(source, dark, contrast, specVersion, PLATFORM);
+            case CONTENT -> new SchemeContent(source, dark, contrast, specVersion, PLATFORM);
+            case RAINBOW -> new SchemeRainbow(source, dark, contrast, specVersion, PLATFORM);
+            case FRUIT_SALAD -> new SchemeFruitSalad(source, dark, contrast, specVersion, PLATFORM);
+            case CMF -> new SchemeCmf(source, dark, contrast, specVersion, PLATFORM);
+            case TONAL_SPOT -> new SchemeTonalSpot(source, dark, contrast, specVersion, PLATFORM);
+        };
+    }
+
+    /** Maps the public spec-version enum onto the vendored engine's enum. */
+    private static ColorSpec.SpecVersion internalSpecVersion(ColorSpecVersion specVersion) {
+        return switch (specVersion) {
+            case SPEC_2021 -> ColorSpec.SpecVersion.SPEC_2021;
+            case SPEC_2025 -> ColorSpec.SpecVersion.SPEC_2025;
+            case SPEC_2026 -> ColorSpec.SpecVersion.SPEC_2026;
+        };
+    }
+
+    /** Maps the engine's (post-fallback) spec version back onto the public enum. */
+    private static ColorSpecVersion effectiveSpecVersion(ColorSpec.SpecVersion specVersion) {
+        return switch (specVersion) {
+            case SPEC_2021 -> ColorSpecVersion.SPEC_2021;
+            case SPEC_2025 -> ColorSpecVersion.SPEC_2025;
+            case SPEC_2026 -> ColorSpecVersion.SPEC_2026;
+        };
+    }
+
+    private static Map<ColorRole, Color> resolve(DynamicScheme scheme) {
         MaterialDynamicColors mdc = new MaterialDynamicColors();
         Map<ColorRole, Color> map = new EnumMap<>(ColorRole.class);
         map.put(ColorRole.PRIMARY, fromArgb(mdc.primary().getArgb(scheme)));
