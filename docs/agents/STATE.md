@@ -77,3 +77,9 @@ Everything in `M3FX_AUDIT.md` → mapped to tasks in `QUEUE.md`.
   tier title truncates ("YEARLY CYBER …", "BEST V…"); funnel is fake data.
 - **C7**: staff Role/Status/Last-Login columns truncate ("RECEPTI…", "Suspen…", "2026-10-…") —
   pair with B6 DataTable width work; "Delete Staff" destructive text button needs error styling.
+- **C3**: customer-profile biometric stat cards clip ("13.8 %", "142.5") — B10 covers the root
+  cause; profile hero card is sparse; radar chart fine.
+- **C6**: payment top-right receipt-lookup field is squeezed/clipped at 1280; stock radios in
+  the settle form; stat badges truncate ("Pending settleme…").
+- **C8**: availability is the WORST layout — duplicate overlapping title text, heatmap strip
+  collides with the selected-slot glass panel; workout skeleton confirmed visually.
