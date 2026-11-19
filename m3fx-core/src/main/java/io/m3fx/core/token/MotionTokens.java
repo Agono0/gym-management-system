@@ -1,6 +1,8 @@
 package io.m3fx.core.token;
 
 import javafx.animation.Interpolator;
+import javafx.beans.property.ReadOnlyBooleanProperty;
+import javafx.beans.property.ReadOnlyBooleanWrapper;
 
 /**
  * M3 motion durations and easing curves.
@@ -8,6 +10,16 @@ import javafx.animation.Interpolator;
  * <p>See <a href="https://m3.material.io/styles/motion/easing-and-duration/tokens-specs">M3 motion
  * easing and duration tokens</a> and {@code material-web/tokens/_md-sys-motion.scss} (v0.192 and
  * v34.0.21).
+ *
+ * <p>Reduced motion: {@link #reducedMotionProperty()} exposes the global accessibility flag
+ * (WCAG 2.3.3; M3 applying-transitions guidance — see {@code docs/SPEC_NOTES/reduced-motion.md}).
+ * When {@link #isReducedMotion()} is {@code true}, consumers must snap springs to their target
+ * instead of interpolating, replace spatial/transform motion with opacity fades capped at
+ * {@link #DURATION_REDUCED_FADE}, and keep instant feedback (state layers, focus rings)
+ * unchanged. Pure Java cannot read the OS animation preference (Windows
+ * {@code SPI_GETCLIENTAREAANIMATION}) without a native bridge, which the library forbids, so the
+ * flag initializes from the {@code m3fx.reducedMotion} system property and apps wire their own
+ * setting UI.
  */
 public final class MotionTokens {
 
@@ -226,5 +238,72 @@ public final class MotionTokens {
     public static final SpringToken APPLE_SETTLE = new SpringToken(320, 0.88);
     /** Apple-style playful spring: slight overshoot, tab-bar morph energy (stiffness 380, damping 0.65). */
     public static final SpringToken APPLE_PLAYFUL = new SpringToken(380, 0.65);
+
+    // ------------------------------------------------------------------
+    // Reduced motion.
+    //
+    // Global accessibility flag (WCAG 2.3.3 Animation from Interactions; M3
+    // applying-transitions guidance). Consumption contract lives in the class
+    // Javadoc and docs/SPEC_NOTES/reduced-motion.md; controls wire it in lane-B
+    // task B7. Pure Java cannot read the OS animation preference without a
+    // native bridge (forbidden), so the documented fallback is the
+    // `m3fx.reducedMotion` system property + an app-level setting UI.
+    // ------------------------------------------------------------------
+
+    /**
+     * Cap (150ms) for fade durations while reduced motion is active. // [VERIFY] library
+     * convention aligned with the M3 DURATION_SHORT_3 step, not a verbatim spec number (see
+     * {@code docs/SPEC_NOTES/reduced-motion.md}).
+     */
+    public static final int DURATION_REDUCED_FADE = 150;
+
+    /**
+     * The reduced-motion flag, initialized from the {@code m3fx.reducedMotion} system property.
+     * Mutable like the rest of the token layer's state: read and write it on the JavaFX
+     * Application Thread.
+     */
+    private static final ReadOnlyBooleanWrapper REDUCED_MOTION =
+            new ReadOnlyBooleanWrapper(null, "reducedMotion", fromSystemProperty());
+
+    /**
+     * The observed reduced-motion flag. Consumers (skins) can attach listeners to react to
+     * accessibility changes at runtime.
+     *
+     * @return the read-only reduced-motion property
+     */
+    public static ReadOnlyBooleanProperty reducedMotionProperty() {
+        return REDUCED_MOTION.getReadOnlyProperty();
+    }
+
+    /**
+     * Returns whether motion should be reduced. Semantics: springs snap to target, transitions
+     * degrade to fades of at most {@link #DURATION_REDUCED_FADE}, instant feedback is unchanged.
+     *
+     * @return {@code true} when reduced motion is active
+     */
+    public static boolean isReducedMotion() {
+        return REDUCED_MOTION.get();
+    }
+
+    /**
+     * Sets the reduced-motion flag. Call on the JavaFX Application Thread — property listeners
+     * fire synchronously on the calling thread.
+     *
+     * @param reducedMotion {@code true} to reduce motion
+     */
+    public static void setReducedMotion(boolean reducedMotion) {
+        REDUCED_MOTION.set(reducedMotion);
+    }
+
+    /**
+     * Reads the initial flag value. Only the value {@code true} (case-insensitive) enables it;
+     * the property being absent or any other value disables it, matching
+     * {@link Boolean#getBoolean(String)}.
+     *
+     * @return the initial reduced-motion flag from the {@code m3fx.reducedMotion} property
+     */
+    static boolean fromSystemProperty() {
+        return Boolean.getBoolean("m3fx.reducedMotion");
+    }
 }
 
