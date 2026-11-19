@@ -1,212 +1,155 @@
-# AGENTS.md: m3fx (Material Design 3 for JavaFX)
+# AGENTS.md — Gym Management System (multi-agent charter)
 
-You are helping build **m3fx**, an open-source Material Design 3 component library for JavaFX.
-Read this whole file before every task. Also read `PLAN.md` to see the current phase.
+This repo is worked on by **multiple AI agents in parallel**. Read this whole file before
+every task. It defines what the project is, the rules every agent must follow, and the exact
+workflow for getting code from your branch into `main`.
 
-> **Reality note (repo state):** this repo currently hosts the Gym Management System app
-> (`src/`, `com.gym`) together with the m3fx library as Gradle subprojects
-> (`m3fx-core`, `m3fx-controls`). Deviations from the sections below, all decided in
-> `docs/DECISIONS.md`: build is **Gradle**, not Maven; reference repos sit at the repo root
-> (`material-color-utilities-main/`, `material-web-2.5.0/`) instead of `refs/`; there is no
-> separate `m3fx-demo` module (the gym app + `main.fxml` act as the gallery); Java language
-> level is 21 on JDK 27. Follow those files over the details here where they conflict.
-
-> **Gym-app documentation (not m3fx).** The application's docs live in `docs/` (index:
-> `docs/README.md`) and in each layer folder: `src/main/java/com/gym/README.md` plus
-> `model/`, `dao/`, `service/`, `controller/`, `util/README.md` and `src/main/resources/README.md`
-> (with `fxml/`, `db/`, `theme/`, `images/` sub-docs). They are learning material, not task
-> trackers: purpose, OOP concepts, design patterns, per-file rationale, how-to steps, code sketches,
-> verification, common mistakes, review checklists and exercises. **`docs/UML.md` is the single
-> source of truth** for the app's class names, field lists, signatures and 19 business rules;
-> `docs/DECISIONS.md` explains why; `docs/DOCS_STANDARD.md` defines how the folder READMEs must be
-> written (section order, per-file entry template, no invented members, `m3fx` referenced only as an
-> external dependency). When a task touches `com.gym`, read the README of the layer you are editing
-> and keep it in sync in the same change. Everything else in this file — PLAN phases, the component
-> checklists, `docs/SPEC_NOTES/`, `docs/COVERAGE.md` — concerns the `m3fx` library only.
-
----
-
-## 1. Goal
-
-A Java library that JavaFX developers add as a dependency to get:
-
-- M3 color system (dynamic color from a seed, light/dark, contrast levels)
-- M3 typography, shape, elevation, motion, and state-layer systems
-- M3 components as real JavaFX controls (`Control` + `Skin` + CSS)
-- M3 Expressive additions where they can be implemented in JavaFX
-- A demo/gallery app showing every component in every state
-
-Honest scope: M3 is a design spec, not a code package. We implement the spec in JavaFX.
-Do not claim "100% M3". Track coverage in `docs/COVERAGE.md`.
+> **Reality note (repo state, keep this section accurate when the repo changes):**
+> - Build is **Gradle** (`./gradlew`, Java 21 bytecode on JDK 27), not Maven.
+> - The app is the Gym Management System: `src/main/java/com/gym` with full layers
+>   (`model`, `dao`, `service`, `controller`, `exception`, `util`) and a CLI module
+>   (`com.gym.cli`), backed by SQLite (`gym.db`).
+> - **Views are Java-built, not FXML.** Every screen controller constructs its own node tree
+>   via the `com.gym.controller.Screen` registry (`ScreenController` interface). The 20
+>   `.fxml` files in `src/main/resources/fxml/` are **kept on disk but are never loaded** —
+>   do not delete them and do not reintroduce `FXMLLoader` into the app code.
+> - `m3fx-core` and `m3fx-controls` are the in-repo Material Design 3 library subprojects the
+>   GUI consumes; reference repos (`material-color-utilities-main/`, `material-web-2.5.0/`)
+>   sit at the repo root and are **read-only**.
+> - `submission/` is the standalone CLI hand-in copy of the project — it is built and edited
+>   independently of `src/`; keep it compiling on its own.
+> - The per-layer READMEs (`src/main/java/com/gym/README.md` and each layer folder, plus
+>   `src/main/resources/README.md` and `docs/`) are learning documentation. `docs/UML.md`
+>   is the single source of truth for class names, signatures and the business rules. When a
+>   task touches a layer, read that layer's README and keep it in sync in the same change.
 
 ---
 
-## 2. Tech stack
+## 1. Non-negotiables (every agent, every task)
 
-- Java 21 (use records, sealed types, switch expressions where they help)
-- JavaFX 21 LTS or newer (pin the version once in the parent POM `<properties>`)
-- Maven multi-module build
-- JUnit 5 for logic tests; UI tests use the project's own FX harness (not TestFX) plus
-  `Node.snapshot()` for visual checks
-- Ikonli for icon rendering (`ikonli-javafx`); Material Symbols SVG paths where Ikonli lacks an icon
-- No other runtime dependencies in `m3fx-core` or `m3fx-controls` without asking me
+1. **Do not delete the `.fxml` files.** They are intentionally retained. The app must keep
+   loading zero FXML — never add `FXMLLoader`, `javafx.fxml` imports, or `/fxml/` resource
+   loads back into `src/main/java`.
+2. **Do not edit** reference repos (`material-color-utilities-main/`, `material-web-2.5.0/`),
+   `m3fx-*` reference material, or anything in `backups/`, `lectures/`, `skills/`,
+   `submission.rar` without an explicit instruction.
+3. **Tokens, not literals** inside `m3fx-*`: no hardcoded colors, radii, font sizes or
+   durations in library controls — everything comes from the theme/token system.
+4. **No new dependencies** without explicit approval from the user.
+5. **Do not invent behavior.** Where the spec or `docs/UML.md` is silent, ask — never guess
+   business rules. The 19 rules in `docs/UML.md` are authoritative; the UI must not
+   re-implement them, only call the services.
+6. **Honest reporting.** If a build or run fails, report it with the actual output. Never
+   claim done what was not run.
 
----
+## 2. Code quality — "high-quality" means all of this
 
-## 3. Repository layout
+Before you consider any task finished, the code must:
 
-```
-m3fx/
-├── AGENTS.md
-├── PLAN.md
-├── docs/
-│   ├── COVERAGE.md        component + feature checklist, updated every PR
-│   ├── SPEC_NOTES/        one .md per component: numbers extracted from the spec
-│   └── DECISIONS.md       short log of design decisions and why
-├── refs/                  READ-ONLY reference repos (do not edit, do not ship)
-│   ├── material-color-utilities/
-│   └── material-web/
-├── m3fx-core/             no UI controls; pure logic + tokens
-│   └── src/main/java/.../m3fx/core/
-│       ├── color/         ported material-color-utilities (HCT, schemes, dynamic color)
-│       ├── token/         ShapeTokens, TypeScale, ElevationLevel, MotionTokens, StateOpacity
-│       └── theme/         M3Theme, ColorRole, ThemeVariant, contrast level
-├── m3fx-controls/
-│   └── src/main/java/.../m3fx/controls/
-│       ├── button/ card/ textfield/ selection/ chip/ nav/ dialog/ ...
-│       └── internal/      Ripple, StateLayer, ElevationShadow, MotionUtil
-│   └── src/main/resources/.../m3fx/css/
-├── m3fx-demo/             gallery app, one page per component
-└── pom.xml                parent POM
+- **Compile clean**: `./gradlew compileJava compileTestJava` (or the smallest task set that
+  covers your change) with zero errors. Warnings you introduced must be fixed, not ignored.
+- **Match the surrounding code**: same naming, comment density, formatting and idioms as the
+  files you touch. One formatter style across the file, not per-edit mixing.
+- **Follow the layer README** you are editing (they document per-file rationale and the
+  patterns each layer uses) and keep it in sync when behavior changes.
+- **Small, single-purpose changes**: no drive-by refactors of unrelated code, no commented-out
+  blocks, no dead code, no TODOs without a stated plan.
+- **Public API documented** (one-line Javadoc minimum) and named so a reader needs no
+  explanation.
+- **Actually run**: for UI work, launch the app (`./gradlew runGym` or `runSamples`); for CLI
+  work, run `./gradlew runCli` or the submission's runner. A task is not done if it was not
+  executed at least once.
+- **Keep the test/verification bar**: if tests exist for the area you touch, they must pass;
+  if you add behavior, add or extend verification for it.
+
+## 3. Multi-agent workflow — how code reaches `main`
+
+Every agent follows this exact sequence. **Do not skip steps.**
+
+### Step 1 — Branch and build on the latest state
+
+```bash
+git switch main
+git pull --rebase origin main      # never start from a stale main
+git switch -c <type>/<short-task-name>   # e.g. feat/membership-freeze-dialog
 ```
 
-Use a single base package, e.g. `io.github.<username>.m3fx`. Add `module-info.java`
-to core and controls, and export only public API packages (never `internal`).
+One task = one branch. Keep branches short-lived (days, not weeks).
 
----
+### Step 2 — Work to completion
 
-## 4. Using the reference repos
+- Implement the whole task on the branch. Commit in logical units with conventional
+  messages: `feat(scope): summary`, `fix(scope): summary`, `docs(scope): summary`,
+  `chore(scope): summary` (matching existing history).
+- **Continue working until the task is finished** — an agent does not stop mid-task, and does
+  not park a half-done change. If you are blocked, resolve the block (or report and hand off
+  cleanly with a written state), but never leave the branch in a state that fails the build.
 
-### material-color-utilities (`refs/material-color-utilities/java`)
-- Copy the Java sources into `m3fx-core/.../color/`. Keep the Apache 2.0 license headers.
-- Add a `NOTICE` entry crediting Google. Do not remove copyright headers.
-- Do not rewrite the algorithms. Only adjust package names and fix compile issues.
-- Wrap it in a clean API: `M3Theme.fromSeed(Color seed, ThemeVariant variant, boolean dark, double contrast)`.
-- Expose all M3 color roles as JavaFX `Color` values, including `surface-container-lowest..highest`,
-  `*-fixed`, `inverse-*`, `scrim`, `shadow`, `surface-tint`.
+### Step 3 — Sync, resolve, then push (in this order)
 
-### material-web (`refs/material-web`)
-- It is a **reference only**. Never copy its Lit/TypeScript code into the library.
-- Read it to extract: dimensions, padding, corner radii, state-layer opacities, colors per state,
-  font roles per component. Look at each component's styles (SCSS) and the token files.
-- Write the extracted numbers to `docs/SPEC_NOTES/<component>.md` BEFORE writing Java.
-- **Important:** material-web is in maintenance mode and does NOT include M3 Expressive.
-  For Expressive and newer components, use the official spec at https://m3.material.io
-  and the Jetpack Compose Material3 source (androidx.compose.material3, Apache 2.0)
-  as secondary references. If a number cannot be found in a source, ask me; never invent values.
+**Before every push** (and again right before opening the PR):
 
-### Source priority when sources disagree
-1. m3.material.io spec pages
-2. androidx.compose.material3 source (most up to date)
-3. material-web tokens (baseline M3 only, may lag)
+```bash
+git fetch origin
+git pull --rebase origin main      # bring your branch up to the latest main
+# ... fix any conflicts locally now, re-run the build to prove the merge is sound ...
+./gradlew compileJava compileTestJava   # green before you push — always
+git push origin <branch>
+```
 
----
+Pushing without pulling first is forbidden: conflicts must be fixed **on your branch before
+they reach the repo**, never after. If the rebase is large, pull again right before the PR so
+you never merge against stale knowledge.
 
-## 5. Architecture rules
+### Step 4 — CI/CD checks gate the merge
 
-1. **Tokens, never literals.** No hardcoded colors, radii, font sizes, or durations in controls.
-   Everything comes from `M3Theme`, `ShapeTokens`, `TypeScale`, `MotionTokens`, or `StateOpacity`.
-2. **Theme through CSS looked-up colors.** `M3Theme` generates a CSS string that defines
-   `-md-sys-color-primary`, `-md-sys-color-on-primary`, etc. on `.root`. Control CSS references
-   those names only. Switching theme = swapping one stylesheet; all controls update.
-3. **Control / Skin / CSS split.**
-    - `XxxControl extends Control` (or `ButtonBase`, etc.): state and public API, properties, no visuals.
-    - `XxxSkin extends SkinBase<XxxControl>`: layout and node tree.
-    - `xxx.css`: visual styling.
-      Prefer extending existing JavaFX controls (`Button`, `TextField`, `CheckBox`) with a custom skin
-      when behavior matches. Build from `Control` only when it does not.
-4. **State layers are shared.** One `StateLayer` helper handles hover (8%), focus (10%),
-   pressed (10%), dragged (16%) overlays. Do not reimplement per component.
-5. **Ripple is shared.** One `Ripple` helper (clipped circle + animation). Components opt in.
-6. **Elevation is shared.** `ElevationLevel` (0 to 5) maps to `DropShadow` settings in one place.
-7. **Motion.** Use `MotionTokens` for durations and easing. For Expressive spring motion, implement
-   a small `SpringInterpolator`; do not scatter ad-hoc `Timeline`s.
-8. **Accessibility.** Every control sets an accessible role/text, is keyboard operable, shows a visible
-   focus indicator, and meets 48x48 minimum touch target where the spec says so.
-9. **Public API style.** JavaFX property pattern (`xxxProperty()`, getter, setter). Variants via
-   an enum property (e.g. `ButtonVariant.FILLED`) plus matching style class. Factory methods like
-   `M3Button.filled("Save")`. Fluent where natural.
-10. **Typography.** Bundle Roboto (Apache 2.0 / OFL) in controls; allow overriding the font family
-    in `M3Theme`. Load fonts once via `M3Fonts.load()`.
-11. **No ligature icon fonts.** JavaFX does not support Material Symbols ligatures. Use Ikonli
-    or SVG `Region` shapes through an `M3Icon` wrapper.
-12. **Thread safety.** All UI code on the FX thread. No static mutable state except the font loader.
+- Open the pull request against `main`.
+- **CI/CD must be green before anything merges.** While this repo has no workflow file yet,
+  the *current* CI gate is the Gradle build itself — the same command a workflow would run:
 
----
+  ```bash
+  ./gradlew build
+  ```
 
-## 6. Code quality rules
+  It must pass with zero errors on the PR's merged state (re-run it locally after the final
+  rebase). Once a GitHub Actions workflow is added, its green check replaces this step and
+  becomes mandatory.
+- **Never merge red.** If checks fail: stay on the task, fix, re-push, re-check — see Step 5.
 
-- Javadoc on every public class and method (one-liner minimum, link to spec page).
-- Small classes. If a skin exceeds ~300 lines, extract helpers.
-- No unused code, no commented-out blocks, no TODOs without a `COVERAGE.md` entry.
-- Naming: `M3Button`, `M3Card`, `M3TextField`... prefix public controls with `M3`.
-- Tests: each component gets at least (a) property/state logic tests, (b) a UI smoke test,
-  (c) a demo page. UI tests use the project's own FX harness (JUnit 5 + real
-  `FXMLLoader`/`Node` interactions on the toolkit thread — see `src/test/java/com/gym/fxml/`
-  and the m3fx `*Test` suites); TestFX is **not** used and must not be required.
-- Format with a single formatter config (add `spotless` or `google-java-format` in Phase 0).
+### Step 5 — Merge, and keep working
 
----
+- After checks are green, merge the PR into `main` (squash or merge-commit, matching the
+  branch's commit discipline). Delete the branch after merge.
+- **Do not go idle while CI runs or while a PR is open.** Continue productive work: start the
+  next task on a fresh branch, fix an earlier finding, improve docs — but never start work
+  that conflicts with an open PR on the same files.
+- When CI reports a failure on your PR, the failure is yours: fix it on the same branch and
+  re-push. A task is **finished** only when its code is merged into `main` with green checks
+  and the working tree is clean.
 
-## 7. Workflow for every task
+## 4. Build & run commands
 
-1. State which phase and component you are working on.
-2. Read relevant spec sources and write/update `docs/SPEC_NOTES/<component>.md` (numbers + source links).
-3. Implement: control, skin, CSS, tokens usage.
-4. Add the component to the demo app with ALL variants and ALL states (enabled, hover, focus,
-   pressed, disabled, error where applicable) in both light and dark.
-5. Add tests.
-6. Run `./gradlew test`. Fix failures. Run the demo (`./gradlew run` for the m3fx gallery,
-   `./gradlew runGym` for the app shell) and, if you can, save snapshots to `docs/snapshots/`
-   for me to inspect.
-7. Update `docs/COVERAGE.md` and `docs/DECISIONS.md` if you made a non-obvious choice.
-8. Summarize in plain language: what the classes do and how they connect, so I can explain it
-   in my college presentation. List anything you were unsure about.
+| Command | Purpose |
+|---|---|
+| `./gradlew build` | Full build — **the merge gate** |
+| `./gradlew compileJava compileTestJava` | Fast compile check |
+| `./gradlew run` | m3fx gallery (samples showcase) |
+| `./gradlew runGym` | Full Gym Management System GUI shell |
+| `./gradlew runCli` | CLI application |
+| `./gradlew test` | Test suite, when tests exist for the touched area |
 
-One component per task. Do not start the next one without being asked.
+On Windows use `gradlew.bat` where the shell script is unavailable.
 
----
+## 5. Pointers
 
-## 8. Definition of done (per component)
-
-- [ ] Matches spec dimensions, shapes, colors, and typography (cite the source in SPEC_NOTES)
-- [ ] All variants and states implemented
-- [ ] Works in light and dark and with a different seed color
-- [ ] Keyboard + accessibility verified
-- [ ] State layer, ripple, and elevation use shared helpers
-- [ ] Demo page present
-- [ ] Tests pass, build passes
-- [ ] COVERAGE.md updated
-- [ ] Javadoc written
-
----
-
-## 9. Do not
-
-- Do not copy Android/Flutter/web code and "translate" it line by line.
-- Do not edit anything in `refs/`.
-- Do not add dependencies without asking.
-- Do not invent spec numbers. Ask or cite.
-- Do not use `localStorage`-style hacks, reflection into JavaFX internals, or `com.sun.*` APIs
-  unless unavoidable. If unavoidable, isolate it in `internal/` and document it in DECISIONS.md.
-- Do not refactor unrelated code during a component task.
-- Do not claim a component is done if it was not run visually.
-
----
-
-## 10. Licensing
-
-- Library license: Apache 2.0.
-- Include `NOTICE` for material-color-utilities (Google, Apache 2.0).
-- Bundled Roboto font: keep its license file in resources.
-- Material icons/symbols: Apache 2.0; keep attribution.
+- **`docs/UML.md`** — class names, field lists, signatures, the 19 business rules (source of
+  truth). When code and UML disagree, fix both in the same change.
+- **Layer READMEs** — `src/main/java/com/gym/README.md` + one per layer, and
+  `src/main/resources/README.md`. Read before editing a layer; update in the same change.
+- **`docs/DECISIONS.md`** — why the architecture looks the way it does. Add a short entry for
+  every non-obvious decision you make.
+- **m3fx component work** (when a task targets the library): extract spec numbers into
+  `docs/SPEC_NOTES/<component>.md` before writing Java, implement as Control + Skin + CSS,
+  use shared helpers (state layer, ripple, elevation, motion), and track scope in
+  `docs/COVERAGE.md`. Never translate Android/web code line-by-line and never invent spec
+  values — ask.
