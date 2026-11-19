@@ -352,7 +352,6 @@ public class Main {
     }
 }
 
-// ===== CliTheme =====
 
 // Pure ASCII formatting helpers for Windows CMD terminal screens
 class CliTheme {
@@ -820,7 +819,7 @@ class CliInput {
     }
 }
 
-// ===== CliSession =====
+
 
 // Holds the active signed-in staff user and simple terminal navigation flags
 class CliSession {
@@ -882,7 +881,7 @@ class CliSession {
     }
 }
 
-// ===== GymOperations =====
+
 
 // Coordinates cross-entity operations using the 13 concrete DAOs
 class GymOperations {
@@ -1638,7 +1637,7 @@ class GymOperations {
     }
 }
 
-// ===== SampleDataSeeder =====
+
 
 // Seeds repeatable sample gym data when the SQLite database starts empty
 class SampleDataSeeder {
@@ -1805,7 +1804,7 @@ class SampleDataSeeder {
     }
 }
 
-// ===== MemberCliMenu =====
+
 
 // Terminal screens for Customer List, Member 360 Profile, Medical Profile, and Progress Records
 class MemberCliMenu {
@@ -2299,7 +2298,7 @@ class MemberCliMenu {
     }
 }
 
-// ===== TrainerCliMenu =====
+
 
 // Terminal screens for Coaches, Coach Profile, Availability Slots, and Trainer Subscriptions
 class TrainerCliMenu {
@@ -2769,7 +2768,7 @@ class TrainerCliMenu {
     }
 }
 
-// ===== MembershipBillingCliMenu =====
+
 
 // Terminal screens for Memberships and Payments / Billing Ledger
 class MembershipBillingCliMenu {
@@ -3268,7 +3267,6 @@ class MembershipBillingCliMenu {
     }
 }
 
-// ===== ScheduleWorkoutCliMenu =====
 
 // Terminal screens for Training Schedule / Sessions and Workouts + Live HUD
 class ScheduleWorkoutCliMenu {
@@ -3677,7 +3675,6 @@ class ScheduleWorkoutCliMenu {
     }
 }
 
-// ===== FacilityAdminCliMenu =====
 
 // Terminal screens for Attendance, Equipment and Staff/Admin Controls
 class FacilityAdminCliMenu {
