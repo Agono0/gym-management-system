@@ -83,3 +83,10 @@ Everything in `M3FX_AUDIT.md` → mapped to tasks in `QUEUE.md`.
   the settle form; stat badges truncate ("Pending settleme…").
 - **C8**: availability is the WORST layout — duplicate overlapping title text, heatmap strip
   collides with the selected-slot glass panel; workout skeleton confirmed visually.
+- **C7**: attendance occupancy gauge shows 140.9% while the cap math says 142/200 (71%) —
+  display math wrong; RFID scanner panel text doubles (B12 ghost-text root).
+- **C9**: progress heatmap footer garbled/overlapping streak text; trajectory spline renders a
+  flat line from constant demo data (real records will fix the shape).
+- **C8**: trainer-profile hero is mostly EMPTY whitespace at 1280 with a tiny "ER" avatar, and
+  the capacity gauge shows 121.7% for 23/25 athletes (92%) — gauge + layout both wrong.
+- **C9/login**: login standalone screen shows the B12 ghost-text on brand/status chips.

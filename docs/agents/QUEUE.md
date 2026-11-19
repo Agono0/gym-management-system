@@ -157,6 +157,18 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   test added; suite green; screenshots clean.
   claimed-by: — | status: READY
 
+- [ ] B12 | lane:B | deps:— | files: m3fx-controls/.../glass/** (GlassPaneSkin + related), + test
+  goal: **HIGH — systemic ghost text** (reproduced on login, availability, attendance screens
+  in the baseline matrix): text inside/near `M3GlassPane` renders TWICE with a slight offset
+  ("GYM-OS // ATHLETIC ENGINE", "STATION: FRONT_DESK_01", "TLS 1.3 / WAL ACTIVE", the
+  availability title, the attendance scanner panel copy). Likely the glass content pipeline
+  adding content to two parents or a reflection/backdrop layer painting real text. Find the
+  root cause in GlassPaneSkin, fix, and prove each of the three screens renders single text
+  (screenshots at 1280).
+  done-when: no duplicate text on the three reproducer screens, glass tests green, no
+  performance regression in the glass path.
+  claimed-by: — | status: READY
+
 - [ ] B7 | lane:B | deps:A3 | files: m3fx-controls/.../internal/MotionUtil.java, internal/SpringAnimation.java, internal/StateLayer.java
   goal: Honor `MotionTokens.isReducedMotion()` in the controls internals: `MotionUtil.enter/exit/
   splash/shake/pressScale` degrade to ≤150 ms fades; `SpringAnimation` snaps to target; state
