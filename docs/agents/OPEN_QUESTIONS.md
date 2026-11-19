@@ -17,9 +17,15 @@ Policy: anything a worker could not verify against the official spec goes here w
    deviation, documented in COVERAGE). App size-class work (C1) should keep the documented
    deviation or align consciously.
 5. **Slider track** — 16dp single-track slider deviation is a JavaFX 21 `SliderSkin` limitation.
-6. **SPEC_2026 provenance** — vendored `ColorSpec2026` + `Variant.CMF` are local extensions not
-   present upstream (header says "Copyright 2026 Google LLC" — locally authored). A1 must
-   correct provenance comments while exposing the API.
+6. **SPEC_2026 provenance — RESOLVED (A1, round 1)**: the earlier audit premise was wrong;
+   `ColorSpec2026`, `Variant.CMF` and `SchemeCmf` are genuine upstream material-color-utilities
+   `main` files (byte-identical modulo package renames — verified by Worker A's diff against
+   upstream raw sources). Headers are authentic; the only real gap was the unreachable public
+   API, fixed additively in A1. See `docs/SPEC_NOTES/color-system-versions.md`.
+8. **Upstream drift in `DynamicScheme.maybeFallbackSpecVersion`** — vendored snapshot predates
+   upstream's `(specVersion, variant, platform)` signature that keeps SPEC_2025 for
+   WATCH+CONTENT. Unreachable from `M3Theme` (always PHONE). Parked for a future vendor
+   refresh; semantics unchanged per A1.
 7. **OS reduced-motion detection on Windows** — pure Java cannot read
    SPI_GETCLIENTAREAANIMATION without JNA (new dep = forbidden). Decision: app-level setting +
    `m3fx.reducedMotion` system property (documented in A3); revisit only if the user approves

@@ -37,6 +37,19 @@ Everything in `M3FX_AUDIT.md` → mapped to tasks in `QUEUE.md`.
 | Round | Gate | Result |
 |---|---|---|
 | 0 (baseline) | `./gradlew build` | green (pre-existing state) |
+| 1 merges | `./gradlew build` after each ff-merge; `:m3fx-core:test` 23 green; `:m3fx-controls:test` 168 green | pushed a7f23de |
+| 1 visual | customer-list screenshot on merged main | real 20-member roster, live KPIs, loading/empty states work; NEW finding: M3StatCard labels/badges truncate unreadably at 1024/1280 → task B10 |
+
+## Round-1 learnings (workers, re-read)
+
+- `M3LinearProgress` indeterminate was doubly broken (SPLINE crash + invisible bars) — fixed in
+  B1; `UiKit.loadingState()` still uses `M3CircularProgress`, may switch back in C1 (polish).
+- Worker A proved the vendored engine's pinned `ColorSpec2026` is upstream mcu-main design —
+  OPEN_QUESTIONS #6 superseded; the genuine gap is only the unreachable API, now exposed (A1).
+- Test harness: closing the last shown Stage kills the shared FX thread (implicit exit) —
+  always `Platform.setImplicitExit(false)` when a test shows a Stage.
+- First run on an empty DB seeds synchronously in the load task — screenshot settle may catch
+  the loading state (re-run once seeded).
 
 ## Workflow rules (agents, re-read every task)
 

@@ -30,7 +30,8 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   pinned `ColorSpec2026` field; fix the misleading "2026 spec" comments in `M3ThemeTest`.
   done-when: new API documented with Javadoc, default output byte-identical (test asserts
   baseline colors unchanged), contrast-level 0.5/1.0 tests added, full :m3fx-core:test green.
-  claimed-by: — | status: READY
+  claimed-by: A | status: DONE (round 1, commit 1b82828 — findings: pinned-ColorSpec2026 is
+  upstream mcu-main design, documented not changed; contrast gate 120 assertions pass)
 
 - [ ] A2 | lane:A | deps:— | files: m3fx-core/.../token/ShapeTokens.java + new ShapeTokensTest.java
   goal: Fix the spec naming and lookup gaps: `forName` gains `none`, 32 and 48; rename 32 to the
@@ -64,6 +65,15 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   done-when: no temp file leak per theme re-apply, all three fixes tested or verified by run.
   claimed-by: — | status: READY
 
+- [ ] A7 | lane:A | deps:— | files: m3fx-core/.../token/SpringInterpolator.java (or a new shared easing class), m3fx-controls/.../progress/M3LinearProgress.java + its test
+  goal: Promote the web-semantics overshoot bezier (`OvershootSpline`, born nested in
+  `LinearSkin` during B1) to a shared token-layer easing: cubic-bezier with x∈[0,1], y free,
+  for material-web curves whose y control points leave [0,1] (JavaFX `Interpolator.SPLINE`
+  throws on those). `M3LinearProgress` switches to the shared class; core test pins the spline
+  math against Interpolator.SPLINE for in-range points.
+  done-when: one canonical easing class in core, LinearProgress uses it, tests green.
+  claimed-by: — | status: READY
+
 - [ ] A6 | lane:A | deps:A2,A3,A4 | files: m3fx-core/src/test/**
   goal: Test the currently untested core tokens: ShapeTokens lookup, StateOpacity values,
   ElevationLevel mapping, TypeScale completeness (15 roles), SpringInterpolator endpoints.
@@ -79,7 +89,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   physics `AnimationTimer` only when the pane is shown/visible and stops it when hidden.
   done-when: dispose leaves zero stray handlers/listeners (test), resize churn gone, glass panes
   that are off-screen cost no pulses; full :m3fx-controls:test green.
-  claimed-by: — | status: READY
+  claimed-by: B | status: DONE (round 1, commits c00630a+c846913 — bonus: found+fixed
+  M3LinearProgress indeterminate SPLINE crash (y outside [0,1]) + invisible-bars-on-first-use;
+  new OvershootSpline; 168 controls tests green)
 
 - [ ] B2 | lane:B | deps:— | files: m3fx-controls/.../chip/M3Chip.java, iconbutton/M3IconButton.java, common/M3Tooltip.java, snackbar/M3Snackbar.java, data/M3DataTable.java, carousel/M3Carousel.java
   goal: Keyboard + a11y: `M3Chip` Space/Enter fires ACTION (toggle semantics for FILTER) +
@@ -124,6 +136,15 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   tests green.
   claimed-by: — | status: READY
 
+- [ ] B10 | lane:B | deps:— | files: m3fx-controls/.../data/M3StatCard.java + its test
+  goal: Stat-card truncation pass (found in round-1 screenshots on merged main): title, badge
+  and supporting labels truncate to unreadable slivers at 1024/1280 ("TOTAL A…",
+  "of 20 members on r…", "Requires Foll…"). Per M3 card spec the label must ellipsize at a
+  sensible minimum or wrap — pick the spec-conformant behavior, verify in the gallery page and
+  the dashboard/customer-list KPI strips at 1024 and 1280.
+  done-when: screenshots at both widths show readable labels/badges, test added, suite green.
+  claimed-by: — | status: READY
+
 - [ ] B7 | lane:B | deps:A3 | files: m3fx-controls/.../internal/MotionUtil.java, internal/SpringAnimation.java, internal/StateLayer.java
   goal: Honor `MotionTokens.isReducedMotion()` in the controls internals: `MotionUtil.enter/exit/
   splash/shake/pressScale` degrade to ≤150 ms fades; `SpringAnimation` snaps to target; state
@@ -159,7 +180,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   gradle task `screenshots`.
   done-when: `./gradlew screenshots` produces PNGs for all screens + shell; UiKit adopted by at
   least one existing screen as proof (CustomerList feedback/nav); compile + existing tests green.
-  claimed-by: — | status: READY
+  claimed-by: C | status: DONE (round 1, commit f6198fc — ScreenShooter built by orchestrator;
+  UiKit/Data/DemoSeeder shipped; CustomerList loads real 20-member roster with loading/empty/
+  error states; verified by screenshots + sqlite counts on merged main)
 
 - [ ] C1 | lane:C | deps:C0 | files: src/main/java/com/gym/controller/AppShellController.java, GymApp.java, LoginController/GateController (login path only)
   goal: Shell responsiveness + real login: width-class listener (compact <600 → M3NavigationBar,
@@ -291,4 +314,5 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 
 | Round | A | B | C | Merged at |
 |---|---|---|---|---|
-| 1 | A1 | B1 | C0 | — |
+| 1 | A1 (1b82828) | B1 (6164e24) | C0 (a7f23de) | a7f23de, pushed — build green, core tests 23, controls 168, customer-list real-data render verified |
+| 2 | A2 | B3 | C1 | in progress |
