@@ -1,5 +1,17 @@
 package com.gym.controller;
 
+import com.gym.dao.AttendanceDao;
+import com.gym.dao.CustomerDao;
+import com.gym.dao.MembershipDao;
+import com.gym.dao.TrainerDao;
+import com.gym.model.Attendance;
+import com.gym.model.Customer;
+import com.gym.model.CustomerStatus;
+import com.gym.model.Membership;
+import com.gym.model.MembershipStatus;
+import com.gym.model.Trainer;
+import com.gym.ui.Data;
+import com.gym.ui.UiKit;
 import com.gym.util.PhoneUtil;
 import io.m3fx.controls.appbar.M3TopAppBar;
 import io.m3fx.controls.button.ButtonVariant;
@@ -39,20 +51,34 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
+import java.time.LocalDate;
+import java.time.Month;
+import java.time.format.TextStyle;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Controller for the Customer List Roster & Athlete Directory.
  * Conforms to docs/ui/members/CUSTOMER_LIST_UI.md Section 7 contract.
- * Pure UI: strictly no backend service, DAO, or database logic.
  *
- * <p>UX contract: the roster is a working demo data set — the search bar and filter chips
- * actually filter it (so the table's empty states are reachable), Add Member opens a real
- * entry dialog, export copies a CSV to the clipboard, delete confirms first and offers
- * Undo, and every answer surfaces through an {@link M3Overlay} snackbar.
+ * <p>Data contract (DECISIONS.md 77/78): the roster is loaded from the real SQLite database
+ * through {@code CustomerDao} on a background task via {@link Data#loadAsync} — no service
+ * layer, no business rules in the UI; DAO {@code ValidationException} messages surface
+ * verbatim in snackbars. The KPI strip is computed from the same loaded rows, so it always
+ * agrees with the table. Freeze/renew/assign (rules 6/7/15) and the profile flows are
+ * Milestone-3 (C3) scope.
+ *
+ * <p>UX contract: the search bar and filter chips filter the live roster (so the table's
+ * empty states are reachable), Add Member opens a real entry dialog backed by
+ * {@code CustomerDao}, delete implements rule 4 (status change to INACTIVE) with Undo,
+ * export copies a CSV to the clipboard, and every answer surfaces through an
+ * {@link M3Overlay} snackbar.
  *
  * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
  * former customer-list.fxml: app bar, KPI cards, search + filter chips, master table,
@@ -60,7 +86,7 @@ import java.util.Map;
  */
 public class CustomerListController implements ScreenController {
 
-    /** Row layout: id, name, phone, email, status, trainer, 8-wk activity %, joined. */
+    /** Row layout: id, name, phone, email, status, trainer, 8-wk activity %, joined, raw status, db id. */
     private static final int COL_ID = 0;
     private static final int COL_NAME = 1;
     private static final int COL_PHONE = 2;
@@ -69,6 +95,14 @@ public class CustomerListController implements ScreenController {
     private static final int COL_TRAINER = 5;
     private static final int COL_ACTIVITY = 6;
     private static final int COL_JOINED = 7;
+    private static final int COL_RAW_STATUS = 8;
+    private static final int COL_CUSTOMER_ID = 9;
+
+    /** A customer whose latest ACTIVE membership ends within this horizon counts as expiring. */
+    private static final int EXPIRING_DAYS = 7;
+
+    /** The activity column counts attendance weeks within this many past days. */
+    private static final int ACTIVITY_WINDOW_DAYS = 56;
 
     // ---- View fields (the former fx:id injections, now built by buildView) ----
     private StackPane rootContainer;
@@ -89,6 +123,8 @@ public class CustomerListController implements ScreenController {
     private M3Chip chipFilterSuspended;
     private M3Chip chipFilterInactive;
     private M3Chip chipFilterExpiring;
+    /** Host of the master table; swaps to loading/empty/error states around DAO loads. */
+    private StackPane contentHost;
     private M3DataTable<Object[]> customerTable;
     private TableColumn<Object[], ?> colId;
     private TableColumn<Object[], ?> colFullName;
@@ -110,10 +146,8 @@ public class CustomerListController implements ScreenController {
     private M3Overlay overlay;
     /** Exclusive single-selection group behind the five filter chips. */
     private ToggleGroup filterGroup;
-    /** The full demo roster; the table shows the chip/search-filtered subset. */
+    /** The full roster loaded from CustomerDao; the table shows the chip/search-filtered subset. */
     private final List<Object[]> roster = new ArrayList<>();
-    /** Next membership number issued by the Add Member dialog. */
-    private int nextMemberNumber = 1043;
     /** Row currently shown in the quick-peek side sheet, or {@code null}. */
     private Object[] selectedRow;
 
@@ -158,6 +192,7 @@ public class CustomerListController implements ScreenController {
         chipFilterInactive.setId("chipFilterInactive");
         chipFilterExpiring.setId("chipFilterExpiring");
         customerTable.setId("customerTable");
+        contentHost.setId("contentHost");
         colId.setId("colId");
         colFullName.setId("colFullName");
         colPhone.setId("colPhone");
@@ -175,14 +210,12 @@ public class CustomerListController implements ScreenController {
         speedDial.setId("speedDial");
         rootContainer.getChildren().add(overlay);
 
-        loadDemoRoster();
         wireRosterColumns();
         keepFilterChipsExclusive();
         hideTableBuiltInSearch();
-        applyRosterView();
-        fillSearchSuggestions();
         hideSideSheet();
         wireSpeedDial();
+        loadRoster();
     }
 
     /** One roster table column definition (header text + preferred width). */
@@ -236,13 +269,13 @@ public class CustomerListController implements ScreenController {
         VBox workspace = new VBox(16);
         workspace.setPadding(new Insets(16, 24, 64, 24));
 
-        // Bento KPI summary cards.
+        // Bento KPI summary cards (filled from the loaded roster in applyKpis()).
         HBox kpiRow = new HBox(16);
         kpiRow.setFillHeight(true);
-        cardTotalActive = new M3StatCard("TOTAL ACTIVE", "1,428", "84% Operating Capacity");
-        cardExpiringSoon = new M3StatCard("EXPIRING (< 7 DAYS)", "38", "Requires Follow-Up");
-        cardSuspended = new M3StatCard("SUSPENDED / HOLD", "14", "Memberships Frozen");
-        cardNewThisMonth = new M3StatCard("NEW THIS MONTH", "+86", "+12% vs Previous Month");
+        cardTotalActive = new M3StatCard("TOTAL ACTIVE", "-", "of the loaded roster");
+        cardExpiringSoon = new M3StatCard("EXPIRING (< 7 DAYS)", "-", "Requires Follow-Up");
+        cardSuspended = new M3StatCard("SUSPENDED / HOLD", "-", "Memberships Frozen");
+        cardNewThisMonth = new M3StatCard("NEW THIS MONTH", "-", "Joined this month");
         for (M3StatCard card : List.of(cardTotalActive, cardExpiringSoon, cardSuspended, cardNewThisMonth)) {
             HBox.setHgrow(card, Priority.ALWAYS);
         }
@@ -274,11 +307,14 @@ public class CustomerListController implements ScreenController {
         chipFlow.getChildren().addAll(chipFilterAll, chipFilterActive, chipFilterSuspended,
                 chipFilterInactive, chipFilterExpiring);
 
-        // Virtualized master data table: rows open the quick-peek sheet, headers sort.
+        // Virtualized master data table: rows open the quick-peek sheet, headers sort. It lives
+        // in a host pane so the load/empty/error states can swap around it.
         customerTable = new M3DataTable<>();
         VBox.setVgrow(customerTable, Priority.ALWAYS);
+        contentHost = new StackPane(customerTable);
 
-        workspace.getChildren().addAll(kpiRow, searchRow, chipFlow, customerTable);
+        workspace.getChildren().addAll(kpiRow, searchRow, chipFlow, contentHost);
+        VBox.setVgrow(contentHost, Priority.ALWAYS);
         mainLayout.setCenter(workspace);
 
         // Contextual quick-peek side sheet (collapsible drawer).
@@ -403,37 +439,62 @@ public class CustomerListController implements ScreenController {
         applyRosterView();
     }
 
-    /** Opens the Add Member dialog; confirming inserts the athlete into the roster. */
+    /**
+     * Opens the Add Member dialog; confirming inserts a real customer through
+     * {@code CustomerDao} on a background task ({@link Data#submit}). The inline checks
+     * mirror the DAO's rules for instant field feedback; a DAO {@code ValidationException}
+     * surfaces verbatim in a snackbar and the dialog stays open so the values can be fixed.
+     */
     public void onAdd() {
         M3TextField nameField = new M3TextField("Full name", TextFieldVariant.OUTLINED);
         M3TextField phoneField = new M3TextField("Phone (010/011/012/015 + 8 digits)", TextFieldVariant.OUTLINED);
         phoneField.setSupportingText("11 digits, e.g. 01005558877");
-        Label hint = new Label("New members start on the Monthly Standard plan with Active status.");
+        M3TextField emergencyNameField = new M3TextField("Emergency contact name", TextFieldVariant.OUTLINED);
+        M3TextField emergencyPhoneField = new M3TextField("Emergency contact phone", TextFieldVariant.OUTLINED);
+        emergencyPhoneField.setSupportingText("11 digits, e.g. 01005558877");
+        Label hint = new Label("New members join with Active status; a coach can be assigned later.");
         hint.setWrapText(true);
 
         M3Button cancel = M3Button.text("Cancel");
         M3Button add = M3Button.text("Add Member");
-        M3Dialog dialog = M3Dialog.basic("Add member", new VBox(12, nameField, phoneField, hint),
+        M3Dialog dialog = M3Dialog.basic("Add member", new VBox(10,
+                UiKit.formRow("Member", nameField),
+                UiKit.formRow("Phone", phoneField),
+                UiKit.formRow("Emergency", emergencyNameField),
+                UiKit.formRow("Contact no.", emergencyPhoneField),
+                hint),
                 cancel, add);
         dialog.setDefaultAction(add::activate);
         add.setOnAction(e -> {
             String name = nameField.getText().trim();
             String phone = phoneField.getText().trim();
+            String emergencyName = emergencyNameField.getText().trim();
+            String emergencyPhone = emergencyPhoneField.getText().trim();
             boolean nameOk = !name.isEmpty();
             boolean phoneOk = PhoneUtil.isValid(phone);
+            boolean emergencyNameOk = !emergencyName.isEmpty();
+            boolean emergencyPhoneOk = PhoneUtil.isValid(emergencyPhone);
             nameField.setError(!nameOk);
             phoneField.setError(!phoneOk);
-            if (!nameOk || !phoneOk) {
+            emergencyNameField.setError(!emergencyNameOk);
+            emergencyPhoneField.setError(!emergencyPhoneOk);
+            if (!nameOk || !phoneOk || !emergencyNameOk || !emergencyPhoneOk) {
                 return;
             }
-            dialog.hide();
-            Object[] row = {"M-" + nextMemberNumber, name, phone, "", "Active",
-                    "Unassigned", 0, "New"};
-            nextMemberNumber++;
-            roster.add(0, row);
-            chipFilterAll.setSelected(true);
-            applyRosterView();
-            overlay.showSnackbar(name + " added to the roster (" + row[COL_ID] + ").");
+            CustomerDao customerDao = new CustomerDao();
+            Data.submit(
+                    () -> customerDao.insert(new Customer(0, name, phone, "", "", "", "",
+                            emergencyName, emergencyPhone, CustomerStatus.ACTIVE,
+                            LocalDate.now().toString(), null)),
+                    inserted -> {
+                        dialog.hide();
+                        chipFilterAll.setSelected(true);
+                        loadRoster();
+                        overlay.showSnackbar(inserted.getFullName() + " added to the roster (M-"
+                                + String.format("%04d", inserted.getId()) + ").");
+                    },
+                    error -> overlay.showSnackbar(
+                            "Could not add member: " + error.getMessage()));
         });
         cancel.setOnAction(e -> dialog.hide());
         overlay.showDialog(dialog);
@@ -495,34 +556,147 @@ public class CustomerListController implements ScreenController {
     }
 
     // ------------------------------------------------------------------
-    // Demo roster, columns, filtering and side sheet
+    // Roster loading (CustomerDao on a background task), columns, filtering
     // ------------------------------------------------------------------
 
-    private void loadDemoRoster() {
-        roster.add(new Object[] {"M-1007", "Layla Hassan", "01005558877", "layla.h@mailbox.com",
-                "Active", "Coach Sarah", 92, "2025-02-11"});
-        roster.add(new Object[] {"M-1012", "Omar Fathi", "01012244668", "omar.fathi@gym.io",
-                "Expiring", "Coach Marcus", 74, "2025-03-02"});
-        roster.add(new Object[] {"M-1015", "Nour El-Din", "01109876543", "nour.eldin@mailbox.com",
-                "Active", "Coach Elena", 81, "2025-03-19"});
-        roster.add(new Object[] {"M-1021", "Sara Adel", "01233445566", "sara.adel@gym.io",
-                "Suspended", "Unassigned", 18, "2025-04-27"});
-        roster.add(new Object[] {"M-1026", "Kareem Aziz", "01066778899", "kareem.aziz@mailbox.com",
-                "Active", "Coach Marcus", 88, "2025-05-14"});
-        roster.add(new Object[] {"M-1029", "Hana Mostafa", "01122334455", "hana.m@gym.io",
-                "Expiring", "Coach Sarah", 63, "2025-05-30"});
-        roster.add(new Object[] {"M-1031", "Youssef Kamal", "01099887766", "y.kamal@mailbox.com",
-                "Active", "Coach Yusuf", 57, "2025-06-08"});
-        roster.add(new Object[] {"M-1033", "Mariam Lotfy", "01288776655", "mariam.l@gym.io",
-                "Inactive", "Unassigned", 5, "2025-06-21"});
-        roster.add(new Object[] {"M-1035", "Tarek Nabil", "01011445599", "tarek.nabil@gym.io",
-                "Active", "Coach Elena", 79, "2025-07-03"});
-        roster.add(new Object[] {"M-1037", "Farida Samir", "01155667788", "farida.s@gym.io",
-                "Expiring", "Coach Sarah", 45, "2025-07-15"});
-        roster.add(new Object[] {"M-1040", "Ahmed Sobhy", "01077889900", "a.sobhy@mailbox.com",
-                "Suspended", "Coach Yusuf", 22, "2025-08-01"});
-        roster.add(new Object[] {"M-1042", "Dina Raouf", "01244556677", "dina.raouf@gym.io",
-                "Active", "Coach Marcus", 96, "2025-08-18"});
+    /**
+     * Loads the roster from the database on a background task: the bootstrap
+     * ({@link Data#ensureReady()}), the four queries and the row assembly run off the FX
+     * thread; the result lands in {@link #roster} and the KPI strip on the FX thread. Shows
+     * {@link UiKit#loadingState()} while running, {@link UiKit#emptyState()} when the database
+     * has no customers and {@link UiKit#errorState()} with retry on failure.
+     */
+    private void loadRoster() {
+        Data.loadAsync(contentHost,
+            () -> {
+                Data.ensureReady();
+                return buildRows(new CustomerDao().findAll(), new TrainerDao().findAll(),
+                        new MembershipDao().findAll(), new AttendanceDao().findAll());
+            },
+            rows -> {
+                roster.clear();
+                roster.addAll(rows);
+                contentHost.getChildren().setAll(roster.isEmpty()
+                        ? UiKit.emptyState("No members in the database yet.",
+                                "Add Member", this::onAdd)
+                        : customerTable);
+                applyKpis();
+                fillSearchSuggestions();
+                applyRosterView();
+            },
+            error -> contentHost.getChildren().setAll(UiKit.errorState(
+                    error.getMessage() == null ? error.toString() : error.getMessage(),
+                    this::loadRoster)));
+    }
+
+    /**
+     * Assembles the table rows off the FX thread (no JavaFX types touched here).
+     * Presentation-only derivations, owned by C3 to revisit: display status "Expiring" means
+     * an ACTIVE customer whose latest ACTIVE membership ends within {@link #EXPIRING_DAYS}
+     * days; "8-Wk Activity %" is the share of the past 8 weeks (of 8) with at least one
+     * attendance check-in. These are UI metrics, not business rules.
+     */
+    private static List<Object[]> buildRows(List<Customer> customers, List<Trainer> trainers,
+                                            List<Membership> memberships,
+                                            List<Attendance> attendance) {
+        LocalDate today = LocalDate.now();
+        Map<Integer, String> trainerNames = new HashMap<>();
+        for (Trainer trainer : trainers) {
+            trainerNames.put(trainer.getId(), trainer.getFullName());
+        }
+        Map<Integer, Membership> activeMembership = new HashMap<>();
+        for (Membership membership : memberships) {
+            if (membership.getStatus() != MembershipStatus.ACTIVE) {
+                continue;
+            }
+            Membership current = activeMembership.get(membership.getCustomerId());
+            if (current == null
+                    || membership.getEndDate().compareTo(current.getEndDate()) > 0) {
+                activeMembership.put(membership.getCustomerId(), membership);
+            }
+        }
+        Map<Integer, Set<Integer>> attendanceWeeks = new HashMap<>();
+        for (Attendance record : attendance) {
+            long daysAgo = ChronoUnit.DAYS.between(LocalDate.parse(record.getDate()), today);
+            if (daysAgo < 0 || daysAgo >= ACTIVITY_WINDOW_DAYS) {
+                continue;
+            }
+            attendanceWeeks.computeIfAbsent(record.getCustomerId(), id -> new HashSet<>())
+                    .add((int) (daysAgo / 7));
+        }
+
+        List<Object[]> rows = new ArrayList<>();
+        for (Customer customer : customers) {
+            CustomerStatus rawStatus = customer.getStatus() == null
+                    ? CustomerStatus.ACTIVE : customer.getStatus();
+            Membership membership = activeMembership.get(customer.getId());
+            boolean expiring = membership != null && membership.getEndDate() != null
+                    && isExpiringSoon(LocalDate.parse(membership.getEndDate()), today);
+            String displayStatus;
+            if (rawStatus == CustomerStatus.SUSPENDED) {
+                displayStatus = "Suspended";
+            } else if (rawStatus == CustomerStatus.INACTIVE) {
+                displayStatus = "Inactive";
+            } else {
+                displayStatus = expiring ? "Expiring" : "Active";
+            }
+            String trainerName = customer.getTrainerId() == null ? "Unassigned"
+                    : trainerNames.getOrDefault(customer.getTrainerId(),
+                            "Coach #" + customer.getTrainerId());
+            Set<Integer> weeks = attendanceWeeks.get(customer.getId());
+            int activityPct = weeks == null ? 0
+                    : Math.min(100, weeks.size() * 100 / (ACTIVITY_WINDOW_DAYS / 7));
+
+            rows.add(new Object[] {
+                    "M-" + String.format("%04d", customer.getId()),
+                    customer.getFullName(),
+                    customer.getPhone(),
+                    customer.getEmail() == null ? "" : customer.getEmail(),
+                    displayStatus,
+                    trainerName,
+                    activityPct,
+                    customer.getJoinDate() == null ? "" : customer.getJoinDate(),
+                    rawStatus,
+                    customer.getId()});
+        }
+        return rows;
+    }
+
+    /** True when the membership end date falls within the expiring horizon from today. */
+    private static boolean isExpiringSoon(LocalDate endDate, LocalDate today) {
+        return !endDate.isBefore(today) && !endDate.isAfter(today.plusDays(EXPIRING_DAYS));
+    }
+
+    /** Recomputes the KPI strip from the loaded roster so it always agrees with the table. */
+    private void applyKpis() {
+        int active = 0;
+        int suspended = 0;
+        int expiring = 0;
+        int newThisMonth = 0;
+        LocalDate today = LocalDate.now();
+        String monthPrefix = today.getYear() + "-"
+                + String.format("%02d", today.getMonthValue());
+        for (Object[] row : roster) {
+            CustomerStatus status = (CustomerStatus) row[COL_RAW_STATUS];
+            if (status == CustomerStatus.ACTIVE) {
+                active++;
+                if ("Expiring".equals(row[COL_STATUS])) {
+                    expiring++;
+                }
+            } else if (status == CustomerStatus.SUSPENDED) {
+                suspended++;
+            }
+            if (String.valueOf(row[COL_JOINED]).startsWith(monthPrefix)) {
+                newThisMonth++;
+            }
+        }
+        cardTotalActive.setValue(String.valueOf(active));
+        cardTotalActive.setDeltaText("of " + roster.size() + " members on roster");
+        cardExpiringSoon.setValue(String.valueOf(expiring));
+        cardSuspended.setValue(String.valueOf(suspended));
+        cardNewThisMonth.setValue(String.valueOf(newThisMonth));
+        cardNewThisMonth.setDeltaText("Joined in "
+                + today.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH));
     }
 
     /**
@@ -564,8 +738,9 @@ public class CustomerListController implements ScreenController {
         customerTable.getChildren().removeIf(node -> node instanceof M3SearchBar);
     }
 
-    /** Search suggestions: athlete names for quick jump-in. */
+    /** Search suggestions: athlete names from the loaded roster for quick jump-in. */
     private void fillSearchSuggestions() {
+        searchBar.getSuggestions().clear();
         for (Object[] row : roster) {
             searchBar.getSuggestions().add((String) row[COL_NAME]);
         }
@@ -692,36 +867,64 @@ public class CustomerListController implements ScreenController {
         return item;
     }
 
-    /** Confirm-then-delete with an Undo snackbar (the destructive-action contract). */
+    /**
+     * Rule 4 delete for the selected athlete: confirms first (the destructive-action
+     * contract), then flips the customer's status to INACTIVE through {@code CustomerDao} on
+     * a background task — no record is hard-deleted — and offers Undo restoring the previous
+     * status. Any DAO {@code ValidationException} surfaces verbatim in a snackbar.
+     */
     private void deleteRow(Object[] row) {
         if (row == null) {
             overlay.showSnackbar("Select an athlete row first.");
             return;
         }
         String name = String.valueOf(row[COL_NAME]);
-        M3Button cancel = M3Button.text("Keep Member");
-        M3Button delete = M3Button.text("Delete");
-        M3Dialog dialog = M3Dialog.basic("Delete " + name + "?",
-                new Label("This removes " + row[COL_ID] + " from the roster view. Undo stays "
-                        + "available right after the delete."),
-                cancel, delete);
-        dialog.setDefaultAction(delete::activate);
-        delete.setOnAction(e -> {
-            dialog.hide();
-            int index = roster.indexOf(row);
-            roster.remove(row);
-            if (selectedRow == row) {
-                hideSideSheet();
-            }
-            applyRosterView();
-            overlay.showSnackbar(name + " removed from the roster.", "Undo", () -> {
-                roster.add(Math.min(index, roster.size()), row);
-                applyRosterView();
-                overlay.showSnackbar(name + " restored to the roster.");
-            });
-        });
-        cancel.setOnAction(e -> dialog.hide());
-        overlay.showDialog(dialog);
+        String memberId = String.valueOf(row[COL_ID]);
+        CustomerStatus previousStatus = (CustomerStatus) row[COL_RAW_STATUS];
+        int customerId = (Integer) row[COL_CUSTOMER_ID];
+        UiKit.confirmDialog(overlay, "Delete " + name + "?",
+                "The member is marked Inactive (rule 4) — nothing is hard-deleted, and Undo "
+                        + "stays available right after.",
+                "Delete", "Keep Member",
+                () -> Data.submit(
+                        () -> {
+                            CustomerDao customerDao = new CustomerDao();
+                            Customer customer = customerDao.findById(customerId);
+                            if (customer != null) {
+                                customer.setStatus(CustomerStatus.INACTIVE);
+                                customerDao.update(customer);
+                            }
+                            return customer;
+                        },
+                        updated -> {
+                            if (selectedRow == row) {
+                                hideSideSheet();
+                            }
+                            loadRoster();
+                            overlay.showSnackbar(name + " (" + memberId + ") marked Inactive.",
+                                    "Undo", () -> restoreStatus(customerId, name, previousStatus));
+                        },
+                        error -> overlay.showSnackbar(
+                                "Could not delete member: " + error.getMessage())));
+    }
+
+    /** Undo for a rule-4 delete: restores the member's previous status through the DAO. */
+    private void restoreStatus(int customerId, String name, CustomerStatus previousStatus) {
+        Data.submit(
+                () -> {
+                    CustomerDao customerDao = new CustomerDao();
+                    Customer customer = customerDao.findById(customerId);
+                    if (customer != null) {
+                        customer.setStatus(previousStatus);
+                        customerDao.update(customer);
+                    }
+                    return customer;
+                },
+                restored -> {
+                    loadRoster();
+                    overlay.showSnackbar(name + " restored to the roster.");
+                },
+                error -> overlay.showSnackbar("Could not undo: " + error.getMessage()));
     }
 
     private VBox helpContent() {
