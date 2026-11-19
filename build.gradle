@@ -85,6 +85,21 @@ tasks.register('runGym', JavaExec) {
     ]
 }
 
+// QA lane: snapshot every Java-built screen + the shell into build/screens for visual review
+tasks.register('screenshots', JavaExec) {
+    group = 'application'
+    description = 'Snapshots every Java-built screen and the app shell into build/screens PNGs.'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.gym.tools.ScreenShooter'
+    args layout.buildDirectory.dir('screens').get().toString()
+    jvmArgs = [
+        '-Xms512m',
+        '-Xmx2048m',
+        '--enable-native-access=ALL-UNNAMED',
+        '--sun-misc-unsafe-memory-access=allow'
+    ]
+}
+
 // Runs the interactive CMD Terminal UI & TA Validation Showcase
 tasks.register('runCli', JavaExec) {
     group = 'application'
