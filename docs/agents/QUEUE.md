@@ -38,7 +38,8 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   spec name *extra-large-increased* keeping `EXPRESSIVE_LARGE_INCREASED` as a deprecated alias;
   document the full M3 shape scale in the Javadoc.
   done-when: lookup table covers the whole scale, alias compiles with @Deprecated, tests green.
-  claimed-by: — | status: READY
+  claimed-by: A | status: DONE (round 2, commit 356c3c2 — scale sourced from upstream
+  material-web v34 generated tokens; zero external callers verified pre-rename; core tests 28)
 
 - [ ] A3 | lane:A | deps:— | files: m3fx-core/.../token/MotionTokens.java + new ReducedMotionTest (or MotionTokensTest extension)
   goal: Add reduced-motion support to the token layer: a global `MotionTokens.isReducedMotion()`
@@ -326,4 +327,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | Round | A | B | C | Merged at |
 |---|---|---|---|---|
 | 1 | A1 (1b82828) | B1 (6164e24) | C0 (a7f23de) | a7f23de, pushed — build green, core tests 23, controls 168, customer-list real-data render verified |
-| 2 | A2 | B3 | C1 | in progress |
+| 2 | A2 (356c3c2) | B3 | C1 | A2 merged 3f1e8a4; B3/C1 in progress |
