@@ -235,7 +235,11 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   simplified in Q-pass).
   done-when: toggling a layer property changes the render, list change triggers redraw, test
   covers both; suite green.
-  claimed-by: — | status: READY
+  claimed-by: A | status: DONE (round 11, commit 63942b6 → main b0616ac — pinsVisible/
+  zonesVisible properties honored in redraw (hidden pins leave hit-testing), observed
+  equipmentList redraws on change; honest scope: no heatmap/sensor layers invented — those
+  toggles stay disabled UI; pixel-evidence tests with transparent-snapshot + pulse lessons
+  recorded; controls tests 241)
 
 - [ ] B7 | lane:B | deps:A3 | files: m3fx-controls/.../internal/MotionUtil.java, internal/SpringAnimation.java, internal/StateLayer.java
   goal: Honor `MotionTokens.isReducedMotion()` in the controls internals: `MotionUtil.enter/exit/
