@@ -68,6 +68,8 @@ public class StaffController implements ScreenController {
     private M3Button btnReassignAction;
     private M3Button btnAdjustPaymentAction;
     private Label lblSelectedStaff;
+    /** The viewer badge: real signed-in identity once the shell publishes it. */
+    private Label roleBadge;
     /** Content host around the roster table for the Data.loadAsync loading/error states. */
     private StackPane rosterHost;
 
@@ -99,7 +101,23 @@ public class StaffController implements ScreenController {
         populateStaffTable();
         loadStaff();
         wireSearch();
-
+        // B/C7: the viewer badge shows the real signed-in identity once the shell publishes
+        // itself on the scene root (SHELL_CONTROLLER_KEY); standalone previews (no gate
+        // sign-in) keep the honest "not signed in" fallback.
+        txtSearchStaff.sceneProperty().addListener((obs, oldScene, scene) -> {
+            if (scene != null && scene.getRoot().getProperties()
+                    .get(AppShellController.SHELL_CONTROLLER_KEY)
+                    instanceof AppShellController shell) {
+                String name = shell.getSignedInName();
+                if (name == null || name.isBlank()) {
+                    roleBadge.setText("ROLE: NOT SIGNED IN");
+                } else {
+                    StaffRole role = shell.getSignedInRole() == null
+                            ? StaffRole.STAFF : shell.getSignedInRole();
+                    roleBadge.setText("ROLE: " + role + " (" + name + ")");
+                }
+            }
+        });
     // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
     // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
     // (findById("navCustomers") and friends) and the interaction tests keep working unchanged.
@@ -148,11 +166,8 @@ public class StaffController implements ScreenController {
         topCaption.getStyleClass().add("body-medium");
         Region topSpacer = new Region();
         HBox.setHgrow(topSpacer, Priority.ALWAYS);
-        Label roleBadge = new Label("ROLE: ADMIN (Alex Vance)");
+        roleBadge = new Label("ROLE: NOT SIGNED IN");
         roleBadge.getStyleClass().add("badge-admin");
-        btnTopAddStaff = new M3Button("+ Add Staff Member", ButtonVariant.FILLED);
-        btnTopAddStaff.getStyleClass().add("m3-button-filled");
-        btnTopAddStaff.setOnAction(e -> onAddStaff());
         topRow.getChildren().addAll(topCaption, topSpacer, roleBadge, btnTopAddStaff);
         topBarContainer.getChildren().addAll(topAppBar, topRow);
         basePane.setTop(topBarContainer);

@@ -153,6 +153,9 @@ public class AppShellController implements ScreenController {
     private M3PulseBeacon dbSyncBeacon;
     private M3Switch themeModeSwitch;
     private M3Chip userRoleChip;
+    /** The signed-in identity from the login gate (null until a gate sign-in publishes it). */
+    private String signedInName;
+    private StaffRole signedInRole;
     private M3IconButton logoutBtn;
 
     private M3NavigationRail navigationRail;
@@ -1076,11 +1079,25 @@ public class AppShellController implements ScreenController {
     /**
      * Publishes the signed-in identity from the real login gate (rule 16): the user chip shows
      * the account's full name and role. The default stays the seeded ADMIN account so
-     * gates-disabled runs (tests, previews) keep their established look.
+     * gates-disabled runs (tests, previews) keep their established look. The identity is also
+     * stored so screen controllers can read it (C7's staff screen renders it in its viewer
+     * badge) without re-deriving it from the database.
      */
     public void setSignedInUser(String fullName, StaffRole role) {
         String name = fullName == null || fullName.isBlank() ? "Signed in" : fullName;
-        userRoleChip.setText(name + " [" + (role == null ? StaffRole.STAFF : role) + "]");
+        signedInName = name;
+        signedInRole = role == null ? StaffRole.STAFF : role;
+        userRoleChip.setText(name + " [" + signedInRole + "]");
+    }
+
+    /** The signed-in account's full name, or null when no gate sign-in has happened yet. */
+    public String getSignedInName() {
+        return signedInName;
+    }
+
+    /** The signed-in account's role, or null when no gate sign-in has happened yet. */
+    public StaffRole getSignedInRole() {
+        return signedInRole;
     }
 
     public void onOpenCommandPalette() {
