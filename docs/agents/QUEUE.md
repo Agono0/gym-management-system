@@ -371,7 +371,12 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   linked object, customer match), void per rule 19 (no hard delete), dead "Print Thermal Copy"
   button either works (receipt preview dialog) or is removed.
   done-when: freeze→unfreeze→renew round-trip; payment→void→replacement round-trip; screenshots.
-  claimed-by: — | status: BLOCKED (C0,C2)
+  claimed-by: C | status: DONE (round 11, commits 45e9366+f3f83c9 → main 73c72c9 — real tier
+  stats, fake funnel replaced by an honest plan-distribution bar chart, rule-7 lifecycle with
+  destructive-cancel confirm, rule-6 outstanding balance, rule-12 single-link payments with
+  rule-19 void+replace, real receipt preview; sqlite round-trip evidence for both flows.
+  Finding: M3FunnelChart silently renders non-monotonic stages (fold-back) — candidate lane-B
+  guard, parked; inspector re-reads rule-6 per selection (fine, noted for Q5))
 
 - [ ] C7 | lane:C | deps:C0,C2 | files: src/main/java/com/gym/controller/{AttendanceController,StaffController}.java
   goal: Attendance on AttendanceDao (rule 5: ACTIVE customer + unexpired membership, same-day
@@ -456,3 +461,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 7 | B9 (211f1cc) | B10+B11 | C4 | B9 merged locally 18f3955; controls tests 233 |
 | 8 | B15 (1cce386) | B10 (088e259→7adc969) + B11 (869bbb6) | C4 (d3540b6), C5 (7f6d12f) | B10+B11 merged; A's text-field test lookups adapted (a37e16c); B16 queued |
 | 9 | B16 | B8 (40b7699) | C6 | **LANE B COMPLETE** (B1-B16); merged locally 40b7699 |
+| 10 | B16 (in flight) | C7 (in flight) | C6 (73c72c9) | C6 merged after spec-note renumber resolution |
