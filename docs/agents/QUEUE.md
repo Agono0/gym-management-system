@@ -72,7 +72,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   shutdown for stragglers); fix the `ThemeColors` static dark-baseline fallback cache; cache
   `ElevationLevel.values()` (or index math) in `of()`.
   done-when: no temp file leak per theme re-apply, all three fixes tested or verified by run.
-  claimed-by: — | status: READY
+  claimed-by: A | status: DONE (round 3, commit 696a73a — refcount + ReferenceQueue + shutdown
+  sweep; ThemeColors fallback was unreachable dead code, removed with null-guard documented;
+  ElevationLevel array cached)
 
 - [ ] A7 | lane:A | deps:— | files: m3fx-core/.../token/SpringInterpolator.java (or a new shared easing class), m3fx-controls/.../progress/M3LinearProgress.java + its test
   goal: Promote the web-semantics overshoot bezier (`OvershootSpline`, born nested in
@@ -81,13 +83,16 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   throws on those). `M3LinearProgress` switches to the shared class; core test pins the spline
   math against Interpolator.SPLINE for in-range points.
   done-when: one canonical easing class in core, LinearProgress uses it, tests green.
-  claimed-by: — | status: READY
+  claimed-by: A | status: DONE (round 3, commit 5b667e9 — `io.m3fx.core.token.OvershootSpline`
+  with CSS-spec abscissa validation; LinearProgress rewired; 4 core tests)
 
 - [ ] A6 | lane:A | deps:A2,A3,A4 | files: m3fx-core/src/test/**
   goal: Test the currently untested core tokens: ShapeTokens lookup, StateOpacity values,
   ElevationLevel mapping, TypeScale completeness (15 roles), SpringInterpolator endpoints.
   done-when: new test classes green, no product code changed.
-  claimed-by: — | status: BLOCKED (A2,A3,A4)
+  claimed-by: A | status: DONE (round 3, commit f73b4f7 — StateOpacity/TypeScale/
+  SpringInterpolatorEndpoints pinned against v34 tokens; ElevationLevel covered by A5's test;
+  all values agree, zero product changes)
 
 ## Lane B — m3fx-controls
 
@@ -354,3 +359,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 |---|---|---|---|---|
 | 1 | A1 (1b82828) | B1 (6164e24) | C0 (a7f23de) | a7f23de, pushed — build green, core tests 23, controls 168, customer-list real-data render verified |
 | 2 | A2 (356c3c2), A3 (0a794ff), A4 (26a86e9) | B3 (949e301) | C1 (1d60941) | all merged locally 2802906 — pushes deferred per user directive |
+| 3 | A5 (696a73a), A6 (f73b4f7), A7 (5b667e9) | B12 | C2 | A batch merged locally 168bbb3 — lane A queue EMPTY (A1-A7 done); core tests 61, controls 174 |
