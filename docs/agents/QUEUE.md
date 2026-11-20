@@ -259,7 +259,7 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   done-when: `grep -rn "Color.web(\"#" src/main/java/com/gym/controller` returns nothing except
   GymApp SEED_PURPLE; `grep -rnP "[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]"` over controllers is
   empty; dashboard renders clean at 600 AND 1280 (screenshots); no regression on touched screens.
-  claimed-by: — | status: READY (reassigned — reference diff in ../gym-wt-C)
+  claimed-by: C | status: CLAIMED (C-resume — continuing from the dirty reference in ../gym-wt-C)
 
 - [ ] C3 | lane:C | deps:C0,C2 | files: src/main/java/com/gym/controller/{DashboardController,CustomerListController,CustomerProfileController}.java
   goal: Real-data rebuild: Dashboard KPIs/charts/tables query CustomerDao/MembershipDao/
