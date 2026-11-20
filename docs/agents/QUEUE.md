@@ -199,14 +199,18 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   `.m3-fab-extended` 16px / default `.m3-fab` NO radius — M3 spec: FAB shape = large (16dp)
   for all sizes. Fix the radii, verify in gallery/screenshots.
   done-when: radii 16 across sizes, screenshots clean, suite green.
-  claimed-by: — | status: READY
+  claimed-by: B | status: DONE (round 6, commit 5740d81 — the two divergent size-variant rules
+  fixed; the default-rule part of the queue note was stale, already correct on main; visual
+  probe confirmed 16px corners on all four sizes)
 
 - [ ] B14 | lane:B | deps:— | files: m3fx-controls/.../icon/M3Icon.java + test
   goal: One-line hygiene (found by B2): `M3Icon.symbol(name)` calls `renderSymbol` directly and
   never sets `symbolNameProperty`, so property-based consumers see null. Route `symbol()` through
   `setSymbolName` (property listener renders), keep behavior identical, test the property path.
   done-when: `symbol()` sets the property, property changes re-render, tests green.
-  claimed-by: — | status: READY
+  claimed-by: B | status: DONE (round 6, commit 86c8ba9 — property path + re-render + warn-once
+  pinned; ofSvg/ofGlyph raw-content semantics documented by test; B6 test file rawtypes cleaned;
+  controls tests 209)
 
 - [ ] B7 | lane:B | deps:A3 | files: m3fx-controls/.../internal/MotionUtil.java, internal/SpringAnimation.java, internal/StateLayer.java
   goal: Honor `MotionTokens.isReducedMotion()` in the controls internals: `MotionUtil.enter/exit/
@@ -400,3 +404,5 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 3b | B7 (57ccd5c, pooled to A) | — | — | merged locally 57ccd5c; core tests 62, controls 185 |
 | 3c | — | B12 (42c2a51, salvaged) | — | merged locally 2fa2fa5 — ghost text fixed; workers A/B/C hit quota limits; remaining tasks handed to zcode1/zcode2 |
 | 4 | B2 (9b17a06, pooled to A) | B4 (f945adb) | C2 (ea92798+d4db029) | all merged locally b16dc17; runSamples fixed (M3Samples tracked, 273fbe6); controls 197, core 66 tests |
+| 5 | B5 (5bf9571, pooled to A) | B6 (6afb2ca) | C3 | B5+B6 merged locally 6afb2ca→943fcf5 |
+| 6 | B9 | B13 (5740d81) + B14 (86c8ba9) | — | merged locally 46814e0; controls tests 209 |
