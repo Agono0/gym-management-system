@@ -1,5 +1,25 @@
 package com.gym.controller;
 
+import com.gym.dao.AttendanceDao;
+import com.gym.dao.CustomerDao;
+import com.gym.dao.EquipmentDao;
+import com.gym.dao.MembershipDao;
+import com.gym.dao.PaymentDao;
+import com.gym.dao.SessionDao;
+import com.gym.dao.TrainerAvailabilityDao;
+import com.gym.dao.TrainerDao;
+import com.gym.model.Attendance;
+import com.gym.model.Customer;
+import com.gym.model.CustomerStatus;
+import com.gym.model.Membership;
+import com.gym.model.MembershipStatus;
+import com.gym.model.Payment;
+import com.gym.model.PlanType;
+import com.gym.model.Session;
+import com.gym.model.SessionStatus;
+import com.gym.model.Trainer;
+import com.gym.model.TrainerAvailability;
+import com.gym.ui.Data;
 import com.gym.ui.UiKit;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
@@ -28,6 +48,7 @@ import io.m3fx.controls.progress.M3LinearProgress;
 import io.m3fx.controls.scene3d.M3TiltCard3D;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.Label;
 import javafx.scene.layout.ColumnConstraints;
@@ -38,28 +59,35 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Random;
+import java.util.Map;
 
 /**
  * Controller for Executive Operations Dashboard.
  * Conforms to docs/ui/dashboard/DASHBOARD_UI.md Section 7 contract.
- * Pure UI: strictly no backend service, DAO, or database logic.
  *
- * <p>Every visible action answers: telemetry refresh and the speed dial / quick check-in
- * mutate the on-screen telemetry and confirm via an {@link M3Overlay} snackbar; the destructive
- * END SHIFT action confirms through an {@link M3Dialog} first.
+ * <p>Data contract (DECISIONS.md 77/78, task C3): every KPI, chart and table queries the real
+ * SQLite database through the DAOs on a background task ({@link Data#loadAsync}) — no demo
+ * numbers, no jitter. The quick check-in enforces rule 5 through {@code AttendanceDao} (ACTIVE
+ * customer + unexpired membership; a same-day re-check-in updates the existing row), the
+ * session agenda confirms through {@code SessionDao} under rule 18, and slot capacity follows
+ * rule 17 (CONFIRMED-only occupancy). Refresh re-queries the database — no simulated telemetry.
+ *
+ * <p>Every visible action answers: telemetry refresh re-queries, quick check-in and the speed
+ * dial route into the rule-5 check-in, and the destructive END SHIFT action confirms through
+ * an {@link M3Dialog} first.
  *
  * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
  * former dashboard.fxml: hero banner, KPI bento, traffic/agenda split, facility diagnostics,
  * floating speed dial and toast host.
  */
 public class DashboardController implements ScreenController {
-
-    private static final int SESSIONS_DONE_AT_LOAD = 38;
-    private static final int SESSIONS_TOTAL = 46;
 
     // ---- View fields (the former fx:id injections, now built by buildView) ----
     private StackPane dashboardRoot;
@@ -106,14 +134,16 @@ public class DashboardController implements ScreenController {
     /** Current window width class driving the hero/bento layout swaps. */
     private WindowSizeClass dashboardWidthClass = WindowSizeClass.EXPANDED;
 
+    /**
+     * Content host around the bento grid: {@link Data#loadAsync} swaps it to a loading state
+     * while the DAO snapshot is built and to an error state with retry when a load fails.
+     */
+    private StackPane contentHost;
+    /** Customers eligible for a rule-5 check-in at the last successful load. */
+    private List<Customer> checkableCustomers = new ArrayList<>();
+
     /** Overlay host for snackbars and dialogs, added to the screen root in code (no fx:id). */
     private final M3Overlay overlay = new M3Overlay();
-    /** Running session counters so the check-in answer updates the visible KPI coherently. */
-    private int sessionsDone = SESSIONS_DONE_AT_LOAD;
-    /** Day-wide pending confirmations shown on the sessions KPI (8 at load). */
-    private int pendingConfirmations = 8;
-    /** Deterministic jitter source for the refresh answer. */
-    private final Random telemetryNoise = new Random();
 
     /**
      * Builds the complete Executive Operations Dashboard and initializes all behavior. Same
@@ -174,14 +204,15 @@ public class DashboardController implements ScreenController {
 
         // BENTO ROW 1: 4 key metric stat cards. Desktop widths keep the stretching row; compact
         // widths swap the same cards into a 2x2 grid (below), so nothing is ever clipped.
+        // Values fill from the database once the load task returns.
         kpiRow = new HBox(16);
-        statActiveMembers = new M3StatCard("ACTIVE MEMBERS", "1,428", "+4.2% vs last month");
+        statActiveMembers = new M3StatCard("ACTIVE MEMBERS", "-", "of the loaded roster");
         statActiveMembers.getStyleClass().add("stat-card-teal");
-        statDailyRevenue = new M3StatCard("TODAY'S REVENUE", "$3,840.00", "Target: $4,500.00 (85%)");
+        statDailyRevenue = new M3StatCard("TODAY'S REVENUE", "-", "from recorded payments");
         statDailyRevenue.getStyleClass().add("stat-card-azure");
-        statTodaySessions = new M3StatCard("TODAY'S SESSIONS", "38 / 46", "8 Pending Confirmation");
+        statTodaySessions = new M3StatCard("TODAY'S SESSIONS", "-", "Pending Confirmation");
         statTodaySessions.getStyleClass().add("stat-card-purple");
-        statEquipmentHealth = new M3StatCard("EQUIPMENT OPERATIONAL", "94.2%", "2 Units in Maintenance");
+        statEquipmentHealth = new M3StatCard("EQUIPMENT OPERATIONAL", "-", "Units in Maintenance");
         statEquipmentHealth.getStyleClass().add("stat-card-coral");
         for (M3StatCard card : List.of(statActiveMembers, statDailyRevenue, statTodaySessions, statEquipmentHealth)) {
             HBox.setHgrow(card, Priority.ALWAYS);
@@ -302,11 +333,10 @@ public class DashboardController implements ScreenController {
 
         // Compact counterparts of the bento rows: the SAME cards stacked full-width (a card
         // row cannot fit a 600dp window, and a clipped card is worse than a stacked one).
-        // The width-class listener (registered once dashboardRoot exists) swaps layouts.
+        // The containers start EMPTY — filling them here would steal the cards out of the
+        // desktop rows; applyDashboardLayout moves the nodes on the first class swap.
         vizStack = new VBox(16);
         diagnosticsStack = new VBox(16);
-        vizStack.getChildren().addAll(trafficCard, agendaCard);
-        diagnosticsStack.getChildren().addAll(donutCard, barCard, facilityRadarCard);
 
         bentoGrid.getChildren().addAll(heroBannerCard, kpiRow, vizRow, diagnosticsRow);
 
@@ -330,7 +360,10 @@ public class DashboardController implements ScreenController {
 
         dashboardRoot = new StackPane();
         dashboardRoot.getStyleClass().add("dashboard-root");
-        dashboardRoot.getChildren().addAll(bentoGrid, quickActionSpeedDial, dashboardSnackbar, overlay);
+        // The bento grid lives in a content host so the real-data load can swap it for
+        // loading/error states without touching the floating chrome around it.
+        contentHost = new StackPane(bentoGrid);
+        dashboardRoot.getChildren().addAll(contentHost, quickActionSpeedDial, dashboardSnackbar, overlay);
 
         // Width-class listener (library breakpoints, same pattern as the shell's
         // applyResponsiveChrome): swaps the hero and bento rows between the desktop and compact
@@ -350,12 +383,9 @@ public class DashboardController implements ScreenController {
         });
 
         refreshGreetingAndClock();
-        attachTelemetrySparklines();
-        populateTrafficChart();
-        populateAgendaTable();
-        populateEquipmentDonut();
-        populatePlanBarChart();
+        wireAgendaColumns();
         wireQuickCheckIn();
+        loadDashboard();
 
     // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
     // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
@@ -418,15 +448,12 @@ public class DashboardController implements ScreenController {
     }
 
     /**
-     * Answers the REFRESH TELEMETRY action: advances the live clock and occupancy readout,
-     * redraws the hourly traffic chart, and confirms via snackbar.
+     * Answers the REFRESH TELEMETRY action: re-queries the database (fresh snapshot) and
+     * confirms via snackbar — no simulated telemetry anywhere.
      */
     public void refreshData() {
         refreshGreetingAndClock();
-        int occupancy = 76 + telemetryNoise.nextInt(13);
-        capacityStatusLabel.setText("Floor Occupancy: " + occupancy
-                + "% [Optimal Dynamic Range]");
-        populateTrafficChart();
+        loadDashboard();
         overlay.showSnackbar("Telemetry refreshed at " + clockText());
     }
 
@@ -477,8 +504,268 @@ public class DashboardController implements ScreenController {
     }
 
     // ------------------------------------------------------------------
-    // Demo telemetry wiring (no backend: static demo data)
+    // Real telemetry: DAO snapshot on a background task (task C3)
     // ------------------------------------------------------------------
+
+    /**
+     * The immutable result of one background snapshot: every number, row and series the
+     * dashboard renders, computed off the FX thread from the DAOs. Building it as a value
+     * keeps all FX access inside {@link #applySnapshot}.
+     */
+    private record DashboardSnapshot(int totalMembers, int activeMembers,
+                                     double revenueToday, int paymentsToday,
+                                     List<Object[]> agendaRows, int pendingSessions,
+                                     double[] todayHourlyLoad, double[] baselineHourlyLoad,
+                                     double[] attendanceTrend, double[] revenueTrend,
+                                     int equipmentAvailable, int equipmentInMaintenance,
+                                     int equipmentRetired, int equipmentTotal,
+                                     Map<PlanType, Integer> activePlans,
+                                     int insideNow, int checkedInToday,
+                                     List<Customer> checkableCustomers) {
+    }
+
+    /**
+     * Loads the dashboard from the database on a background task: the bootstrap, the DAO
+     * queries and the snapshot computation run off the FX thread; the result lands on the
+     * cards, charts and agenda on the FX thread. Shows {@link UiKit#loadingState()} while
+     * running and {@link UiKit#errorState()} with retry on failure.
+     */
+    private void loadDashboard() {
+        Data.loadAsync(contentHost,
+            () -> {
+                Data.ensureReady();
+                return buildSnapshot();
+            },
+            snapshot -> {
+                contentHost.getChildren().set(0, bentoGrid);
+                applySnapshot(snapshot);
+            },
+            error -> contentHost.getChildren().setAll(UiKit.errorState(
+                    error.getMessage() == null ? error.toString() : error.getMessage(),
+                    this::loadDashboard)));
+    }
+
+    /**
+     * Queries the DAOs and computes every dashboard figure. Runs on the background thread —
+     * no JavaFX types are touched here.
+     */
+    private DashboardSnapshot buildSnapshot() throws Exception {
+        Data.ensureReady();
+        LocalDate today = LocalDate.now();
+
+        List<Customer> customers = new CustomerDao().findAll();
+        List<Membership> memberships = new MembershipDao().findAll();
+        List<Payment> payments = new PaymentDao().findAll();
+        List<Session> sessions = new SessionDao().findAll();
+        List<Trainer> trainers = new TrainerDao().findAll();
+        List<Attendance> attendance = new AttendanceDao().findAll();
+        List<com.gym.model.Equipment> equipment = new EquipmentDao().findAll();
+        List<TrainerAvailability> slots = new TrainerAvailabilityDao().findAll();
+
+        int activeMembers = 0;
+        Map<Integer, String> customerNames = new HashMap<>();
+        for (Customer customer : customers) {
+            customerNames.put(customer.getId(), customer.getFullName());
+            if (customer.getStatus() == CustomerStatus.ACTIVE) {
+                activeMembers++;
+            }
+        }
+
+        // Revenue today (voided payments never count, rules 6/19) and the 14-day revenue trend.
+        double revenueToday = 0;
+        int paymentsToday = 0;
+        double[] revenueTrend = new double[14];
+        for (Payment payment : payments) {
+            if (payment.isVoided() || payment.getDate() == null) {
+                continue;
+            }
+            long daysAgo = ChronoUnit.DAYS.between(LocalDate.parse(payment.getDate()), today);
+            if (daysAgo == 0) {
+                revenueToday += payment.getAmount().doubleValue();
+                paymentsToday++;
+            }
+            if (daysAgo >= 0 && daysAgo < 14) {
+                revenueTrend[13 - (int) daysAgo] += payment.getAmount().doubleValue();
+            }
+        }
+
+        // Attendance: today's hourly load, the trailing-14-day hourly baseline, the daily
+        // trend and the live occupancy figures.
+        double[] todayHourly = new double[15];
+        double[] baselineHourly = new double[15];
+        double[] attendanceTrend = new double[14];
+        int checkedInToday = 0;
+        int insideNow = 0;
+        for (Attendance record : attendance) {
+            if (record.getDate() == null || record.getCheckIn() == null) {
+                continue;
+            }
+            LocalDate date = LocalDate.parse(record.getDate());
+            long daysAgo = ChronoUnit.DAYS.between(date, today);
+            int hourBucket = hourBucket(record.getCheckIn());
+            if (daysAgo == 0) {
+                checkedInToday++;
+                if (record.getCheckOut() == null || record.getCheckOut().isBlank()) {
+                    insideNow++;
+                }
+                todayHourly[hourBucket] += 1;
+            }
+            if (daysAgo >= 1 && daysAgo < 15) {
+                baselineHourly[hourBucket] += 1;
+            }
+            if (daysAgo >= 0 && daysAgo < 14) {
+                attendanceTrend[13 - (int) daysAgo] += 1;
+            }
+        }
+        for (int i = 0; i < baselineHourly.length; i++) {
+            baselineHourly[i] = Math.round(baselineHourly[i] / 14.0 * 10.0) / 10.0;
+        }
+
+        // Sessions today: rule 17 capacity counts CONFIRMED occupancy per published slot only.
+        Map<Integer, String> trainerNames = new HashMap<>();
+        for (Trainer trainer : trainers) {
+            trainerNames.put(trainer.getId(), trainer.getFullName());
+        }
+        Map<Integer, Integer> slotCaps = new HashMap<>();
+        for (TrainerAvailability slot : slots) {
+            slotCaps.put(slot.getId(), slot.getMaxCustomers());
+        }
+        Map<Integer, Integer> confirmedBySlot = new HashMap<>();
+        List<Session> todaysSessions = new ArrayList<>();
+        for (Session session : sessions) {
+            if (today.toString().equals(session.getDate())) {
+                todaysSessions.add(session);
+            }
+            if (session.getStatus() == SessionStatus.CONFIRMED
+                    && session.getAvailabilityId() != null) {
+                confirmedBySlot.merge(session.getAvailabilityId(), 1, Integer::sum);
+            }
+        }
+        todaysSessions.sort((a, b) -> a.getStartTime().compareTo(b.getStartTime()));
+        List<Object[]> agendaRows = new ArrayList<>();
+        int pendingSessions = 0;
+        for (Session session : todaysSessions) {
+            String status = sessionStatusLabel(session.getStatus());
+            if (session.getStatus() == SessionStatus.REQUESTED) {
+                pendingSessions++;
+            }
+            String capacity = "—";
+            if (session.getAvailabilityId() != null
+                    && slotCaps.containsKey(session.getAvailabilityId())) {
+                int occupied = confirmedBySlot.getOrDefault(session.getAvailabilityId(), 0);
+                capacity = occupied + " / " + slotCaps.get(session.getAvailabilityId());
+            }
+            agendaRows.add(new Object[] {
+                    session.getStartTime(),
+                    customerNames.getOrDefault(session.getCustomerId(),
+                            "Member #" + session.getCustomerId()),
+                    trainerNames.getOrDefault(session.getTrainerId(),
+                            "Coach #" + session.getTrainerId()),
+                    capacity,
+                    status,
+                    session.getId()});
+        }
+
+        // Equipment health and active plan distribution (active = unexpired ACTIVE).
+        int equipmentTotal = equipment.size();
+        int equipmentAvailable = 0;
+        int equipmentInMaintenance = 0;
+        int equipmentRetired = 0;
+        for (com.gym.model.Equipment item : equipment) {
+            switch (item.getStatus()) {
+                case AVAILABLE -> equipmentAvailable++;
+                case IN_MAINTENANCE -> equipmentInMaintenance++;
+                case RETIRED -> equipmentRetired++;
+            }
+        }
+        Map<PlanType, Integer> activePlans = new HashMap<>();
+        for (Membership membership : memberships) {
+            if (membership.getStatus() == MembershipStatus.ACTIVE
+                    && membership.getEndDate() != null
+                    && !LocalDate.parse(membership.getEndDate()).isBefore(today)) {
+                activePlans.merge(membership.getPlan(), 1, Integer::sum);
+            }
+        }
+
+        // Rule-5 check-in candidates: ACTIVE customer with an unexpired ACTIVE membership.
+        List<Customer> checkable = new ArrayList<>();
+        for (Customer customer : customers) {
+            if (customer.getStatus() != CustomerStatus.ACTIVE) {
+                continue;
+            }
+            for (Membership membership : memberships) {
+                if (membership.getCustomerId() == customer.getId()
+                        && membership.getStatus() == MembershipStatus.ACTIVE
+                        && membership.getEndDate() != null
+                        && !LocalDate.parse(membership.getEndDate()).isBefore(today)) {
+                    checkable.add(customer);
+                    break;
+                }
+            }
+        }
+
+        return new DashboardSnapshot(customers.size(), activeMembers, revenueToday,
+                paymentsToday, agendaRows, pendingSessions, todayHourly, baselineHourly,
+                attendanceTrend, revenueTrend, equipmentAvailable, equipmentInMaintenance,
+                equipmentRetired, equipmentTotal, activePlans, insideNow, checkedInToday,
+                checkable);
+    }
+
+    /** Buckets a check-in time (HH:mm) into the 07:00-21:00 chart hour (clamped). */
+    private static int hourBucket(String checkIn) {
+        int hour;
+        try {
+            hour = Integer.parseInt(checkIn.trim().substring(0, 2));
+        } catch (RuntimeException e) {
+            return 0;
+        }
+        return Math.max(0, Math.min(14, hour - 7));
+    }
+
+    /** User-facing agenda copy for a session status (sentence case, no enum shout). */
+    private static String sessionStatusLabel(SessionStatus status) {
+        return switch (status) {
+            case REQUESTED -> "Pending";
+            case CONFIRMED -> "Confirmed";
+            case COMPLETED -> "Completed";
+            case NO_SHOW -> "No-show";
+            case CANCELLED -> "Cancelled";
+        };
+    }
+
+    /** Applies a finished snapshot to the cards, charts, agenda and telemetry label. */
+    private void applySnapshot(DashboardSnapshot snapshot) {
+        checkableCustomers = snapshot.checkableCustomers();
+
+        statActiveMembers.setValue(String.valueOf(snapshot.activeMembers()));
+        statActiveMembers.setDeltaText("of " + snapshot.totalMembers() + " members on roster");
+        statDailyRevenue.setValue(String.format("$%,.2f", snapshot.revenueToday()));
+        statDailyRevenue.setDeltaText("from " + snapshot.paymentsToday() + " payments today");
+        statTodaySessions.setValue(snapshot.agendaRows().size() + " today");
+        statTodaySessions.setDeltaText(snapshot.pendingSessions() + " Pending Confirmation");
+        double operational = snapshot.equipmentTotal() == 0 ? 0
+                : snapshot.equipmentAvailable() * 100.0 / snapshot.equipmentTotal();
+        statEquipmentHealth.setValue(String.format("%.1f%%", operational));
+        statEquipmentHealth.setDeltaText(snapshot.equipmentInMaintenance()
+                + " Units in Maintenance");
+
+        refreshGreetingAndClock();
+        capacityStatusLabel.setText("Floor Occupancy: " + snapshot.insideNow() + " of "
+                + snapshot.activeMembers() + " members inside · " + snapshot.checkedInToday()
+                + " checked in today");
+
+        mountSparkline(statActiveMembers, memberSparkline, snapshot.attendanceTrend());
+        mountSparkline(statDailyRevenue, revenueSparkline, snapshot.revenueTrend());
+
+        trafficSplineChart.getSeriesList().setAll(
+                M3DataSeries.of("Today", snapshot.todayHourlyLoad()),
+                M3DataSeries.of("14-day average", snapshot.baselineHourlyLoad()));
+
+        agendaTable.getItems().setAll(snapshot.agendaRows());
+
+        populateEquipmentDonut(snapshot);
+        populatePlanBarChart(snapshot);
+    }
 
     private void refreshGreetingAndClock() {
         int hour = LocalTime.now().getHour();
@@ -491,14 +778,7 @@ public class DashboardController implements ScreenController {
         return LocalTime.now().format(DateTimeFormatter.ofPattern("h:mm a"));
     }
 
-    /** Mounts the two sparklines inside their KPI cards with real history. */
-    private void attachTelemetrySparklines() {
-        mountSparkline(statActiveMembers, memberSparkline,
-                1385, 1392, 1401, 1398, 1410, 1404, 1417, 1428);
-        mountSparkline(statDailyRevenue, revenueSparkline,
-                2820, 3150, 2960, 3410, 3260, 3690, 3510, 3840);
-    }
-
+    /** Mounts one sparkline inside its KPI card with the given real history. */
     private void mountSparkline(M3StatCard card, M3Sparkline sparkline, double... values) {
         sparkline.getData().clear();
         for (double value : values) {
@@ -506,64 +786,50 @@ public class DashboardController implements ScreenController {
         }
         sparkline.setPrefSize(110, 26);
         sparkline.setMaxWidth(110);
-        if (card.getContent() instanceof VBox layoutBox) {
+        if (card.getContent() instanceof VBox layoutBox
+                && !layoutBox.getChildren().contains(sparkline)) {
             layoutBox.getChildren().add(sparkline);
         }
     }
 
-    private void populateTrafficChart() {
-        M3DataSeries today = M3DataSeries.of("Today", hourlyLoad(58));
-        M3DataSeries baseline = M3DataSeries.of("14-day average", hourlyLoad(46));
-        trafficSplineChart.getSeriesList().setAll(today, baseline);
-    }
-
-    /** Smooth 07:00–21:00 attendance curve around the given midday peak. */
-    private double[] hourlyLoad(double peak) {
-        double[] base = {peak * 0.28, peak * 0.44, peak * 0.72, peak * 0.95, peak,
-                peak * 0.86, peak * 0.64, peak * 0.78, peak * 0.92, peak * 0.70,
-                peak * 0.48, peak * 0.36, peak * 0.30, peak * 0.24, peak * 0.18};
-        double[] jittered = new double[base.length];
-        for (int i = 0; i < base.length; i++) {
-            jittered[i] = Math.round(base[i] * (0.92 + telemetryNoise.nextDouble() * 0.16));
-        }
-        return jittered;
-    }
-
-    /**
-     * Builds the session agenda: real columns, demo rows, and a row action that confirms
-     * pending sessions — the visible answer updates the row, the sessions KPI and a snackbar.
-     */
-    private void populateAgendaTable() {
+    /** Wires the agenda columns and the confirm row action; rows come from the snapshot. */
+    private void wireAgendaColumns() {
         agendaTable.getColumns().add(new M3DataTable.Column<>("Time", row -> (String) row[0], 76.0));
         agendaTable.getColumns().add(new M3DataTable.Column<>("Session", row -> (String) row[1], 190.0));
         agendaTable.getColumns().add(new M3DataTable.Column<>("Coach", row -> (String) row[2], 150.0));
         agendaTable.getColumns().add(new M3DataTable.Column<>("Capacity", row -> (String) row[3], 92.0));
         agendaTable.getColumns().add(new M3DataTable.Column<>("Status", row -> (String) row[4], 104.0));
-
-        agendaTable.getItems().setAll(List.of(
-                new Object[] {"07:00", "HIIT Circuit", "Coach Sarah", "14 / 16", "Confirmed"},
-                new Object[] {"08:30", "Powerlifting Club", "Coach Marcus", "10 / 12", "Confirmed"},
-                new Object[] {"10:00", "Senior Mobility", "Coach Elena", "8 / 10", "Confirmed"},
-                new Object[] {"12:30", "Express Lunch Cardio", "Coach Sarah", "11 / 14", "Confirmed"},
-                new Object[] {"14:00", "VBT Strength Lab", "Coach Marcus", "6 / 8", "Pending"},
-                new Object[] {"17:30", "Spin Interval", "Coach Elena", "18 / 20", "Pending"},
-                new Object[] {"19:00", "Boxing Fundamentals", "Coach Yusuf", "12 / 16", "Confirmed"},
-                new Object[] {"20:30", "Open Mat Recovery", "Coach Yusuf", "9 / 12", "Confirmed"}));
-
-        agendaTable.setOnRowAction(row -> confirmPendingSession(agendaTable, row));
+        agendaTable.setOnRowAction(this::confirmPendingSession);
     }
 
-    private void confirmPendingSession(M3DataTable<Object[]> table, Object[] row) {
+    /**
+     * Confirms a pending (REQUESTED) session through {@code SessionDao} under rule 18 — the
+     * DAO owns the transition check, the UI renders its answer and re-queries so the row, the
+     * capacity and the KPI delta all reflect the database.
+     */
+    private void confirmPendingSession(Object[] row) {
         if (!"Pending".equals(row[4])) {
             overlay.showSnackbar(row[1] + " at " + row[0] + " is already " + row[4] + ".");
             return;
         }
-        row[4] = "Confirmed";
-        table.getItems().set(table.getItems().indexOf(row), row);
-        pendingConfirmations = Math.max(0, pendingConfirmations - 1);
-        statTodaySessions.setDeltaText(pendingConfirmations + " Pending Confirmation");
-        overlay.showSnackbar("Session confirmed: " + row[1] + " at " + row[0]
-                + " with " + row[2] + ".");
+        int sessionId = (Integer) row[5];
+        String description = row[1] + " at " + row[0] + " with " + row[2];
+        Data.submit(
+                () -> {
+                    Session session = new SessionDao().findById(sessionId);
+                    if (session == null) {
+                        throw new com.gym.exception.ValidationException(
+                                "Session no longer exists in the database");
+                    }
+                    session.setStatus(SessionStatus.CONFIRMED);
+                    new SessionDao().update(session);
+                    return session;
+                },
+                confirmed -> {
+                    overlay.showSnackbar("Session confirmed: " + description + ".");
+                    loadDashboard();
+                },
+                error -> overlay.showSnackbar("Could not confirm session: " + error.getMessage()));
     }
 
     /**
@@ -603,49 +869,105 @@ public class DashboardController implements ScreenController {
         bentoGrid.getChildren().set(3, diagnosticsRow);
     }
 
-    private void populateEquipmentDonut() {
-        equipmentDonutChart.setCenterHeadline("94.2%");
+    private void populateEquipmentDonut(DashboardSnapshot snapshot) {
+        if (snapshot.equipmentTotal() == 0) {
+            equipmentDonutChart.setCenterHeadline("—");
+            equipmentDonutChart.setCenterSubtitle("No equipment recorded");
+            equipmentDonutChart.getRings().clear();
+            return;
+        }
+        equipmentDonutChart.setCenterHeadline(String.format("%.1f%%",
+                snapshot.equipmentAvailable() * 100.0 / snapshot.equipmentTotal()));
         equipmentDonutChart.setCenterSubtitle("Operational");
-        // Semantic role mapping, no hardcoded hex: operational = the success state → the
-        // tertiary accent (M3's contrasting accent, which lands in the green family under this
-        // seed), in-maintenance = the problem state → the error role.
-        equipmentDonutChart.addRing("Operational", 26, 28, UiKit.themeRole(ColorRole.TERTIARY));
-        equipmentDonutChart.addRing("In Maintenance", 2, 28, UiKit.themeRole(ColorRole.ERROR));
+        equipmentDonutChart.getRings().clear();
+        // Semantic role mapping, no hardcoded hex: available = the success state → the tertiary
+        // accent (green family under this seed), in-maintenance = the problem state → the error
+        // role. Retired units close the ring in the neutral secondary accent.
+        equipmentDonutChart.addRing("Operational", snapshot.equipmentAvailable(),
+                snapshot.equipmentTotal(), UiKit.themeRole(ColorRole.TERTIARY));
+        equipmentDonutChart.addRing("In Maintenance", snapshot.equipmentInMaintenance(),
+                snapshot.equipmentTotal(), UiKit.themeRole(ColorRole.ERROR));
+        if (snapshot.equipmentRetired() > 0) {
+            equipmentDonutChart.addRing("Retired", snapshot.equipmentRetired(),
+                    snapshot.equipmentTotal(), UiKit.themeRole(ColorRole.SECONDARY));
+        }
     }
 
-    private void populatePlanBarChart() {
-        M3DataSeries plans = new M3DataSeries("Active members");
+    private void populatePlanBarChart(DashboardSnapshot snapshot) {
+        M3DataSeries plans = new M3DataSeries("Active plans");
         plans.getData().addAll(List.of(
-                new M3DataPoint("Monthly", 612),
-                new M3DataPoint("Quarterly", 298),
-                new M3DataPoint("Annual", 421),
-                new M3DataPoint("Student", 97)));
+                new M3DataPoint("Monthly",
+                        snapshot.activePlans().getOrDefault(PlanType.MONTHLY, 0)),
+                new M3DataPoint("Quarterly",
+                        snapshot.activePlans().getOrDefault(PlanType.QUARTERLY, 0)),
+                new M3DataPoint("Annual",
+                        snapshot.activePlans().getOrDefault(PlanType.YEARLY, 0))));
         planBarChart.getSeriesList().setAll(plans);
     }
 
-    /** Quick check-in: the split button's leading action plus its two menu shortcuts. */
+    /** Quick check-in: the split button's leading action opens the eligible-member menu. */
     private void wireQuickCheckIn() {
-        quickActionSplitBtn.setOnAction(e -> checkIn("Walk-in member"));
-        M3Menu menu = new M3Menu();
-        menu.item("Check in walk-in member", () -> checkIn("Walk-in member"));
-        menu.item("Check in class attendee", () -> checkIn("Class attendee"));
-        quickActionSplitBtn.setMenu(menu);
+        quickActionSplitBtn.setOnAction(e -> openCheckInMenu(quickActionSplitBtn));
+        quickActionSplitBtn.setMenu(null);
     }
 
-    private void checkIn(String kind) {
-        if (sessionsDone >= SESSIONS_TOTAL) {
-            overlay.showSnackbar("All " + SESSIONS_TOTAL + " sessions today are checked in.");
-            return;
+    /**
+     * The check-in menu lists the rule-5 eligible members at the last load (ACTIVE customer
+     * with an unexpired ACTIVE membership). Choosing one runs the real check-in through
+     * {@code AttendanceDao}; without eligible members the answer says exactly that.
+     */
+    private void openCheckInMenu(Node anchor) {
+        M3Menu menu = new M3Menu();
+        if (checkableCustomers.isEmpty()) {
+            menu.item("No members are eligible to check in right now", () -> { });
+        } else {
+            for (Customer customer : checkableCustomers) {
+                menu.item(customer.getFullName() + " · " + customer.getPhone(),
+                        () -> checkInCustomer(customer));
+            }
         }
-        sessionsDone++;
-        statTodaySessions.setValue(sessionsDone + " / " + SESSIONS_TOTAL);
-        overlay.showSnackbar(kind + " checked in — session " + sessionsDone
-                + " of " + SESSIONS_TOTAL + " today.");
+        if (anchor.getScene() != null && anchor.getScene().getWindow() != null) {
+            menu.showBelow(anchor);
+        } else {
+            overlay.showSnackbar("Check-in opens inside the app window.");
+        }
+    }
+
+    /**
+     * Rule-5 check-in through {@code AttendanceDao}: an ACTIVE customer with an unexpired
+     * membership checks in; a same-day re-check-in updates the existing row instead of
+     * inserting a duplicate. Success re-queries the dashboard so occupancy and trends follow.
+     */
+    private void checkInCustomer(Customer customer) {
+        Data.submit(
+                () -> {
+                    String now = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
+                    String today = LocalDate.now().toString();
+                    AttendanceDao attendanceDao = new AttendanceDao();
+                    for (Attendance existing : attendanceDao.findByCustomerId(customer.getId())) {
+                        if (today.equals(existing.getDate())) {
+                            existing.setCheckIn(now);
+                            attendanceDao.update(existing);
+                            return "updated";
+                        }
+                    }
+                    attendanceDao.insert(new Attendance(0, customer.getId(), today, now, null));
+                    return "checked in";
+                },
+                outcome -> {
+                    overlay.showSnackbar(customer.getFullName() + (outcome.equals("updated")
+                            ? " re-checked in — the same-day row was updated (rule 5)."
+                            : " checked in at " + clockText() + "."));
+                    loadDashboard();
+                },
+                error -> overlay.showSnackbar("Could not check in "
+                        + customer.getFullName() + ": " + error.getMessage()));
     }
 
     /** The floating speed dial mirrors the two real dashboard answers. */
     private void wireSpeedDial() {
-        quickActionSpeedDial.addAction("Quick Check-In", M3Icon.symbol("person"), () -> checkIn("Walk-in member"));
+        quickActionSpeedDial.addAction("Quick Check-In", M3Icon.symbol("person"),
+                () -> openCheckInMenu(quickActionSpeedDial));
         quickActionSpeedDial.addAction("Refresh Telemetry", M3Icon.symbol("refresh"), this::refreshData);
     }
 }
