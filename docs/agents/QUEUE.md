@@ -154,7 +154,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   filters with a short debounce instead of a full `rebuildRows()` per keystroke.
   done-when: seed-switch repaint verified in gallery, typing in a 1000-row table stays smooth,
   tests green.
-  claimed-by: — | status: READY
+  claimed-by: B | status: DONE (round 5, commit 6afb2ca — ChartThemeSupport repaint hook wired
+  into all 10 canvas charts + per-chart repaint counters in tests; 200 ms search debounce with
+  Enter-immediate; controls tests 205)
 
 - [ ] B10 | lane:B | deps:— | files: m3fx-controls/.../data/M3StatCard.java + its test
   goal: Stat-card truncation pass (found in round-1 screenshots on merged main): title, badge
