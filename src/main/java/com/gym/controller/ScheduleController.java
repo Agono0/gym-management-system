@@ -1,5 +1,19 @@
 package com.gym.controller;
 
+import com.gym.dao.CustomerDao;
+import com.gym.dao.SessionDao;
+import com.gym.dao.TrainerAvailabilityDao;
+import com.gym.dao.TrainerDao;
+import com.gym.model.AvailabilityStatus;
+import com.gym.model.Customer;
+import com.gym.model.CustomerStatus;
+import com.gym.model.Membership;
+import com.gym.model.MembershipStatus;
+import com.gym.model.Session;
+import com.gym.model.SessionStatus;
+import com.gym.model.Trainer;
+import com.gym.model.TrainerAvailability;
+import com.gym.ui.Data;
 import com.gym.ui.UiKit;
 import io.m3fx.controls.appbar.M3TopAppBar;
 import io.m3fx.controls.button.ButtonVariant;
@@ -15,6 +29,7 @@ import io.m3fx.controls.dialog.M3Dialog;
 import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.iconbutton.IconButtonVariant;
 import io.m3fx.controls.iconbutton.M3IconButton;
+import io.m3fx.controls.menu.M3Menu;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.textfield.M3TextField;
 import io.m3fx.core.theme.ColorRole;
@@ -46,24 +61,36 @@ import javafx.scene.layout.VBox;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
- * Pure UI controller for Master Schedule & Class Timetable screen.
+ * Controller for Master Schedule & Class Timetable screen.
  * Conforms to Section 7 of docs/ui/workouts/SCHEDULE_CALENDAR_UI.md and docs/UML.md.
- * Owns the week navigation, the demo agenda population, the status filtering, the coach rail,
- * the session inspector and the session lifecycle actions (confirm/complete/no-show/cancel).
+ *
+ * <p>Data contract (DECISIONS.md 77/78, task C4): the week agenda, the coach rail and the
+ * booking flows run on real sessions — one {@link Data#loadAsync} snapshot per view
+ * (`SessionDao` + `TrainerAvailabilityDao` + customers + coaches), real week navigation over
+ * all 7 day columns, and every lifecycle action through {@code SessionDao} with the rules
+ * owned by the DAO or mirrored verbatim from the CLI's {@code GymRulesHelper}: rule 1 booking
+ * (inside-slot CONFIRMED, outside-slot REQUESTED, admin override, default 60 min), rule 10
+ * cancel (>= 2h free, late cancels still CANCELLED with the reason recorded), rule 17 capacity
+ * (CONFIRMED-only occupancy), rule 18 transitions.
  *
  * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
  * former schedule.fxml: week navigation bar, coach rail, agenda matrix, session inspector.
  */
 public class ScheduleController implements ScreenController {
 
-    /** Visible day columns of the demo agenda (Mon-Wed keeps the matrix readable at 1024px). */
-    private static final int DEMO_DAY_COLUMNS = 3;
+    /** Day columns of the agenda matrix — the whole week, Mon through Sun. */
+    private static final int DAY_COLUMNS = 7;
     private static final int FIRST_HOUR = 7;
     private static final int LAST_HOUR = 20;
     private static final DateTimeFormatter DAY_FMT = DateTimeFormatter.ofPattern("EEE dd");
@@ -98,6 +125,7 @@ public class ScheduleController implements ScreenController {
     private M3Chip chipFilterCancelled;
     private VBox inspectorContainer;
     private M3IconButton btnCloseInspector;
+    private M3Button btnRunLive;
 
     /** Start (Monday) of the week shown in the header; refreshed by the navigation buttons. */
     private LocalDate weekStart = LocalDate.now().with(DayOfWeek.MONDAY);
@@ -105,25 +133,47 @@ public class ScheduleController implements ScreenController {
     /** Hosts M3 snackbars and dialogs for this screen (attached to the scene root at runtime). */
     private final M3Overlay feedback = new M3Overlay();
 
-    /** Demo coach roster: name plus whether the coach has open slots this week. */
-    private record Coach(String name, String detail, boolean availableThisWeek) {}
+    /**
+     * One agenda session assembled in the background snapshot: the database row plus the
+     * display strings resolved from the customers/coaches/slots.
+     */
+    private record SessionRecord(int sessionId, LocalDate date, String start, int durationMin,
+                                 String customerName, int trainerId, String trainerName,
+                                 SessionStatus status, Integer availabilityId, Integer slotCap,
+                                 int confirmedInSlot, String price, String notes) {
+    }
 
-    private final List<Coach> coaches = List.of(
-            new Coach("Elena Rostova", "Olympic Lifting · 4 open slots", true),
-            new Coach("Marcus Vance", "Powerbuilding · fully booked", false),
-            new Coach("Kim Park", "Post-Rehab · 2 open slots", true),
-            new Coach("Ana Silva", "VO2 & Conditioning · 6 open slots", true),
-            new Coach("Dana Wolfe", "Strength Basics · fully booked", false),
-            new Coach("Omar Haddad", "Circuits · 3 open slots", true));
+    /**
+     * The immutable result of one background week snapshot: agenda sessions, the coach roster,
+     * the week's published slots and the rule-5/1 booking candidates.
+     */
+    private record WeekSnapshot(List<SessionRecord> sessions, List<Trainer> trainers,
+                                List<TrainerAvailability> slots,
+                                List<Customer> bookableCustomers) {
+    }
+
+    /** Sessions of the currently rendered week (drives the cards and the inspector). */
+    private final List<SessionRecord> weekSessions = new ArrayList<>();
+    /** Coach roster of the currently rendered week snapshot. */
+    private final List<Trainer> trainerRoster = new ArrayList<>();
+    /** The week's published slots, kept for the booking flows. */
+    private final List<TrainerAvailability> weekSlots = new ArrayList<>();
+    /** Rule-1 booking candidates (ACTIVE customers), refreshed with every snapshot. */
+    private final List<Customer> bookableCustomers = new ArrayList<>();
 
     /** Demo session cards currently on the agenda grid, in placement order. */
     private final List<M3Card> agendaCards = new ArrayList<>();
 
     /** The session currently loaded into the inspector, or null before the first click. */
-    private String[] selectedSession;
+    private SessionRecord selectedSession;
 
     /** Whether the coach rail currently shows only this week's available coaches. */
     private boolean showingAvailableOnly;
+
+    /** Content host around the agenda: swaps loading/error states around DAO loads. */
+    private StackPane contentHost;
+    /** The scrollable agenda node, restored after loading/error states. */
+    private javafx.scene.Node agendaView;
 
     /**
      * Builds the complete Schedule &amp; Timetable view and initializes all behavior. Same
@@ -208,8 +258,11 @@ public class ScheduleController implements ScreenController {
         ScrollPane agendaScroll = new ScrollPane(agendaGrid);
         agendaScroll.setFitToWidth(true);
         agendaScroll.setFitToHeight(false);
-        VBox.setVgrow(agendaScroll, Priority.ALWAYS);
-        calendarPane.getChildren().addAll(statusFilterStrip, agendaScroll);
+        agendaView = agendaScroll;
+        // Content host so the real-data week load can swap the agenda for loading/error states.
+        contentHost = new StackPane(agendaScroll);
+        VBox.setVgrow(contentHost, Priority.ALWAYS);
+        calendarPane.getChildren().addAll(statusFilterStrip, contentHost);
 
         // Right contextual inspector side sheet.
         inspectorContainer = new VBox(16);
@@ -269,8 +322,12 @@ public class ScheduleController implements ScreenController {
         btnCancelAction.getStyleClass().add("m3-button-text-danger");
         btnCancelAction.setMaxWidth(Double.MAX_VALUE);
         btnCancelAction.setOnAction(e -> onCancel());
+        btnRunLive = new M3Button("Run Live", ButtonVariant.FILLED);
+        btnRunLive.getStyleClass().add("m3-button-filled");
+        btnRunLive.setMaxWidth(Double.MAX_VALUE);
+        btnRunLive.setOnAction(e -> onRunLive());
         lifecycleButtons.getChildren().addAll(btnConfirmAction, btnCompleteAction,
-                btnNoShowAction, btnCancelAction);
+                btnNoShowAction, btnCancelAction, btnRunLive);
 
         inspectorContainer.getChildren().addAll(
                 inspectorHeader,
@@ -322,14 +379,11 @@ public class ScheduleController implements ScreenController {
         btnCloseInspector.setId("btnCloseInspector");
         installFeedbackLayer(agendaGrid);
         updateDateRangeLabel();
-        populateCoachRail();
-        if (agendaGrid.getChildren().isEmpty()) {
-            buildDemoAgenda();
-        }
         wireStatusFilters();
         // The inspector is contextual: it starts collapsed so the agenda (this screen's primary
         // answer) gets the full width, and opens over the session the user clicks.
         collapseInspector();
+        loadSchedule();
     }
 
     /** Small label with one style class. */
@@ -364,30 +418,62 @@ public class ScheduleController implements ScreenController {
         });
     }
 
-    /** Fills the coach rail and wires the search field to filter it live. */
-    private void populateCoachRail() {
-        ListView<String> list = trainerListView;
-        list.setPlaceholder(new Label("No coaches match your search."));
-        list.setItems(FXCollections.observableArrayList(coachSummaries(coaches)));
-        searchTrainerField.getInput().textProperty().addListener((obs, o, query) -> {
-            String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
-            List<String> visible = new ArrayList<>();
-            for (Coach coach : coaches) {
-                if (coach.name().toLowerCase(Locale.ROOT).contains(q)
-                        || coach.detail().toLowerCase(Locale.ROOT).contains(q)) {
-                    visible.add(coach.name() + " — " + coach.detail());
-                }
-            }
-            list.getItems().setAll(visible);
-        });
+    /** Wires the coach rail search filter; the rail itself fills from the week snapshot. */
+    private void wireCoachRailSearch() {
+        trainerListView.setPlaceholder(new Label("No coaches match your search."));
+        searchTrainerField.getInput().textProperty().addListener((obs, o, query) ->
+                applyCoachRail());
     }
 
-    private static List<String> coachSummaries(List<Coach> source) {
-        List<String> summaries = new ArrayList<>();
-        for (Coach coach : source) {
-            summaries.add(coach.name() + " — " + coach.detail());
+    /** Fills the coach rail from the real roster, honoring the search query and the toggle. */
+    private void applyCoachRail() {
+        String query = searchTrainerField.getInput().getText() == null
+                ? "" : searchTrainerField.getInput().getText().trim().toLowerCase(Locale.ROOT);
+        List<String> visible = new ArrayList<>();
+        for (Trainer trainer : trainerRoster) {
+            if (showingAvailableOnly && openSlotCount(trainer.getId()) == 0) {
+                continue;
+            }
+            String summary = trainer.getFullName() + " — " + displayValue(trainer.getSpecialization())
+                    + " · " + openSlotCount(trainer.getId()) + " open slots this week";
+            if (query.isEmpty()
+                    || summary.toLowerCase(Locale.ROOT).contains(query)) {
+                visible.add(summary);
+            }
         }
-        return summaries;
+        trainerListView.getItems().setAll(visible);
+    }
+
+    /** Open (not CLOSED, under-cap) slot count for one coach within the rendered week. */
+    private int openSlotCount(int trainerId) {
+        int open = 0;
+        for (TrainerAvailability slot : weekSlots) {
+            if (slot.getTrainerId() != trainerId
+                    || slot.getStatus() == AvailabilityStatus.CLOSED
+                    || !inRenderedWeek(LocalDate.parse(slot.getDate()))) {
+                continue;
+            }
+            int confirmed = 0;
+            for (SessionRecord session : weekSessions) {
+                if (session.availabilityId() != null
+                        && session.availabilityId() == slot.getId()
+                        && session.status() == SessionStatus.CONFIRMED) {
+                    confirmed++;
+                }
+            }
+            if (slot.getMaxCustomers() > confirmed) {
+                open++;
+            }
+        }
+        return open;
+    }
+
+    private static String displayValue(String value) {
+        return value == null || value.isBlank() ? "General coaching" : value;
+    }
+
+    private boolean inRenderedWeek(LocalDate date) {
+        return !date.isBefore(weekStart) && !date.isAfter(weekStart.plusDays(6));
     }
 
     /** Wires the three status chips so the agenda reacts to filtering immediately. */
@@ -420,19 +506,19 @@ public class ScheduleController implements ScreenController {
     public void onPrevWeek() {
         weekStart = weekStart.minusWeeks(1);
         updateDateRangeLabel();
-        feedback.showSnackbar("Showing week " + lblCurrentDateRange.getText() + " (demo)");
+        loadSchedule();
     }
 
     public void onNextWeek() {
         weekStart = weekStart.plusWeeks(1);
         updateDateRangeLabel();
-        feedback.showSnackbar("Showing week " + lblCurrentDateRange.getText() + " (demo)");
+        loadSchedule();
     }
 
     public void onToday() {
         weekStart = LocalDate.now().with(DayOfWeek.MONDAY);
         updateDateRangeLabel();
-        feedback.showSnackbar("Back to the current week (demo)");
+        loadSchedule();
     }
 
     /** Hides the inspector and hands its width back to the agenda (2-pane split). */
@@ -458,18 +544,137 @@ public class ScheduleController implements ScreenController {
     }
 
     /**
-     * Fills the agenda matrix with hour rows, day headers and a few sample sessions so the
-     * center pane is not an empty grid. Cards are tagged with their status (for the chips),
-     * clickable (loads the inspector) and keyboard operable. Demo content only — replaced once
-     * real bookings flow.
+     * Loads the rendered week from the database on a background task: the bootstrap, the
+     * session/slot/customer/coach queries and the snapshot computation run off the FX thread;
+     * the agenda, coach rail and header land on the FX thread. Shows
+     * {@link UiKit#loadingState()} while running and {@link UiKit#errorState()} with retry on
+     * failure.
      */
-    private void buildDemoAgenda() {
+    private void loadSchedule() {
+        Data.loadAsync(contentHost,
+            () -> {
+                Data.ensureReady();
+                return buildWeekSnapshot(weekStart);
+            },
+            snapshot -> {
+                contentHost.getChildren().set(0, agendaView);
+                applyWeek(snapshot);
+            },
+            error -> contentHost.getChildren().setAll(UiKit.errorState(
+                    error.getMessage() == null ? error.toString() : error.getMessage(),
+                    this::loadSchedule)));
+    }
+
+    /**
+     * Queries the sessions of the rendered week (plus slots, customers and coaches for the
+     * display strings and the booking flows). Runs on the background thread — no JavaFX types
+     * touched here.
+     */
+    private WeekSnapshot buildWeekSnapshot(LocalDate monday) throws Exception {
+        Data.ensureReady();
+        LocalDate weekEnd = monday.plusDays(6);
+
+        List<Session> allSessions = new SessionDao().findAll();
+        List<TrainerAvailability> slots = new TrainerAvailabilityDao().findAll();
+        List<Customer> customers = new CustomerDao().findAll();
+        List<Trainer> trainers = new TrainerDao().findAll();
+
+        Map<Integer, String> customerNames = new HashMap<>();
+        for (Customer customer : customers) {
+            customerNames.put(customer.getId(), customer.getFullName());
+        }
+        Map<Integer, String> trainerNames = new HashMap<>();
+        for (Trainer trainer : trainers) {
+            trainerNames.put(trainer.getId(), trainer.getFullName());
+        }
+        Map<Integer, Integer> slotCaps = new HashMap<>();
+        for (TrainerAvailability slot : slots) {
+            slotCaps.put(slot.getId(), slot.getMaxCustomers());
+        }
+        // Rule 17: occupancy counts CONFIRMED sessions only, per slot.
+        Map<Integer, Integer> confirmedBySlot = new HashMap<>();
+        for (Session session : allSessions) {
+            if (session.getStatus() == SessionStatus.CONFIRMED
+                    && session.getAvailabilityId() != null) {
+                confirmedBySlot.merge(session.getAvailabilityId(), 1, Integer::sum);
+            }
+        }
+
+        List<SessionRecord> records = new ArrayList<>();
+        for (Session session : allSessions) {
+            if (session.getDate() == null
+                    || !inRange(LocalDate.parse(session.getDate()), monday, weekEnd)) {
+                continue;
+            }
+            Integer slotCap = session.getAvailabilityId() == null
+                    ? null : slotCaps.get(session.getAvailabilityId());
+            records.add(new SessionRecord(session.getId(),
+                    LocalDate.parse(session.getDate()), session.getStartTime(),
+                    session.getDurationMin(),
+                    customerNames.getOrDefault(session.getCustomerId(),
+                            "Member #" + session.getCustomerId()),
+                    session.getTrainerId(),
+                    trainerNames.getOrDefault(session.getTrainerId(),
+                            "Coach #" + session.getTrainerId()),
+                    session.getStatus() == null ? SessionStatus.REQUESTED : session.getStatus(),
+                    session.getAvailabilityId(), slotCap,
+                    session.getAvailabilityId() == null
+                            ? 0 : confirmedBySlot.getOrDefault(session.getAvailabilityId(), 0),
+                    session.getPrice() == null ? "" : session.getPrice().toPlainString(),
+                    session.getSessionNotes()));
+        }
+        records.sort((a, b) -> a.start().compareTo(b.start()));
+
+        // Rule-1 booking candidates: ACTIVE customers (FK + workflow validation is the DAO's).
+        List<Customer> bookable = new ArrayList<>();
+        for (Customer customer : customers) {
+            if (customer.getStatus() == CustomerStatus.ACTIVE) {
+                bookable.add(customer);
+            }
+        }
+        return new WeekSnapshot(records, trainers, slots, bookable);
+    }
+
+    private static boolean inRange(LocalDate date, LocalDate start, LocalDate end) {
+        return !date.isBefore(start) && !date.isAfter(end);
+    }
+
+    /** Applies a finished week snapshot: agenda matrix, coach rail, header, inspector reset. */
+    private void applyWeek(WeekSnapshot snapshot) {
+        weekSessions.clear();
+        weekSessions.addAll(snapshot.sessions());
+        trainerRoster.clear();
+        trainerRoster.addAll(snapshot.trainers());
+        weekSlots.clear();
+        weekSlots.addAll(snapshot.slots());
+        bookableCustomers.clear();
+        bookableCustomers.addAll(snapshot.bookableCustomers());
+
+        renderWeek();
+        applyCoachRail();
+        collapseInspector();
+        selectedSession = null;
+        feedback.showSnackbar(weekSessions.size() + " sessions this week ("
+                + lblCurrentDateRange.getText() + ").");
+    }
+
+    /**
+     * Renders the agenda matrix with hour rows, all 7 day headers and one card per real
+     * session, placed at its day column and start-hour row. Cards are tagged with their status
+     * (for the chips), clickable (loads the inspector) and keyboard operable.
+     */
+    private void renderWeek() {
         agendaGrid.getChildren().clear();
         agendaCards.clear();
         ColumnConstraints timeCol = new ColumnConstraints(64);
         ColumnConstraints dayCol = new ColumnConstraints();
         dayCol.setHgrow(Priority.ALWAYS);
-        agendaGrid.getColumnConstraints().setAll(timeCol, dayCol, dayCol, dayCol);
+        List<ColumnConstraints> columns = new ArrayList<>();
+        columns.add(timeCol);
+        for (int d = 0; d < DAY_COLUMNS; d++) {
+            columns.add(dayCol);
+        }
+        agendaGrid.getColumnConstraints().setAll(columns);
         // Every row needs its own constraint: one shared instance only sizes row 0, which used
         // to collapse the other hour rows to bare text height and crush the matrix.
         RowConstraints headerRow = new RowConstraints(32);
@@ -481,50 +686,50 @@ public class ScheduleController implements ScreenController {
         }
         agendaGrid.getRowConstraints().setAll(rows);
 
-        for (int d = 0; d < DEMO_DAY_COLUMNS; d++) {
+        for (int d = 0; d < DAY_COLUMNS; d++) {
             Label header = new Label(DAY_FMT.format(weekStart.plusDays(d)));
             header.getStyleClass().add("m3-list-headline");
             GridPane.setHalignment(header, HPos.CENTER);
             agendaGrid.add(header, d + 1, 0);
         }
 
-        String[][][] sessions = {
-                {{"07:00", "John Doe · PT", "CONFIRMED"}, {"09:00", "Ana Silva · PT", "REQUESTED"}, {"17:00", "Group HIIT", "CONFIRMED"}},
-                {{"08:00", "Leo Martins · PT", "CONFIRMED"}, {"10:00", "Zoe Chen · PT", "CANCELLED"}, {"18:00", "Mobility Class", "CONFIRMED"}},
-                {{"07:30", "Kim Park · PT", "REQUESTED"}, {"16:00", "Powerlifting Club", "CONFIRMED"}, {"19:00", "Spin Class", "CONFIRMED"}}
-        };
         for (int h = FIRST_HOUR; h <= LAST_HOUR; h++) {
             Label time = new Label(String.format("%02d:00", h));
             time.getStyleClass().add("m3-list-overline");
             GridPane.setValignment(time, VPos.TOP);
             agendaGrid.add(time, 0, h - FIRST_HOUR + 1);
         }
-        // Place the sample sessions at plausible hours; row 0 is the header row.
-        int[] hours = {7, 9, 17, 8, 10, 18, 7, 16, 19};
-        for (int d = 0; d < DEMO_DAY_COLUMNS; d++) {
-            for (int s = 0; s < sessions[d].length; s++) {
-                String[] session = sessions[d][s];
-                M3Card card = createSessionCard(session, weekStart.plusDays(d));
-                agendaCards.add(card);
-                agendaGrid.add(card, d + 1, hours[d * DEMO_DAY_COLUMNS + s] - FIRST_HOUR + 1);
+        for (SessionRecord session : weekSessions) {
+            int hour;
+            try {
+                hour = Integer.parseInt(session.start().substring(0, 2));
+            } catch (RuntimeException e) {
+                continue;
             }
+            if (hour < FIRST_HOUR || hour > LAST_HOUR) {
+                continue;
+            }
+            M3Card card = createSessionCard(session);
+            agendaCards.add(card);
+            agendaGrid.add(card, session.date().getDayOfWeek().getValue() - DayOfWeek.MONDAY.getValue() + 1,
+                    hour - FIRST_HOUR + 1);
         }
+        applyAgendaFilter();
     }
 
     /** Builds one agenda card: tagged, clickable, keyboard operable. */
-    private M3Card createSessionCard(String[] session, LocalDate day) {
-        Label title = new Label(session[1]);
+    private M3Card createSessionCard(SessionRecord session) {
+        Label title = new Label(session.customerName());
         title.getStyleClass().add("m3-list-supporting");
-        Label caption = new Label(session[0] + " · " + session[2]);
+        Label caption = new Label(session.start() + " · " + statusLabel(session.status()));
         caption.getStyleClass().add("m3-list-overline");
         VBox box = new VBox(2, title, caption);
         box.setPadding(new Insets(6));
         M3Card card = new M3Card(CardVariant.OUTLINED);
         card.setContent(box);
         card.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
-        card.getProperties().put("sessionStatus", session[2]);
-        card.getProperties().put("sessionTime", session[0]);
-        card.getProperties().put("sessionDay", day);
+        card.getProperties().put("sessionStatus", session.status().name());
+        card.getProperties().put("sessionId", session.sessionId());
         card.setOnMouseClicked(e -> openInspector(session));
         card.setOnKeyPressed(e -> {
             switch (e.getCode()) {
@@ -539,81 +744,256 @@ public class ScheduleController implements ScreenController {
         return card;
     }
 
-    /** Loads a demo session into the inspector and shows it. */
-    private void openInspector(String[] session) {
+    /** User-facing agenda copy for a session status (sentence case, no enum shout). */
+    private static String statusLabel(SessionStatus status) {
+        return switch (status) {
+            case REQUESTED -> "Requested";
+            case CONFIRMED -> "Confirmed";
+            case COMPLETED -> "Completed";
+            case NO_SHOW -> "No-show";
+            case CANCELLED -> "Cancelled";
+        };
+    }
+
+    /** Loads a real session into the inspector with rule-18-aware lifecycle buttons. */
+    private void openInspector(SessionRecord session) {
         selectedSession = session;
-        String title = session[1];
-        boolean isClass = !title.contains("·");
-        String athlete = isClass ? "Group booking" : title.substring(0, title.indexOf('·')).trim();
         lblInspectorTitle.setText("Session Inspector");
-        lblSessionStatus.setText(session[2]);
-        lblAthleteName.setText("Athlete: " + athlete);
-        lblCoachName.setText(isClass ? "Coach: Elena Rostova" : "Coach: Marcus Vance");
-        int startHour = Integer.parseInt(session[0].substring(0, 2));
-        lblSessionTime.setText("Time: " + session[0] + " - "
-                + String.format("%02d:00", (startHour + 1) % 24));
-        lblPriceOrSub.setText(isClass ? "Price: $15 drop-in" : "Price: Covered by Subscription");
+        lblSessionStatus.setText(statusLabel(session.status()));
+        lblAthleteName.setText("Athlete: " + session.customerName());
+        lblCoachName.setText("Coach: " + session.trainerName());
+        LocalTime start = LocalTime.parse(session.start());
+        lblSessionTime.setText("Time: " + session.start() + " - "
+                + start.plusMinutes(session.durationMin()).toString() + " ("
+                + session.durationMin() + " min)");
+        lblPriceOrSub.setText(session.notes() == null || session.notes().isBlank()
+                ? "Notes: none recorded" : "Notes: " + session.notes());
+        int slotCap = session.slotCap() == null ? 0 : session.slotCap();
         slotDonutChart.getRings().clear();
-        slotDonutChart.getRings().addAll(
-                new M3DonutChart.Ring("Booked", 4, 8, null),
-                // Waitlist = the pending state → the secondary accent (distinct from the
-                // default-colored booked ring, no success/error semantics).
-                new M3DonutChart.Ring("Waitlist", 2, 8, UiKit.themeRole(ColorRole.SECONDARY)));
-        slotDonutChart.setCenterHeadline("4/8");
+        if (session.availabilityId() != null && slotCap > 0) {
+            slotDonutChart.getRings().addAll(
+                    new M3DonutChart.Ring("Booked", session.confirmedInSlot(), slotCap, null),
+                    new M3DonutChart.Ring("Free", slotCap - session.confirmedInSlot(), slotCap,
+                            UiKit.themeRole(ColorRole.SECONDARY)));
+            slotDonutChart.setCenterHeadline(session.confirmedInSlot() + "/" + slotCap);
+        } else {
+            slotDonutChart.setCenterHeadline("—");
+        }
         sessionTimeline.getItems().clear();
-        sessionTimeline.addItem(session[0], "Slot requested", "Booked online by the athlete", M3Timeline.Status.COMPLETED);
-        sessionTimeline.addItem("+2m", "Coach review", "Coach confirmed the slot", M3Timeline.Status.ACTIVE);
-        sessionTimeline.addItem("—", "Session start", "Pending", M3Timeline.Status.PENDING);
+        sessionTimeline.addItem(session.date().toString(), "Booked",
+                "Session on the schedule for " + session.start(), M3Timeline.Status.COMPLETED);
+        sessionTimeline.addItem("—", "Current status", statusLabel(session.status()),
+                session.status() == SessionStatus.COMPLETED
+                        ? M3Timeline.Status.COMPLETED : M3Timeline.Status.ACTIVE);
+        // Rule 18 drives the lifecycle pair: only REQUESTED confirms; only CONFIRMED
+        // completes, no-shows, cancels or runs live in the HUD.
+        btnConfirmAction.setDisable(session.status() != SessionStatus.REQUESTED);
+        btnCompleteAction.setDisable(session.status() != SessionStatus.CONFIRMED);
+        btnNoShowAction.setDisable(session.status() != SessionStatus.CONFIRMED);
+        btnCancelAction.setDisable(session.status() != SessionStatus.CONFIRMED);
+        btnRunLive.setDisable(session.status() != SessionStatus.CONFIRMED);
         expandInspector();
     }
 
-    /** Applies a lifecycle change to the selected session and answers visibly. */
-    private void applyLifecycle(String newStatus, String message) {
+    /**
+     * Applies a rule-18 lifecycle transition through {@code SessionDao.update} (the DAO owns
+     * the transition check) and re-queries the week so the agenda, capacity and inspector all
+     * reflect the database.
+     */
+    private void applyLifecycle(SessionStatus target, String successMessage) {
         if (selectedSession == null) {
             feedback.showSnackbar("Select a session on the agenda first.");
             return;
         }
-        selectedSession[2] = newStatus;
-        lblSessionStatus.setText(newStatus);
-        for (M3Card card : agendaCards) {
-            if (!selectedSession[0].equals(String.valueOf(card.getProperties().get("sessionTime")))) {
-                continue;
-            }
-            if (sessionMatchesCard(card)) {
-                card.getProperties().put("sessionStatus", newStatus);
-                if (card.getContent() instanceof VBox box && box.getChildren().size() > 1
-                        && box.getChildren().get(1) instanceof Label caption) {
-                    caption.setText(selectedSession[0] + " · " + newStatus);
-                }
-                break;
-            }
-        }
-        applyAgendaFilter();
-        feedback.showSnackbar(message + " (demo)");
+        int sessionId = selectedSession.sessionId();
+        Data.submit(
+                () -> {
+                    Session session = new SessionDao().findById(sessionId);
+                    if (session == null) {
+                        throw new com.gym.exception.ValidationException(
+                                "Session no longer exists in the database");
+                    }
+                    // Rule 17 (mirrored from the CLI): confirming into a full slot is refused.
+                    if (target == SessionStatus.CONFIRMED && session.getAvailabilityId() != null) {
+                        TrainerAvailability slot =
+                                new TrainerAvailabilityDao().findById(session.getAvailabilityId());
+                        int confirmed = 0;
+                        for (Session other : new SessionDao().findAll()) {
+                            if (other.getStatus() == SessionStatus.CONFIRMED
+                                    && session.getAvailabilityId().equals(other.getAvailabilityId())) {
+                                confirmed++;
+                            }
+                        }
+                        if (slot != null && confirmed >= slot.getMaxCustomers()) {
+                            throw new com.gym.exception.ValidationException(
+                                    "Rule 17: Cannot confirm session - linked slot is FULL");
+                        }
+                    }
+                    session.setStatus(target);
+                    new SessionDao().update(session);
+                    return session;
+                },
+                updated -> {
+                    feedback.showSnackbar(successMessage + " — session #"
+                            + updated.getId() + " is now " + statusLabel(updated.getStatus()) + ".");
+                    loadSchedule();
+                },
+                error -> feedback.showSnackbar("Could not update session: " + error.getMessage()));
     }
 
     /**
-     * Matches the selected session to its agenda card. The card is the right one when its status
-     * tag and athlete label still correspond to the selection captured at open time.
+     * Rule-1 booking menu: book inside a published OPEN slot (CONFIRMED, rule 17 cap-checked),
+     * request a time outside the slots (REQUESTED), or the admin override (CONFIRMED, ignores
+     * slot rules). Default duration is 60 minutes.
      */
-    private boolean sessionMatchesCard(M3Card card) {
-        if (!(card.getContent() instanceof VBox box) || box.getChildren().isEmpty()
-                || !(box.getChildren().get(0) instanceof Label title)) {
-            return false;
-        }
-        return title.getText().equals(selectedSession[1]);
-    }
-
     public void onBook() {
-        feedback.showSnackbar("Pick an open slot on the agenda, then confirm it here (demo)");
+        M3Menu menu = new M3Menu();
+        menu.item("Book inside a published slot", () ->
+                openSlotPickerMenu(SessionStatus.CONFIRMED, true));
+        menu.item("Request a time outside the slots", () ->
+                openTrainerPickerMenu(SessionStatus.REQUESTED, false));
+        menu.item("Reserve (admin override)", () ->
+                openTrainerPickerMenu(SessionStatus.CONFIRMED, false));
+        showMenuBelow(actionSplitButton, menu,
+                "Booking opens inside the app window (use File > run, or the app shell).");
     }
 
-    public void onRequest() {
-        applyLifecycle("REQUESTED", "Session requested");
+    /**
+     * One menu entry per published OPEN slot with free capacity (rule 17). Picking a slot
+     * continues to the customer picker; the session lands CONFIRMED with the slot attached.
+     */
+    private void openSlotPickerMenu(SessionStatus target, boolean useSlot) {
+        M3Menu menu = new M3Menu();
+        boolean any = false;
+        for (TrainerAvailability slot : weekSlots) {
+            if (slot.getStatus() == AvailabilityStatus.CLOSED
+                    || !inRenderedWeek(LocalDate.parse(slot.getDate()))) {
+                continue;
+            }
+            int confirmed = 0;
+            for (SessionRecord session : weekSessions) {
+                if (session.availabilityId() != null
+                        && session.availabilityId() == slot.getId()
+                        && session.status() == SessionStatus.CONFIRMED) {
+                    confirmed++;
+                }
+            }
+            if (confirmed >= slot.getMaxCustomers()) {
+                continue;
+            }
+            any = true;
+            String trainerName = trainerName(slot.getTrainerId());
+            menu.item(DAY_FMT.format(LocalDate.parse(slot.getDate())) + " " + slot.getStartTime()
+                            + " · " + trainerName + " · " + confirmed + "/"
+                            + slot.getMaxCustomers() + " booked",
+                    () -> openCustomerMenu(slot.getTrainerId(), target, slot.getId(),
+                            slot.getDate(), slot.getStartTime()));
+        }
+        if (!any) {
+            menu.item("No open slots with free capacity this week", () -> { });
+        }
+        showMenuBelow(actionSplitButton, menu,
+                "Booking opens inside the app window.");
+    }
+
+    /** One menu entry per coach; continues to the customer picker. */
+    private void openTrainerPickerMenu(SessionStatus target, boolean useSlot) {
+        M3Menu menu = new M3Menu();
+        if (trainerRoster.isEmpty()) {
+            menu.item("No coaches in the database yet", () -> { });
+        }
+        for (Trainer trainer : trainerRoster) {
+            menu.item(trainer.getFullName() + " — " + displayValue(trainer.getSpecialization()),
+                    () -> openCustomerMenu(trainer.getId(), target, null,
+                            weekStart.plusDays(1).toString(), "10:00"));
+        }
+        showMenuBelow(actionSplitButton, menu, "Booking opens inside the app window.");
+    }
+
+    /** One menu entry per ACTIVE customer; continues to the booking dialog. */
+    private void openCustomerMenu(int trainerId, SessionStatus target, Integer availabilityId,
+                                  String date, String startTime) {
+        M3Menu menu = new M3Menu();
+        if (bookableCustomers.isEmpty()) {
+            menu.item("No ACTIVE customers to book", () -> { });
+        }
+        for (Customer customer : bookableCustomers) {
+            menu.item(customer.getFullName() + " · " + customer.getPhone(),
+                    () -> openBookingDialog(customer.getId(), trainerId, target,
+                            availabilityId, date, startTime));
+        }
+        showMenuBelow(actionSplitButton, menu, "Booking opens inside the app window.");
+    }
+
+    /**
+     * The booking dialog: customer, coach and slot are already picked; the date/time and the
+     * notes are editable. Submitting inserts the session through {@code SessionDao} with the
+     * rule-1 status (CONFIRMED inside a slot or admin override, REQUESTED outside slots) and
+     * the default 60-minute duration.
+     */
+    private void openBookingDialog(int customerId, int trainerId, SessionStatus target,
+                                   Integer availabilityId, String date, String startTime) {
+        M3TextField dateField = new M3TextField("Session date", io.m3fx.controls.textfield.TextFieldVariant.OUTLINED);
+        dateField.setSupportingText("YYYY-MM-DD");
+        dateField.setText(date);
+        M3TextField timeField = new M3TextField("Start time", io.m3fx.controls.textfield.TextFieldVariant.OUTLINED);
+        timeField.setSupportingText("HH:mm (24h)");
+        timeField.setText(startTime);
+        M3TextField notesField = new M3TextField("Notes", io.m3fx.controls.textfield.TextFieldVariant.OUTLINED);
+        notesField.setSupportingText("Optional — what this session covers");
+
+        M3Button cancel = M3Button.text("Cancel");
+        M3Button book = M3Button.text(target == SessionStatus.REQUESTED
+                ? "Request Session" : "Book Session");
+        M3Dialog dialog = M3Dialog.basic(target == SessionStatus.REQUESTED
+                        ? "Request a session outside the slots"
+                        : "Book the session",
+                new VBox(10, dateField, timeField, notesField), cancel, book);
+        dialog.setDefaultAction(book::activate);
+        book.setOnAction(e -> {
+            String bookingDate = dateField.getText() == null ? "" : dateField.getText().trim();
+            String bookingTime = timeField.getText() == null ? "" : timeField.getText().trim();
+            boolean dateOk = bookingDate.matches("\\d{4}-\\d{2}-\\d{2}");
+            boolean timeOk = bookingTime.matches("\\d{2}:\\d{2}");
+            dateField.setError(!dateOk);
+            timeField.setError(!timeOk);
+            if (!dateOk || !timeOk) {
+                return;
+            }
+            dialog.hide();
+            String notes = notesField.getText() == null ? "" : notesField.getText().trim();
+            Data.submit(
+                    () -> {
+                        Session session = new Session(0, customerId, trainerId, bookingDate,
+                                bookingTime, 60, target, availabilityId, null,
+                                java.math.BigDecimal.ZERO, null,
+                                notes.isBlank() ? null : notes);
+                        return new SessionDao().insert(session);
+                    },
+                    inserted -> {
+                        feedback.showSnackbar((target == SessionStatus.REQUESTED
+                                ? "Session requested" : "Session booked") + " — #"
+                                + inserted.getId() + " on " + inserted.getDate()
+                                + " at " + inserted.getStartTime() + ".");
+                        loadSchedule();
+                    },
+                    error -> feedback.showSnackbar("Could not book session: " + error.getMessage()));
+        });
+        cancel.setOnAction(e -> dialog.hide());
+        feedback.showDialog(dialog);
+    }
+
+    private String trainerName(int trainerId) {
+        for (Trainer trainer : trainerRoster) {
+            if (trainer.getId() == trainerId) {
+                return trainer.getFullName();
+            }
+        }
+        return "Coach #" + trainerId;
     }
 
     public void onConfirmClick() {
-        applyLifecycle("CONFIRMED", "Session confirmed");
+        applyLifecycle(SessionStatus.CONFIRMED, "Session confirmed");
     }
 
     public void onConfirm(int sessionId) {
@@ -621,7 +1001,7 @@ public class ScheduleController implements ScreenController {
     }
 
     public void onCompleteClick() {
-        applyLifecycle("COMPLETED", "Session completed");
+        applyLifecycle(SessionStatus.COMPLETED, "Session completed");
     }
 
     public void onComplete(int sessionId) {
@@ -629,7 +1009,7 @@ public class ScheduleController implements ScreenController {
     }
 
     public void onNoShowClick() {
-        applyLifecycle("NO-SHOW", "Session marked as no-show");
+        applyLifecycle(SessionStatus.NO_SHOW, "Session marked as no-show");
     }
 
     public void onNoShow(int sessionId) {
@@ -637,26 +1017,65 @@ public class ScheduleController implements ScreenController {
     }
 
     public void onReserve() {
-        applyLifecycle("REQUESTED", "Slot reserved");
+        openTrainerPickerMenu(SessionStatus.CONFIRMED, false);
     }
 
-    /** Cancel is destructive: confirm in an M3Dialog, then apply with a snackbar answer. */
+    /**
+     * Rule-10 cancel: destructive, so it confirms first and records the reason. The notice
+     * verdict mirrors the CLI — >= 2h before start is a free cancellation, later cancels are
+     * still marked CANCELLED with the reason recorded.
+     */
     public void onCancel() {
-        if (selectedSession == null) {
+        SessionRecord session = selectedSession;
+        if (session == null) {
             feedback.showSnackbar("Select a session on the agenda first.");
             return;
         }
+        M3TextField reasonField = new M3TextField("Cancel reason", io.m3fx.controls.textfield.TextFieldVariant.OUTLINED);
+        reasonField.setSupportingText("Required (rule 10) — recorded on the session");
         M3Button keep = M3Button.text("Keep session");
         M3Button confirm = M3Button.text("Cancel session");
         M3Dialog dialog = M3Dialog.basic("Cancel this session?",
-                new Label(selectedSession[1] + " at " + selectedSession[0]
-                        + " will be marked CANCELLED. The athlete is notified."),
+                new VBox(10,
+                        new Label(session.customerName() + " at " + session.start() + " on "
+                                + session.date() + " will be marked CANCELLED."),
+                        reasonField),
                 keep, confirm);
         dialog.setDefaultAction(confirm::activate);
         keep.setOnAction(e -> dialog.hide());
         confirm.setOnAction(e -> {
+            String reason = reasonField.getText() == null ? "" : reasonField.getText().trim();
+            if (reason.isEmpty()) {
+                reasonField.setError(true);
+                return;
+            }
             dialog.hide();
-            applyLifecycle("CANCELLED", "Session cancelled");
+            int sessionId = session.sessionId();
+            Data.submit(
+                    () -> {
+                        Session current = new SessionDao().findById(sessionId);
+                        if (current == null) {
+                            throw new com.gym.exception.ValidationException(
+                                    "Session no longer exists in the database");
+                        }
+                        long minutesUntilStart = java.time.Duration.between(
+                                LocalDateTime.now(),
+                                LocalDateTime.of(LocalDate.parse(current.getDate()),
+                                        LocalTime.parse(current.getStartTime()))).toMinutes();
+                        current.setStatus(SessionStatus.CANCELLED);
+                        current.setCancelReason(reason);
+                        new SessionDao().update(current);
+                        return minutesUntilStart >= 120
+                                ? "Rule 10: Free cancellation (>= 2h notice, " + minutesUntilStart
+                                        + " min remaining)."
+                                : "Rule 10: Late cancellation (< 2h before start). Marked CANCELLED"
+                                        + " with the reason recorded.";
+                    },
+                    verdict -> {
+                        feedback.showSnackbar("Session cancelled. " + verdict);
+                        loadSchedule();
+                    },
+                    error -> feedback.showSnackbar("Could not cancel session: " + error.getMessage()));
         });
         feedback.showDialog(dialog);
     }
@@ -675,27 +1094,64 @@ public class ScheduleController implements ScreenController {
 
     /**
      * Toggles the coach rail between the full roster and only the coaches with open slots this
-     * week, answering with a snackbar either way.
+     * week (real open-slot counts), answering with a snackbar either way.
      */
     public void showAvailableTrainers() {
         showingAvailableOnly = !showingAvailableOnly;
-        List<Coach> visible = showingAvailableOnly
-                ? coaches.stream().filter(Coach::availableThisWeek).toList()
-                : coaches;
-        trainerListView.getItems().setAll(coachSummaries(visible));
+        applyCoachRail();
         btnShowAvailableTrainers.setText(showingAvailableOnly
                 ? "Show All Coaches"
                 : "Available Coaches Matrix");
         feedback.showSnackbar(showingAvailableOnly
-                ? "Showing " + visible.size() + " coaches with open slots this week (demo)"
-                : "Showing the full coach roster (demo)");
+                ? "Showing coaches with open slots this week."
+                : "Showing the full coach roster.");
     }
 
     public void showTrainerSlots(int trainerId) {
-        feedback.showSnackbar("Showing slots for coach #" + trainerId + " (demo)");
+        feedback.showSnackbar("Coach #" + trainerId + " slots are visible on the agenda for the "
+                + "rendered week.");
+    }
+
+    /** Shows an anchored menu; without a window (headless preview) it answers via snackbar. */
+    private void showMenuBelow(Node anchor, M3Menu menu, String fallback) {
+        if (anchor.getScene() == null || anchor.getScene().getWindow() == null) {
+            feedback.showSnackbar(fallback);
+            return;
+        }
+        menu.showBelow(anchor);
+    }
+
+    /**
+     * Hands the selected CONFIRMED session to the Live Workout HUD through the owning shell
+     * (the same openScreenViaRail pathway as the roster handoff, so the rail selection stays
+     * on Schedule). Standalone previews answer with a snackbar.
+     */
+    public void onRunLive() {
+        if (selectedSession == null) {
+            feedback.showSnackbar("Select a session on the agenda first.");
+            return;
+        }
+        int sessionId = selectedSession.sessionId();
+        if (viewRoot.getScene() == null
+                || !(viewRoot.getScene().getRoot() instanceof javafx.scene.Parent sceneRoot)) {
+            feedback.showSnackbar("Run Live opens in the app window.");
+            return;
+        }
+        Object shell = sceneRoot.getProperties().get(AppShellController.SHELL_CONTROLLER_KEY);
+        if (shell instanceof AppShellController controller) {
+            controller.openScreenViaRail("navSchedule", Screen.LIVE_WORKOUT_HUD,
+                    hud -> {
+                        if (hud instanceof LiveWorkoutController liveHud) {
+                            liveHud.startSession(sessionId);
+                        }
+                    });
+            return;
+        }
+        feedback.showSnackbar("Run Live opens in the app window.");
     }
 
     public GridPane getAgendaGrid() { return agendaGrid; }
+    public M3Button getBtnRunLive() { return btnRunLive; }
     public M3TextField getSearchTrainerField() { return searchTrainerField; }
     public ListView<String> getTrainerListView() { return trainerListView; }
     public Label getLblInspectorTitle() { return lblInspectorTitle; }
