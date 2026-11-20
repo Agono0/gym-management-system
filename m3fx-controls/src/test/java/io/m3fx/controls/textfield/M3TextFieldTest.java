@@ -141,8 +141,9 @@ class M3TextFieldTest {
     void supportingTextBindsAndErrorFlagsTheField() {
         M3TextField field = new M3TextField("Email", TextFieldVariant.OUTLINED);
         field.setSupportingText("We will never share it");
-        // Bottom row: support label left, counter right.
-        javafx.scene.Node bottomRow = field.getChildren().get(2);
+        // Bottom row: support label left, counter right. Since B11 the top-level children
+        // are [inputBox(StackPane), bottomRow] — the box overlays the label on the input.
+        javafx.scene.Node bottomRow = field.getChildren().get(1);
         javafx.scene.control.Label support = (javafx.scene.control.Label)
                 ((javafx.scene.layout.HBox) bottomRow).getChildren().get(0);
         assertEquals("We will never share it", support.getText());
@@ -159,7 +160,7 @@ class M3TextFieldTest {
         runOnFx(() -> {
             M3TextField field = new M3TextField("Code", TextFieldVariant.FILLED);
             field.setMaxLength(5);
-            javafx.scene.Node bottomRow = field.getChildren().get(2);
+            javafx.scene.Node bottomRow = field.getChildren().get(1);
             javafx.scene.control.Label counter = (javafx.scene.control.Label)
                     ((javafx.scene.layout.HBox) bottomRow).getChildren().get(2);
             assertEquals("0 / 5", counter.getText(),
@@ -183,7 +184,9 @@ class M3TextFieldTest {
     @Test
     void iconSlotsKeepOrderAndHitTargetSize() {
         M3TextField field = new M3TextField("Search", TextFieldVariant.OUTLINED);
-        javafx.scene.layout.HBox inputRow = (javafx.scene.layout.HBox) field.getChildren().get(1);
+        // Since B11 the input row lives inside the input StackPane box (children: [inputRow, label]).
+        javafx.scene.layout.HBox inputRow = (javafx.scene.layout.HBox)
+                ((javafx.scene.layout.StackPane) field.getChildren().get(0)).getChildren().get(0);
         Rectangle leading = new Rectangle(18, 18);
         Rectangle trailing = new Rectangle(18, 18);
         field.setLeadingIcon(leading);
