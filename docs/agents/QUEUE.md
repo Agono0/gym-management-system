@@ -113,7 +113,11 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   "Icon button"); icon-only controls auto-install tooltips (icon button, snackbar close, table
   pagination) via `M3Tooltip.install`; `M3Carousel` gains arrow-key navigation + a11y role.
   done-when: keyboard walkthrough of chips/carousel works, tooltip present, tests added.
-  claimed-by: — | status: READY
+  claimed-by: A (pooled) | status: DONE (round 4, commit 9b17a06 — chip keyboard was
+  architecturally missing (SkinBase dropped ButtonBehavior); icon-button a11y derives from
+  icon name; installIfAbsent tooltips; carousel keys+role; MotionTokens.spring()/DEFAULT
+  deprecated consumerless; controls 197 + core 66 tests. NOTE: M3Button accessibleText is now
+  bound — callers must not setAccessibleText on text buttons (Worker C hit this, worked around))
 
 - [ ] B3 | lane:B | deps:— | files: m3fx-controls/.../icon/M3Icons.java, icon/M3IconsTest.java
   goal: Expand the Material Symbols catalog with every name the app/gallery uses plus a common
@@ -185,6 +189,20 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   claimed-by: B | status: DONE (round 3, salvage commit 42c2a51 → main 2fa2fa5 — Worker B hit
   the quota limit after implementing + green tests; orchestrator verified reproducer
   screenshots (single text on login/availability/attendance) and committed)
+
+- [ ] B13 | lane:B | deps:— | files: m3fx-controls/src/main/resources/io/m3fx/css/m3fx.css (+ fab section)
+  goal: FAB shape per spec (found by B4): `.m3-fab-small` 12px / `.m3-fab-large` 28px /
+  `.m3-fab-extended` 16px / default `.m3-fab` NO radius — M3 spec: FAB shape = large (16dp)
+  for all sizes. Fix the radii, verify in gallery/screenshots.
+  done-when: radii 16 across sizes, screenshots clean, suite green.
+  claimed-by: — | status: READY
+
+- [ ] B14 | lane:B | deps:— | files: m3fx-controls/.../icon/M3Icon.java + test
+  goal: One-line hygiene (found by B2): `M3Icon.symbol(name)` calls `renderSymbol` directly and
+  never sets `symbolNameProperty`, so property-based consumers see null. Route `symbol()` through
+  `setSymbolName` (property listener renders), keep behavior identical, test the property path.
+  done-when: `symbol()` sets the property, property changes re-render, tests green.
+  claimed-by: — | status: READY
 
 - [ ] B7 | lane:B | deps:A3 | files: m3fx-controls/.../internal/MotionUtil.java, internal/SpringAnimation.java, internal/StateLayer.java
   goal: Honor `MotionTokens.isReducedMotion()` in the controls internals: `MotionUtil.enter/exit/
@@ -259,7 +277,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   done-when: `grep -rn "Color.web(\"#" src/main/java/com/gym/controller` returns nothing except
   GymApp SEED_PURPLE; `grep -rnP "[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]"` over controllers is
   empty; dashboard renders clean at 600 AND 1280 (screenshots); no regression on touched screens.
-  claimed-by: C | status: CLAIMED (C-resume — continuing from the dirty reference in ../gym-wt-C)
+  claimed-by: C | status: DONE (round 4, commits ea92798+d4db029 → main b16dc17 — all greps
+  clean, raw-SVG dedupe done, UiKit.themeRole(ColorRole) added, dashboard 600 = width-class
+  reflow (stacked hero, 2×2 KPI grid) verified by screenshots on merged main)
 
 - [ ] C3 | lane:C | deps:C0,C2 | files: src/main/java/com/gym/controller/{DashboardController,CustomerListController,CustomerProfileController}.java
   goal: Real-data rebuild: Dashboard KPIs/charts/tables query CustomerDao/MembershipDao/
@@ -375,3 +395,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 3 | A5 (696a73a), A6 (f73b4f7), A7 (5b667e9) | B12 | C2 | A batch merged locally 168bbb3 — lane A queue EMPTY (A1-A7 done); core tests 61, controls 174 |
 | 3b | B7 (57ccd5c, pooled to A) | — | — | merged locally 57ccd5c; core tests 62, controls 185 |
 | 3c | — | B12 (42c2a51, salvaged) | — | merged locally 2fa2fa5 — ghost text fixed; workers A/B/C hit quota limits; remaining tasks handed to zcode1/zcode2 |
+| 4 | B2 (9b17a06, pooled to A) | B4 (f945adb) | C2 (ea92798+d4db029) | all merged locally b16dc17; runSamples fixed (M3Samples tracked, 273fbe6); controls 197, core 66 tests |
