@@ -15,13 +15,30 @@ import javafx.animation.Interpolator;
  */
 public class SpringInterpolator extends Interpolator {
 
-    /** Default M3 Expressive spring: subtle ~4-6% overshoot, settles naturally. */
+    /**
+     * Default M3 Expressive spring: subtle ~4-6% overshoot, settles naturally.
+     *
+     * <p>Hand-tuned pre-token-grid value that diverges from
+     * {@code MotionTokens.SPATIAL_EXPRESSIVE_DEFAULT}; kept because existing controls consume it.
+     */
     public static final SpringInterpolator DEFAULT = new SpringInterpolator(0.70, 7.5);
 
-    /** Bouncy spring: visible ~15% overshoot for playful entrances and icons. */
+    /**
+     * Bouncy spring: visible ~15% overshoot for playful entrances and icons.
+     *
+     * @deprecated Diverges from the token grid; use
+     *     {@code MotionTokens.SPATIAL_EXPRESSIVE_BOUNCY.toInterpolator()}.
+     */
+    @Deprecated
     public static final SpringInterpolator BOUNCY = new SpringInterpolator(0.50, 9.0);
 
-    /** Gentle spring: critically damped (no overshoot) for fades and subtle changes. */
+    /**
+     * Gentle spring: critically damped (no overshoot) for fades and subtle changes.
+     *
+     * @deprecated Duplicates the effects-language semantics; use
+     *     {@code MotionTokens.EFFECTS_DEFAULT.toInterpolator()}.
+     */
+    @Deprecated
     public static final SpringInterpolator GENTLE = new SpringInterpolator(1.00, 8.0);
 
     /** Liquid glass fluid spring: smooth Apple-style liquid settling with minimal overshoot. */

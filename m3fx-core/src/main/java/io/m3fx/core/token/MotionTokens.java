@@ -118,6 +118,10 @@ public final class MotionTokens {
     /**
      * M3 Expressive spring interpolator (mild natural overshoot, settles smoothly).
      *
+     * <p>Hand-tuned pre-token-grid values that diverge from
+     * {@link #SPATIAL_EXPRESSIVE_DEFAULT}; kept because existing controls consume it. Prefer
+     * {@code SPATIAL_EXPRESSIVE_DEFAULT.toInterpolator()} for new code.
+     *
      * @return the default spring interpolator
      */
     public static Interpolator spring() {
@@ -127,8 +131,11 @@ public final class MotionTokens {
     /**
      * M3 Expressive bouncy spring interpolator (visible playful overshoot).
      *
+     * @deprecated Diverges from the token grid; use
+     *     {@code MotionTokens.SPATIAL_EXPRESSIVE_BOUNCY.toInterpolator()}.
      * @return the bouncy spring interpolator
      */
+    @Deprecated
     public static Interpolator bouncySpring() {
         return SpringInterpolator.BOUNCY;
     }
@@ -136,8 +143,11 @@ public final class MotionTokens {
     /**
      * M3 Expressive gentle spring interpolator (critically damped, no overshoot).
      *
+     * @deprecated Duplicates the effects-language semantics; use
+     *     {@code MotionTokens.EFFECTS_DEFAULT.toInterpolator()}.
      * @return the gentle spring interpolator
      */
+    @Deprecated
     public static Interpolator gentleSpring() {
         return SpringInterpolator.GENTLE;
     }
@@ -152,12 +162,32 @@ public final class MotionTokens {
     }
 
     /**
-     * M3 spring physics token parameters (stiffness and damping ratio).
+     * M3 spring physics token parameters (stiffness and damping ratio), modeled after Compose's
+     * spring: stiffness is the spring constant k with unit mass, damping ratio is ζ.
      *
-     * @param stiffness spring stiffness (higher = faster response)
+     * @param stiffness spring stiffness k (higher = faster response; must be positive)
      * @param dampingRatio damping ratio (1.0 = critically damped, &lt;1.0 = overshoot bounce)
      */
-    public record SpringToken(double stiffness, double dampingRatio) {}
+    public record SpringToken(double stiffness, double dampingRatio) {
+
+        /**
+         * Converts this token into the equivalent damped-oscillator interpolator: the canonical
+         * bridge from the token grid to {@link SpringInterpolator}, using the same parameter
+         * mapping androidx applies internally — unit mass makes the natural frequency
+         * &omega; = &radic;(k/m) = &radic;k, and the damping coefficient follows from
+         * &zeta; directly.
+         *
+         * @return the interpolator for this token
+         * @throws IllegalArgumentException if {@code stiffness <= 0} (androidx: "Spring stiffness
+         *     constant must be positive") or the damping ratio is not settling (&le; 0)
+         */
+        public SpringInterpolator toInterpolator() {
+            if (stiffness <= 0) {
+                throw new IllegalArgumentException("Spring stiffness constant must be positive.");
+            }
+            return new SpringInterpolator(dampingRatio, Math.sqrt(stiffness));
+        }
+    }
 
     /** Spatial Expressive Default: mild natural overshoot (stiffness 380, damping 0.65). */
     public static final SpringToken SPATIAL_EXPRESSIVE_DEFAULT = new SpringToken(380, 0.65);
