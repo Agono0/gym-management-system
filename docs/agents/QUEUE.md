@@ -221,6 +221,16 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   focus contract; bonus: fixed the M3TopAppBarTest missing-FX-bootstrap ordering-luck hole;
   controls tests 241)
 
+- [ ] B16 | lane:B | deps:— | files: m3fx-controls/.../floorplan/M3GymFloorMap.java (+ test)
+  goal: Layer API gap (found by C5): the floor map has no layer-visibility API and does not
+  redraw on list changes — pins/heatmap/zones/sensors draw unconditionally in redraw(). Add
+  per-layer visibility properties (pins/heatmap/zones/sensors) honored by redraw, plus a
+  redraw hook on equipment-list changes (drop the app's re-mount workaround — app side can be
+  simplified in Q-pass).
+  done-when: toggling a layer property changes the render, list change triggers redraw, test
+  covers both; suite green.
+  claimed-by: — | status: READY
+
 - [ ] B7 | lane:B | deps:A3 | files: m3fx-controls/.../internal/MotionUtil.java, internal/SpringAnimation.java, internal/StateLayer.java
   goal: Honor `MotionTokens.isReducedMotion()` in the controls internals: `MotionUtil.enter/exit/
   splash/shake/pressScale` degrade to ≤150 ms fades; `SpringAnimation` snaps to target; state
@@ -339,7 +349,12 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   AttendanceDao counts + EquipmentDao maintenance status instead of hardcoded percentages;
   layer toggles and pin placement actually change the map.
   done-when: add→maintain→delete an equipment item persists; floor numbers match DB; screenshots.
-  claimed-by: — | status: BLOCKED (C0,C2)
+  claimed-by: A (pooled) | status: DONE (round 8, commit 48eef75 → main 7f6d12f — Equipment
+  real CRUD (M3DataTable, rule-13 atomic maintenance, confirmed hard-delete with RETIRED
+  alternative in the dialog, real CSV export), floor map real telemetry with honest disabled
+  toggles + zone readiness from EquipmentDao; sqlite round-trip evidence. Findings: B16 queued
+  (M3GymFloorMap lacks layer API + list-change redraw); zone→people occupancy needs a schema
+  change (documented, not invented); spec-note conflict with C4 resolved (sections renumbered))
 
 - [ ] C6 | lane:C | deps:C0,C2 | files: src/main/java/com/gym/controller/{MembershipController,PaymentController}.java
   goal: Membership + Payment on real data: tier carousel reflects PlanType reality; renew/freeze/
@@ -431,4 +446,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 6 | B9 | B13 (5740d81) + B14 (86c8ba9) | — | merged locally 46814e0; controls tests 209 |
 | 6b | — | — | C3 (083c538+7871e19) | merged locally 5b1b606 — dashboard+profile fully real |
 | 7 | B9 (211f1cc) | B10+B11 | C4 | B9 merged locally 18f3955; controls tests 233 |
-| 8 | B15 (1cce386) | — | C5 | B15 merged locally 1cce386; controls tests 241; C4 merged d3540b6 |
+| 8 | B15 (1cce386) | B10+B11 (in flight) | C4 (d3540b6), C5 (7f6d12f) | C4+C5 merged; spec-note conflict resolved; B16 queued |
