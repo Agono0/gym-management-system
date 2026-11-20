@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * B6: the data table used to run a full {@code filterItems} + {@code rebuildRows} per search
@@ -48,21 +49,21 @@ class M3DataTableSearchDebounceTest {
         }
     }
 
-    private static M3DataTable tableWithRows() {
-        M3DataTable table = new M3DataTable();
-        table.getColumns().add(new M3DataTable.Column<>("Name", String::toString));
+    private static M3DataTable<String> tableWithRows() {
+        M3DataTable<String> table = new M3DataTable<>();
+        table.getColumns().add(new M3DataTable.Column<String>("Name", String::toString));
         table.getItems().addAll("Sarah Connor", "Marcus Vance", "Priya Nair");
         return table;
     }
 
     @Test
     void rapidKeystrokeBurstRebuildsOnce() throws Throwable {
-        M3DataTable[] holder = new M3DataTable[1];
+        AtomicReference<M3DataTable<String>> holder = new AtomicReference<>();
         int[] before = new int[1];
         int[] after = new int[1];
         runOnFx(() -> {
-            M3DataTable table = tableWithRows();
-            holder[0] = table;
+            M3DataTable<String> table = tableWithRows();
+            holder.set(table);
             new Scene(new StackPane(table)); // attach (no stage needed for the debounce timer)
             before[0] = table.rebuildCountForTesting;
             // A rapid keystroke burst: three query changes in one FX turn.
@@ -74,19 +75,19 @@ class M3DataTableSearchDebounceTest {
         });
         // The debounced rebuild fires on a later pulse; wait past the 200ms window.
         Thread.sleep(M3DataTable.SEARCH_DEBOUNCE_MILLIS + 250);
-        runOnFx(() -> after[0] = holder[0].rebuildCountForTesting);
+        runOnFx(() -> after[0] = holder.get().rebuildCountForTesting);
         assertEquals(before[0] + 1, after[0],
                 "a burst must collapse to exactly one rebuild");
     }
 
     @Test
     void enterAppliesTheQueryImmediately() throws Throwable {
-        M3DataTable[] holder = new M3DataTable[1];
+        AtomicReference<M3DataTable<String>> holder = new AtomicReference<>();
         int[] before = new int[1];
         int[] after = new int[1];
         runOnFx(() -> {
-            M3DataTable table = tableWithRows();
-            holder[0] = table;
+            M3DataTable<String> table = tableWithRows();
+            holder.set(table);
             new Scene(new StackPane(table));
             before[0] = table.rebuildCountForTesting;
             table.searchBarForTesting().setQuery("marcus"); // schedules the debounced run
@@ -104,21 +105,21 @@ class M3DataTableSearchDebounceTest {
 
     @Test
     void searchStillFiltersCorrectly() throws Throwable {
-        M3DataTable[] holder = new M3DataTable[1];
+        AtomicReference<M3DataTable<String>> holder = new AtomicReference<>();
         int[] before = new int[1];
         int[] after = new int[1];
         runOnFx(() -> {
-            M3DataTable table = tableWithRows();
-            holder[0] = table;
+            M3DataTable<String> table = tableWithRows();
+            holder.set(table);
             new Scene(new StackPane(table));
             before[0] = table.rebuildCountForTesting;
             table.searchBarForTesting().setQuery("connor");
         });
         Thread.sleep(M3DataTable.SEARCH_DEBOUNCE_MILLIS + 250);
         runOnFx(() -> {
-            after[0] = holder[0].rebuildCountForTesting;
+            after[0] = holder.get().rebuildCountForTesting;
             assertEquals(before[0] + 1, after[0]);
-            assertEquals(1, holder[0].visibleItemCountForTesting(),
+            assertEquals(1, holder.get().visibleItemCountForTesting(),
                     "only Sarah Connor matches");
         });
     }

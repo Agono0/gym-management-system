@@ -83,7 +83,9 @@ public final class M3Icon extends StackPane {
      */
     public static M3Icon symbol(String name) {
         M3Icon icon = new M3Icon();
-        icon.renderSymbol(name);
+        // Route through the property so property-based consumers see the name too; the
+        // property listener renders it (same behavior as calling renderSymbol directly).
+        icon.setSymbolName(name);
         return icon;
     }
 
@@ -117,6 +119,11 @@ public final class M3Icon extends StackPane {
             System.err.println("[m3fx] M3Icon: unknown icon name '" + name
                     + "' - rendering a neutral placeholder. See M3Icons.names() for the catalog.");
         }
+    }
+
+    /** The neutral ring placeholder path (package-private for tests). */
+    static String placeholderPathForTesting() {
+        return UNKNOWN_PLACEHOLDER_PATH;
     }
 
     /**
