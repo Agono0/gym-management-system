@@ -152,6 +152,10 @@ public class AppShellController implements ScreenController {
     private HBox telemetryPill;
     private M3PulseBeacon dbSyncBeacon;
     private M3Switch themeModeSwitch;
+    /** Q1: drives MotionTokens.setReducedMotion live (no restart). */
+    private M3Switch reducedMotionSwitch;
+    /** Q1: drives MotionTokens.setMotionScheme live (no restart). */
+    private M3Switch schemeSwitch;
     private M3Chip userRoleChip;
     /** The signed-in identity from the login gate (null until a gate sign-in publishes it). */
     private String signedInName;
@@ -249,13 +253,42 @@ public class AppShellController implements ScreenController {
         // (M3Switch's own key handling) re-theme the app exactly like mouse clicks do.
         themeModeSwitch.selectedProperty().addListener((obs, o, sel) -> onToggleThemeMode());
 
+        // B/Q1: shell motion controls (live, no restart). The library reads both flags per
+        // call, so MotionUtil/SpringAnimation degrade or re-resolve the moment they flip:
+        // reduced motion turns springs into snaps and screen/dialog transitions into <=150ms
+        // fades (MotionUtil.isReducedMotion guards), and the scheme selects the spring
+        // language (SPATIAL_STANDARD_* vs SPATIAL_EXPRESSIVE_*). Initial values come from
+        // the m3fx.reducedMotion / m3fx.motionScheme system properties via the token layer.
+        reducedMotionSwitch = new M3Switch(io.m3fx.core.token.MotionTokens.isReducedMotion());
+        reducedMotionSwitch.getStyleClass().add("motion-switch");
+        reducedMotionSwitch.setId("reducedMotionSwitch");
+        reducedMotionSwitch.setAccessibleText("Reduce motion: springs snap and transitions "
+                + "become short fades");
+        reducedMotionSwitch.selectedProperty().addListener((obs, o, on) ->
+                io.m3fx.core.token.MotionTokens.setReducedMotion(on));
+        io.m3fx.controls.common.M3Tooltip.install(reducedMotionSwitch,
+                "Reduce motion: springs snap, transitions become short fades (accessibility)");
+        schemeSwitch = new M3Switch(
+                io.m3fx.core.token.MotionTokens.getMotionScheme()
+                        == io.m3fx.core.token.MotionTokens.MotionScheme.STANDARD);
+        schemeSwitch.getStyleClass().add("motion-switch");
+        schemeSwitch.setId("schemeSwitch");
+        schemeSwitch.setAccessibleText("Standard springs: settle without bounce");
+        schemeSwitch.selectedProperty().addListener((obs, o, standard) ->
+                io.m3fx.core.token.MotionTokens.setMotionScheme(standard
+                        ? io.m3fx.core.token.MotionTokens.MotionScheme.STANDARD
+                        : io.m3fx.core.token.MotionTokens.MotionScheme.EXPRESSIVE));
+        io.m3fx.controls.common.M3Tooltip.install(schemeSwitch,
+                "Motion scheme: expressive springs bounce, standard springs settle");
+
         userRoleChip = new M3Chip("Alex Carter [ADMIN]", ChipVariant.ASSIST);
         userRoleChip.setOnAction(e -> onOpenUserMenu());
 
         logoutBtn = new M3IconButton(M3Icon.symbol("close"), IconButtonVariant.STANDARD);
         logoutBtn.setOnAction(e -> onLogout());
 
-        systemCluster.getChildren().addAll(telemetryPill, themeModeSwitch, userRoleChip, logoutBtn);
+        systemCluster.getChildren().addAll(telemetryPill, reducedMotionSwitch, schemeSwitch,
+                themeModeSwitch, userRoleChip, logoutBtn);
         topRow.getChildren().addAll(searchTriggerBar, topRowSpacer, systemCluster);
         appBarContainer.getChildren().addAll(topAppBar, topRow);
         rootShellPane.setTop(appBarContainer);

@@ -436,3 +436,30 @@ replaced by a real "Receipt Preview" dialog action.
   permanence.
 - **Anatomy viewer**: presentational (no joint/muscle fields in the model); it carries the
   record's injury notes as text. The demo dossier prefill is gone.
+
+## 15. Shell motion controls + Q1 reduced-motion evidence (task Q1)
+
+The shell header's system cluster carries two live motion switches next to the dark toggle
+(`reducedMotionSwitch`, `schemeSwitch` — ids for tests), both initialized from the token
+layer, which reads the `m3fx.reducedMotion` / `m3fx.motionScheme` system properties:
+
+- **Reduce motion** → `MotionTokens.setReducedMotion(boolean)`. The library contract (B7):
+  `MotionUtil` guards every consumer on `isReducedMotion()` — `addPressScale` (5 call sites:
+  shell rail toggle, table rows, fabs, cards) skips the press spring and keeps a clean resting
+  scale; `slideIn` (4 sites: screen content entry) appears in place with a fade capped at
+  `DURATION_REDUCED_FADE` (150 ms); `enter`/`exit` degrade to opacity fades; `morphFromBounds`
+  (2 sites: screen swaps) fades instead of morphing; `SpringAnimation.animate` snaps properties
+  to target. Verified by reading each guard in `MotionUtil.java` (lines 87/92/146/237) and
+  `SpringAnimation`'s snap path.
+- **Standard springs** → `MotionTokens.setMotionScheme(STANDARD|EXPRESSIVE)`. The spatial
+  presets resolve through `SpringAnimation`'s scheme check (`SpringAnimation.java:207`):
+  `BOUNCY/DEFAULT` map to `SPATIAL_STANDARD_DEFAULT` under the standard scheme — the ω = √350
+  vs √380 difference is exercised by the core suite (`MotionTokensTest`:
+  `motionSchemeSystemPropertyAndDefaults`, `accelerateAndDecelerateDifferFromStandard`;
+  `ReducedMotionTest`: flag mutability, listener, fade cap, system-property init — 62 core
+  tests green).
+
+Both switches apply live without a restart (the token layer's static state is read per call,
+and consumers attach no cached preset objects). Keyboard: both switches are M3Switches — Tab,
+Space toggles, announced — consistent with the dark-mode toggle beside them. Q3 gap check for
+the new controls: none (they are switches, the covered component).
