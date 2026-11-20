@@ -59,12 +59,16 @@ public enum ElevationLevel {
     }
 
     /**
+    /** The constants in level order, cached so {@link #of(int)} does not clone per call. */
+    private static final ElevationLevel[] LEVELS = values();
+
+    /**
      * Returns the level for a number, clamped to 0-5.
      *
      * @param level requested level
      * @return the matching level
      */
     public static ElevationLevel of(int level) {
-        return values()[Math.min(5, Math.max(0, level))];
+        return LEVELS[Math.min(5, Math.max(0, level))];
     }
 }

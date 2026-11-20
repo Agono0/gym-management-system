@@ -3,6 +3,9 @@ package io.m3fx.controls;
 import io.m3fx.core.theme.M3Theme;
 import io.m3fx.controls.internal.M3Fonts;
 import java.io.IOException;
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -10,6 +13,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +29,10 @@ import javafx.scene.Scene;
  * <p>This class only ever removes the stylesheet URLs it added itself (tracked per scene), so
  * application stylesheets are never touched &mdash; even when their URL happens to contain
  * {@code m3fx}.
+ *
+ * <p>The theme CSS lives in a temp file named from a hash of its content; the file is refcounted
+ * per scene using it and is deleted when the last scene releases it (scene collected or
+ * re-themed) or by a JVM-shutdown sweep for stragglers.
  */
 public final class M3Stylesheets {
 
@@ -43,18 +51,46 @@ public final class M3Stylesheets {
     private static final Map<Scene, List<String>> APPLIED_URLS =
             Collections.synchronizedMap(new WeakHashMap<>());
 
-    /** Guards theme temp-file creation so concurrent scenes reuse one file. */
+    /** Guards theme temp-file creation and the refcounts below so concurrent scenes agree. */
     private static final Object THEME_FILE_LOCK = new Object();
+
+    /** Live refcount per theme temp file (path → number of scenes still using it). */
+    private static final Map<Path, Integer> THEME_FILE_REFS = new HashMap<>();
+
+    /** Weak registrations of the scenes currently using a theme temp file. */
+    private static final List<SceneThemeRef> SCENE_THEME_REFS = new ArrayList<>();
+
+    /** Collected scenes are enqueued here; swept on the next theme application. */
+    private static final ReferenceQueue<Scene> RELEASED_SCENES = new ReferenceQueue<>();
+
+    static {
+        Runtime.getRuntime().addShutdownHook(
+                new Thread(M3Stylesheets::deleteStragglerThemeFiles, "m3fx-theme-css-sweep"));
+    }
+
+    /** Weak registration of a scene using a theme temp file, so the file can be released. */
+    private static final class SceneThemeRef extends WeakReference<Scene> {
+
+        private Path themeFile;
+
+        SceneThemeRef(Scene scene, Path themeFile) {
+            super(scene, RELEASED_SCENES);
+            this.themeFile = themeFile;
+        }
+    }
 
     private M3Stylesheets() {}
 
     /**
-     * Sets the latest active theme for the application.
+     * Sets the latest active theme for the application. {@code null} is ignored so
+     * {@link #getLatestTheme()} keeps providing a baseline for {@code ThemeColors.resolve}.
      *
      * @param theme the theme to set
      */
     public static void setLatestTheme(M3Theme theme) {
-        latestTheme = theme;
+        if (theme != null) {
+            latestTheme = theme;
+        }
     }
 
     /**
@@ -64,8 +100,9 @@ public final class M3Stylesheets {
      * <p>Before applying, only the URLs this class itself previously added to the scene are
      * removed; a user stylesheet whose URL merely contains {@code m3fx} is left in place. The
      * theme temp file is named from a hash of the theme CSS content, so every scene and call
-     * applying the same theme reuses one file; it is recreated only when absent and is not
-     * deleted on exit so it can be reused across runs.
+     * applying the same theme reuses one file; it is recreated only when absent and is deleted
+     * when the last scene using it is released (collected or re-themed) or by the JVM-shutdown
+     * sweep.
      *
      * @param scene the scene to style
      * @param theme the theme to apply
@@ -78,7 +115,9 @@ public final class M3Stylesheets {
             scene.setFill(theme.get(io.m3fx.core.theme.ColorRole.SURFACE));
             removeAppliedUrls(scene);
             try {
-                addTracked(scene, themeStylesheetFile(theme).toUri().toString());
+                Path themeFile = themeStylesheetFile(theme);
+                trackSceneThemeFile(scene, themeFile);
+                addTracked(scene, themeFile.toUri().toString());
             } catch (IOException e) {
                 throw new IllegalStateException("Could not write M3 theme stylesheet", e);
             }
@@ -196,6 +235,95 @@ public final class M3Stylesheets {
             return HexFormat.of().formatHex(bytes, 0, 8);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
+    }
+
+    /** Registers the scene as using the theme file, releasing the file it replaces. */
+    private static void trackSceneThemeFile(Scene scene, Path themeFile) {
+        synchronized (THEME_FILE_LOCK) {
+            sweepReleasedScenes();
+            SceneThemeRef existing = findSceneRef(scene);
+            if (existing == null) {
+                SCENE_THEME_REFS.add(new SceneThemeRef(scene, themeFile));
+                acquireThemeFile(themeFile);
+            } else if (!existing.themeFile.equals(themeFile)) {
+                releaseThemeFile(existing.themeFile);
+                acquireThemeFile(themeFile);
+                existing.themeFile = themeFile;
+            }
+        }
+    }
+
+    /** Finds the weak registration for a scene, if any. */
+    private static SceneThemeRef findSceneRef(Scene scene) {
+        for (SceneThemeRef ref : SCENE_THEME_REFS) {
+            if (ref.get() == scene) {
+                return ref;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Releases the theme file the scene holds. Package-private: also invoked by tests to
+     * simulate a scene release deterministically.
+     *
+     * @param scene the scene being released
+     */
+    static void releaseScene(Scene scene) {
+        synchronized (THEME_FILE_LOCK) {
+            sweepReleasedScenes();
+            SceneThemeRef existing = findSceneRef(scene);
+            if (existing != null) {
+                SCENE_THEME_REFS.remove(existing);
+                releaseThemeFile(existing.themeFile);
+            }
+        }
+    }
+
+    /** Drops collected scenes and releases their theme files. */
+    private static void sweepReleasedScenes() {
+        Reference<? extends Scene> released;
+        while ((released = RELEASED_SCENES.poll()) != null) {
+            SceneThemeRef ref = (SceneThemeRef) released;
+            SCENE_THEME_REFS.remove(ref);
+            releaseThemeFile(ref.themeFile);
+        }
+    }
+
+    /** Increments the refcount for a theme temp file. */
+    private static void acquireThemeFile(Path themeFile) {
+        THEME_FILE_REFS.merge(themeFile, 1, Integer::sum);
+    }
+
+    /** Decrements the refcount for a theme temp file and deletes it when the last user is gone. */
+    private static void releaseThemeFile(Path themeFile) {
+        Integer count = THEME_FILE_REFS.get(themeFile);
+        if (count == null || count <= 1) {
+            THEME_FILE_REFS.remove(themeFile);
+            deleteQuietly(themeFile);
+        } else {
+            THEME_FILE_REFS.put(themeFile, count - 1);
+        }
+    }
+
+    /** Deletes tracked theme temp files left behind by scenes that never got swept. */
+    static void deleteStragglerThemeFiles() {
+        synchronized (THEME_FILE_LOCK) {
+            for (Path file : List.copyOf(THEME_FILE_REFS.keySet())) {
+                deleteQuietly(file);
+            }
+            THEME_FILE_REFS.clear();
+            SCENE_THEME_REFS.clear();
+        }
+    }
+
+    /** Best-effort delete; the temp dir is shared, so failures are not fatal. */
+    private static void deleteQuietly(Path file) {
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException e) {
+            // Best effort: the shutdown sweep or a later re-apply retries.
         }
     }
 }
