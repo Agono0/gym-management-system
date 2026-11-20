@@ -1,5 +1,22 @@
 package com.gym.controller;
 
+import com.gym.dao.CustomerDao;
+import com.gym.dao.MembershipDao;
+import com.gym.dao.PaymentDao;
+import com.gym.dao.SessionDao;
+import com.gym.dao.TrainerSubscriptionDao;
+import com.gym.model.Customer;
+import com.gym.model.Membership;
+import com.gym.model.MembershipStatus;
+import com.gym.model.Payment;
+import com.gym.model.PaymentMethod;
+import com.gym.model.Session;
+import com.gym.model.SessionStatus;
+import com.gym.model.TrainerSubscription;
+import com.gym.model.SubscriptionStatus;
+import com.gym.ui.Data;
+import com.gym.ui.UiKit;
+import com.gym.util.PhoneUtil;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
 import io.m3fx.controls.button.M3SplitButton;
@@ -16,6 +33,7 @@ import io.m3fx.controls.glass.M3GlassPane;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.sheet.M3BottomSheet;
 import io.m3fx.controls.textfield.M3TextField;
+import io.m3fx.controls.textfield.TextFieldVariant;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -36,29 +54,32 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import java.time.LocalDate;
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 /**
  * Controller for Cashless POS Register &amp; Split Billing screen (ACT-18-BILLING).
- * UI-contract only (no backend, domain or service dependencies): the register is a working
- * demo — recording validates the amount and appends a Paid row, the receipt lookup opens the
- * demo receipts sheet, the balance lookup reads unpaid rows from the register, Void confirms
- * through an {@link M3Dialog} and then visibly updates the table row and the revenue KPI, and
- * every answer surfaces through an {@link M3Overlay} snackbar.
+ *
+ * <p>Data contract (DECISIONS.md 77/78, task C6): the ledger, the KPIs and the balance lookup
+ * run on real {@code PaymentDao} rows through one {@link Data#loadAsync} snapshot, with the
+ * rule-6 outstanding balance mirrored exactly from the CLI's {@code GymRulesHelper
+ * .computeOutstandingBalance} (non-CANCELLED memberships/subscriptions priced minus their
+ * non-voided payments, non-cancelled non-subscription sessions with a positive price, voided
+ * money never counting). Record inserts through {@code PaymentDao} with rule 12 (exactly one
+ * linked item; the DAO surfaces any customer-match refusal); the target item is the
+ * customer's oldest unpaid item of the selected type, resolved by the balance lookup. Void
+ * follows rule 19 — void fields on the row (previous amount, reason, date), no hard delete —
+ * and offers a same-item replacement payment so receipts reconcile. The receipt lookup uses
+ * {@code PaymentDao.findByReceiptNo} and the receipt sheet renders the real, itemized row.
  *
  * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
  * former payment.fxml: register pane (lookup, charge item, tender pads), financial ledger,
  * digital receipt drawer on liquid glass.
  */
 public class PaymentController implements ScreenController {
-
-    /** Demo dues per charge item; the default amount (499.00) anchors the membership fee. */
-    private static final double MEMBERSHIP_DUE = 499.00;
-    private static final double SUBSCRIPTION_DUE = 240.00;
-    private static final double SESSION_DUE = 45.00;
 
     /**
      * Corner radius of the floating receipt sheet's liquid glass surface — the same 28px the
@@ -90,21 +111,34 @@ public class PaymentController implements ScreenController {
 
     /** Hosts M3 snackbars and dialogs for this screen (attached to the scene root at runtime). */
     private final M3Overlay feedback = new M3Overlay();
+    /** Most recent ledger row activated by a click — the Void button's first target. */
+    private String selectedPaymentRow;
 
     /** Exclusive single-selection group behind the three tender-method chips. */
     private ToggleGroup methodGroup;
 
-    /** Today's revenue behind the KPI card, seeded from the register value ($4,850.00). */
-    private double todayRevenue = 4850.00;
-    /** Outstanding balance behind the KPI card, seeded from the register value ($320.00). */
-    private double todayUnpaid = 320.00;
+    /** Content host around the workspace: swaps loading/error states around DAO loads. */
+    private StackPane contentHost;
+    /** The workspace node, restored after loading/error states. */
+    private Node workspaceView;
 
-    /** Demo receipt register: R-8801… map to the rows shown in the register table. */
-    private final Map<String, String> demoReceipts = new LinkedHashMap<>();
-    /** Next receipt number issued by the Record action. */
-    private int nextReceiptNumber = 8801;
-    /** Most recent register row activated by a click — the Void button's first target. */
-    private String selectedPaymentRow;
+    /** Rows of the current snapshot in table order; the payment id travels in column 5. */
+    private final Map<String, Integer> rowPaymentIds = new HashMap<>();
+    /** Customers of the current snapshot, kept for the lookup flow. */
+    private final List<Customer> customerDirectory = new ArrayList<>();
+    /** The customer resolved by the last balance lookup, or null. */
+    private Customer resolvedCustomer;
+    /** The resolved customer's unpaid items by type (rule 6), refreshed with every lookup. */
+    private final Map<String, List<UnpaidItem>> unpaidByType = new HashMap<>();
+
+    /** One unpaid rule-6 item (the record-payment target). */
+    private record UnpaidItem(String type, int itemId, double outstanding) {
+    }
+
+    /** The immutable result of one background snapshot. */
+    private record PaymentSnapshot(List<String> ledgerRows, Map<String, Integer> rowIds,
+                                   double revenueToday, double totalOutstanding) {
+    }
 
     /**
      * Builds the complete Cashless POS &amp; Billing view and initializes all behavior. Same
@@ -115,10 +149,10 @@ public class PaymentController implements ScreenController {
         viewRoot = buildView();
 
         keepPaymentMethodsExclusive();
-        populateRecentTransactions();
+        wireLedgerColumns();
         applyReceiptSheetGlass();
         installFeedbackLayer(paymentDataTable);
-        // Row activation marks the payment as the Void button's target (hand cursor affordance).
+        loadPayments();
 
     // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
     // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
@@ -160,7 +194,7 @@ public class PaymentController implements ScreenController {
         topRow.setAlignment(Pos.CENTER_LEFT);
         topRow.setPadding(new Insets(16, 24, 16, 24));
         txtSearchReceipt = new TextField();
-        txtSearchReceipt.setPromptText("Search Receipt # (e.g. R-8801)");
+        txtSearchReceipt.setPromptText("Search receipt # (e.g. REC-1002)");
         txtSearchReceipt.setPrefWidth(250);
         M3Button lookupBtn = new M3Button("Lookup Receipt", ButtonVariant.TONAL);
         lookupBtn.getStyleClass().add("m3-button-tonal");
@@ -188,7 +222,7 @@ public class PaymentController implements ScreenController {
         balanceContent.getChildren().add(styledLabel("CUSTOMER LOOKUP", "label-small"));
         HBox lookupRow = new HBox(8);
         txtCustomerLookup = new M3TextField("Enter Customer ID or Phone",
-                io.m3fx.controls.textfield.TextFieldVariant.FILLED);
+                TextFieldVariant.FILLED);
         HBox.setHgrow(txtCustomerLookup, Priority.ALWAYS);
         M3Button balanceBtn = new M3Button("Check Balance", ButtonVariant.OUTLINED);
         balanceBtn.getStyleClass().add("m3-button-outlined");
@@ -230,9 +264,8 @@ public class PaymentController implements ScreenController {
 
         // Amount field & tender pads.
         VBox amountSection = new VBox(10);
-        amountSection.getChildren().add(styledLabel("CHARGE AMOUNT (BIGDECIMAL)", "label-small"));
+        amountSection.getChildren().add(styledLabel("CHARGE AMOUNT", "label-small"));
         txtPaymentAmount = new M3TextField();
-        txtPaymentAmount.setText("499.00");
         txtPaymentAmount.getStyleClass().add("currency-hero-field");
         HBox tenderPads = new HBox(8);
         M3Button tender20 = new M3Button("$20", ButtonVariant.TONAL);
@@ -268,8 +301,8 @@ public class PaymentController implements ScreenController {
 
         // Telemetry row.
         HBox telemetryRow = new HBox(16);
-        statRevenueCard = new M3StatCard("Today's Revenue", "$4,850.00", "Voided excluded");
-        statUnpaidCard = new M3StatCard("Accounts Receivable", "$320.00", "Pending settlement");
+        statRevenueCard = new M3StatCard("Today's Revenue", "-", "Voided excluded");
+        statUnpaidCard = new M3StatCard("Accounts Receivable", "-", "Rule-6 outstanding, all members");
         HBox.setHgrow(statRevenueCard, Priority.ALWAYS);
         HBox.setHgrow(statUnpaidCard, Priority.ALWAYS);
         telemetryRow.getChildren().addAll(statRevenueCard, statUnpaidCard);
@@ -306,17 +339,23 @@ public class PaymentController implements ScreenController {
         lblReceiptDetails.getStyleClass().add("body-medium");
         HBox receiptActions = new HBox(12);
         receiptActions.setAlignment(Pos.CENTER_RIGHT);
-        M3Button printBtn = new M3Button("Print Thermal Copy", ButtonVariant.FILLED);
-        printBtn.getStyleClass().add("m3-button-filled");
+        M3Button previewBtn = new M3Button("Receipt Preview", ButtonVariant.FILLED);
+        previewBtn.getStyleClass().add("m3-button-filled");
+        previewBtn.setOnAction(e -> onShowReceiptClick());
         M3Button closeBtn = new M3Button("Close", ButtonVariant.OUTLINED);
         closeBtn.getStyleClass().add("m3-button-outlined");
         closeBtn.setOnAction(e -> onCloseReceiptClick());
-        receiptActions.getChildren().addAll(printBtn, closeBtn);
+        receiptActions.getChildren().addAll(previewBtn, closeBtn);
         receiptContent.getChildren().addAll(
                 styledLabel("DIGITAL FISCAL RECEIPT", "title-large"),
                 lblReceiptDetails,
                 receiptActions);
         receiptBottomSheet.setContent(receiptContent);
+
+        // Content host so the real-data load can swap the workspace for loading/error states.
+        workspaceView = workspaceSplit;
+        contentHost = new StackPane(workspaceSplit);
+        layout.setCenter(contentHost);
 
         viewRoot = new StackPane();
         viewRoot.getStyleClass().add("billing-root");
@@ -401,27 +440,223 @@ public class PaymentController implements ScreenController {
         }
     }
 
-    /** Fills the recent-transactions register with demo rows and issues their receipt numbers. */
-    private void populateRecentTransactions() {
-        if (!paymentDataTable.getColumns().isEmpty()) {
-            return;
-        }
+    /** Wires the ledger columns once; the fifth (off-width) column carries the payment id. */
+    private void wireLedgerColumns() {
         paymentDataTable.getColumns().addAll(List.of(
-                new M3DataTable.Column<>("Date", r -> r.split("\\|")[0], 100),
-                new M3DataTable.Column<>("Member", r -> r.split("\\|")[1], 190),
-                new M3DataTable.Column<>("Method", r -> r.split("\\|")[2], 100),
-                new M3DataTable.Column<>("Amount", r -> r.split("\\|")[3], 90),
-                new M3DataTable.Column<>("Status", r -> r.split("\\|")[4], 90)));
-        for (String row : new String[] {
-                "2026-10-29|Priya Nair (#2075)|Card|45.00|Paid",
-                "2026-10-29|Tom Becker (#1533)|Cash|120.00|Paid",
-                "2026-10-28|Aisha Khan (#1902)|Transfer|45.00|Pending",
-                "2026-10-28|Lena Fischer (#3110)|Card|480.00|Paid",
-                "2026-10-27|Jonas Weber (#1254)|Cash|15.00|Paid",
-                "2026-10-27|Diego Ramos (#2871)|Transfer|60.00|Voided"}) {
-            paymentDataTable.getItems().addAll(row);
-            demoReceipts.put("R-" + nextReceiptNumber++, row);
+                new M3DataTable.Column<>("Date", r -> rowField(r, 0), 100),
+                new M3DataTable.Column<>("Member", r -> rowField(r, 1), 190),
+                new M3DataTable.Column<>("Method", r -> rowField(r, 2), 100),
+                new M3DataTable.Column<>("Amount", r -> rowField(r, 3), 90),
+                new M3DataTable.Column<>("Status", r -> rowField(r, 4), 90)));
+    }
+
+    /** One pipe-separated ledger field (the hidden 5th field carries the payment id). */
+    private static String rowField(String row, int index) {
+        String[] parts = row.split("\\|", -1);
+        return index < parts.length ? parts[index] : "";
+    }
+
+    /**
+     * Loads the real payments on a background task: the bootstrap, the DAO queries and the
+     * snapshot computation run off the FX thread; the ledger and KPIs land on the FX thread.
+     * Shows {@link UiKit#loadingState()} while running and {@link UiKit#errorState()} with
+     * retry on failure.
+     */
+    private void loadPayments() {
+        Data.loadAsync(contentHost,
+            () -> {
+                Data.ensureReady();
+                return buildSnapshot();
+            },
+            snapshot -> {
+                contentHost.getChildren().set(0, workspaceView);
+                applySnapshot(snapshot);
+            },
+            error -> contentHost.getChildren().setAll(UiKit.errorState(
+                    error.getMessage() == null ? error.toString() : error.getMessage(),
+                    this::loadPayments)));
+    }
+
+    /**
+     * Queries the payments, customers, memberships, subscriptions and sessions; computes the
+     * ledger rows, today's revenue (voided excluded) and the total rule-6 outstanding across
+     * every customer (mirroring the CLI's {@code GymRulesHelper.computeOutstandingBalance}).
+     * Runs on the background thread — no JavaFX types touched here.
+     */
+    private PaymentSnapshot buildSnapshot() throws Exception {
+        Data.ensureReady();
+        LocalDate today = LocalDate.now();
+        List<Payment> payments = new PaymentDao().findAll();
+        List<Customer> customers = new CustomerDao().findAll();
+        List<Membership> memberships = new MembershipDao().findAll();
+        List<TrainerSubscription> subscriptions = new TrainerSubscriptionDao().findAll();
+        List<Session> sessions = new SessionDao().findAll();
+
+        Map<Integer, String> customerNames = new HashMap<>();
+        for (Customer customer : customers) {
+            customerNames.put(customer.getId(), customer.getFullName());
         }
+
+        // Ledger rows, newest first; the payment id travels in the hidden 5th column.
+        List<String> rows = new ArrayList<>();
+        Map<String, Integer> rowIds = new HashMap<>();
+        double revenueToday = 0;
+        for (int i = payments.size() - 1; i >= 0; i--) {
+            Payment payment = payments.get(i);
+            String statusLabel = payment.isVoided() ? "Voided" : "Paid";
+            if (!payment.isVoided() && today.toString().equals(payment.getDate())) {
+                revenueToday += payment.getAmount().doubleValue();
+            }
+            String row = orEmpty(payment.getDate()) + "|"
+                    + customerNames.getOrDefault(payment.getCustomerId(), "Customer #"
+                            + payment.getCustomerId()) + "|"
+                    + (payment.getMethod() == null ? "-" : payment.getMethod().name()) + "|"
+                    + String.format(Locale.ROOT, "%.2f",
+                            payment.getAmount() == null ? 0 : payment.getAmount().doubleValue())
+                    + "|" + statusLabel + "|" + payment.getId();
+            rowIds.put(row, payment.getId());
+            rows.add(row);
+        }
+
+        // Rule 6, mirrored from the CLI: unpaid = price - non-voided payments, per item,
+        // across memberships, subscriptions and non-subscription sessions.
+        double totalOutstanding = 0;
+        for (Customer customer : customers) {
+            totalOutstanding += computeOutstandingBalance(customer.getId(), payments,
+                    memberships, subscriptions, sessions);
+        }
+
+        return new PaymentSnapshot(rows, rowIds, revenueToday, totalOutstanding);
+    }
+
+    /**
+     * Rule 6 outstanding balance for one customer — mirrors the CLI's
+     * {@code GymRulesHelper.computeOutstandingBalance}: non-CANCELLED memberships and
+     * subscriptions owed their price minus non-voided payments; non-cancelled,
+     * non-subscription-covered sessions with a positive price owed the same; voided payments
+     * never count.
+     */
+    private static double computeOutstandingBalance(int customerId, List<Payment> payments,
+                                                   List<Membership> memberships,
+                                                   List<TrainerSubscription> subscriptions,
+                                                   List<Session> sessions) {
+        double total = 0;
+        for (Membership membership : memberships) {
+            if (membership.getCustomerId() != customerId
+                    || membership.getStatus() == MembershipStatus.CANCELLED
+                    || membership.getPrice() == null) {
+                continue;
+            }
+            double owed = membership.getPrice().doubleValue()
+                    - sumNonVoidedForItem(payments, "membership", membership.getId());
+            total += Math.max(0, owed);
+        }
+        for (TrainerSubscription subscription : subscriptions) {
+            if (subscription.getCustomerId() != customerId
+                    || subscription.getStatus() == SubscriptionStatus.CANCELLED
+                    || subscription.getRatePerPeriod() == null) {
+                continue;
+            }
+            double owed = subscription.getRatePerPeriod().doubleValue()
+                    - sumNonVoidedForItem(payments, "subscription", subscription.getId());
+            total += Math.max(0, owed);
+        }
+        for (Session session : sessions) {
+            if (session.getCustomerId() != customerId
+                    || session.getSubscriptionId() != null
+                    || session.getStatus() == SessionStatus.CANCELLED
+                    || session.getPrice() == null
+                    || session.getPrice().doubleValue() <= 0) {
+                continue;
+            }
+            double owed = session.getPrice().doubleValue()
+                    - sumNonVoidedForItem(payments, "session", session.getId());
+            total += Math.max(0, owed);
+        }
+        return total;
+    }
+
+    /** Sums the non-voided payments linked to one item (rule 12 target types). */
+    private static double sumNonVoidedForItem(List<Payment> payments, String type, int itemId) {
+        double sum = 0;
+        for (Payment payment : payments) {
+            if (payment.isVoided()) {
+                continue;
+            }
+            Integer target = switch (type) {
+                case "membership" -> payment.getMembershipId();
+                case "subscription" -> payment.getSubscriptionId();
+                default -> payment.getSessionId();
+            };
+            if (target != null && target == itemId) {
+                sum += payment.getAmount().doubleValue();
+            }
+        }
+        return sum;
+    }
+
+    /** The unpaid rule-6 items of one customer, keyed by the charge-item radio type. */
+    private Map<String, List<UnpaidItem>> unpaidItemsFor(int customerId, List<Payment> payments,
+                                                         List<Membership> memberships,
+                                                         List<TrainerSubscription> subscriptions,
+                                                         List<Session> sessions) {
+        Map<String, List<UnpaidItem>> unpaid = new HashMap<>();
+        unpaid.put("membership", new ArrayList<>());
+        unpaid.put("subscription", new ArrayList<>());
+        unpaid.put("session", new ArrayList<>());
+        for (Membership membership : memberships) {
+            if (membership.getCustomerId() != customerId
+                    || membership.getStatus() == MembershipStatus.CANCELLED
+                    || membership.getPrice() == null) {
+                continue;
+            }
+            double outstanding = membership.getPrice().doubleValue()
+                    - sumNonVoidedForItem(payments, "membership", membership.getId());
+            if (outstanding > 0.005) {
+                unpaid.get("membership").add(new UnpaidItem("membership",
+                        membership.getId(), outstanding));
+            }
+        }
+        for (TrainerSubscription subscription : subscriptions) {
+            if (subscription.getCustomerId() != customerId
+                    || subscription.getStatus() == SubscriptionStatus.CANCELLED
+                    || subscription.getRatePerPeriod() == null) {
+                continue;
+            }
+            double outstanding = subscription.getRatePerPeriod().doubleValue()
+                    - sumNonVoidedForItem(payments, "subscription", subscription.getId());
+            if (outstanding > 0.005) {
+                unpaid.get("subscription").add(new UnpaidItem("subscription",
+                        subscription.getId(), outstanding));
+            }
+        }
+        for (Session session : sessions) {
+            if (session.getCustomerId() != customerId
+                    || session.getSubscriptionId() != null
+                    || session.getStatus() == SessionStatus.CANCELLED
+                    || session.getPrice() == null
+                    || session.getPrice().doubleValue() <= 0) {
+                continue;
+            }
+            double outstanding = session.getPrice().doubleValue()
+                    - sumNonVoidedForItem(payments, "session", session.getId());
+            if (outstanding > 0.005) {
+                unpaid.get("session").add(new UnpaidItem("session",
+                        session.getId(), outstanding));
+            }
+        }
+        return unpaid;
+    }
+
+    /** Applies a finished snapshot: ledger rows and KPI values. */
+    private void applySnapshot(PaymentSnapshot snapshot) {
+        rowPaymentIds.clear();
+        rowPaymentIds.putAll(snapshot.rowIds());
+        paymentDataTable.getItems().setAll(snapshot.ledgerRows());
+        statRevenueCard.setValue(String.format(Locale.ROOT, "$%,.2f",
+                snapshot.revenueToday()));
+        statUnpaidCard.setValue(String.format(Locale.ROOT, "$%,.2f",
+                snapshot.totalOutstanding()));
     }
 
     /** Puts the three payment-method chips in one ToggleGroup so exactly one tender type is active. */
@@ -431,11 +666,103 @@ public class PaymentController implements ScreenController {
     }
 
     /**
-     * Records the current charge: validates the amount inline (M3TextField error), reads the
-     * active tender chip and charge item, appends a Paid row to the register, advances the
-     * revenue KPI and confirms with a snackbar carrying the new receipt number.
+     * Rule-5-style customer resolution: the query matches a customer id ("6" or "M-0006"), an
+     * Egyptian phone (rule: 11 digits starting 010/011/012/015) or a name fragment. On a hit,
+     * the customer's real rule-6 outstanding and unpaid items load on a background task.
+     */
+    public void onCheckBalanceClick() {
+        String query = txtCustomerLookup.getText() == null ? "" : txtCustomerLookup.getText().trim();
+        if (query.isEmpty()) {
+            txtCustomerLookup.setError(true);
+            txtCustomerLookup.setSupportingText("Enter the customer id (M-0006), phone or name.");
+            feedback.showSnackbar("Enter a customer to look up first.");
+            return;
+        }
+        txtCustomerLookup.setError(false);
+        txtCustomerLookup.setSupportingText("");
+        String normalized = query;
+        Data.submit(
+                () -> {
+                    Data.ensureReady();
+                    List<Customer> customers = new CustomerDao().findAll();
+                    Customer hit = null;
+                    if (normalized.matches("(?i)M-?\\d{1,6}")) {
+                        int id = Integer.parseInt(normalized.replaceAll("(?i)M-?", ""));
+                        for (Customer customer : customers) {
+                            if (customer.getId() == id) {
+                                hit = customer;
+                            }
+                        }
+                    } else if (PhoneUtil.isValid(normalized)) {
+                        for (Customer customer : customers) {
+                            if (normalized.equals(customer.getPhone())) {
+                                hit = customer;
+                            }
+                        }
+                    } else {
+                        for (Customer customer : customers) {
+                            if (customer.getFullName() != null && customer.getFullName()
+                                    .toLowerCase(Locale.ROOT)
+                                    .contains(normalized.toLowerCase(Locale.ROOT))) {
+                                hit = customer;
+                            }
+                        }
+                    }
+                    if (hit == null) {
+                        return new Object[] {null, 0.0, new HashMap<String, List<UnpaidItem>>()};
+                    }
+                    List<Payment> payments = new PaymentDao().findAll();
+                    List<Membership> memberships = new MembershipDao().findAll();
+                    List<TrainerSubscription> subscriptions = new TrainerSubscriptionDao().findAll();
+                    List<Session> sessions = new SessionDao().findAll();
+                    double outstanding = computeOutstandingBalance(hit.getId(), payments,
+                            memberships, subscriptions, sessions);
+                    Map<String, List<UnpaidItem>> unpaid =
+                            unpaidItemsFor(hit.getId(), payments, memberships, subscriptions, sessions);
+                    return new Object[] {hit, outstanding, unpaid};
+                },
+                read -> {
+                    Customer hit = (Customer) read[0];
+                    double outstanding = (Double) read[1];
+                    @SuppressWarnings("unchecked")
+                    Map<String, List<UnpaidItem>> unpaid =
+                            (Map<String, List<UnpaidItem>>) read[2];
+                    if (hit == null) {
+                        resolvedCustomer = null;
+                        unpaidByType.clear();
+                        lblCustomerName.setText("Athlete: Not found for \"" + query + "\"");
+                        lblCustomerBalance.setText("Unpaid Balance: $0.00");
+                        feedback.showSnackbar("No customer matches \"" + query + "\".");
+                        return;
+                    }
+                    resolvedCustomer = hit;
+                    unpaidByType.clear();
+                    unpaidByType.putAll(unpaid);
+                    lblCustomerName.setText("Athlete: " + hit.getFullName() + " (M-"
+                            + String.format("%04d", hit.getId()) + ")");
+                    lblCustomerBalance.setText("Unpaid Balance: $"
+                            + String.format(Locale.ROOT, "%.2f", outstanding)
+                            + " (rule 6)");
+                    feedback.showSnackbar(hit.getFullName() + " has $"
+                            + String.format(Locale.ROOT, "%.2f", outstanding)
+                            + " outstanding across unpaid items.");
+                },
+                error -> feedback.showSnackbar("Could not look up the customer: "
+                        + error.getMessage()));
+    }
+
+    /**
+     * Rule-12 record: the resolved customer's oldest unpaid item of the selected type is the
+     * payment's single link (exactly one of membershipId/subscriptionId/sessionId), the amount
+     * defaults to that item's outstanding, and the DAO surfaces any rule-12 customer-match
+     * refusal verbatim.
      */
     public void onRecord() {
+        if (resolvedCustomer == null) {
+            feedback.showSnackbar("Run a customer lookup first — a payment must link to a"
+                    + " customer and exactly one item (rule 12).");
+            return;
+        }
         double amount = parseAmount(txtPaymentAmount.getText());
         if (amount <= 0) {
             txtPaymentAmount.setError(true);
@@ -446,108 +773,224 @@ public class PaymentController implements ScreenController {
         txtPaymentAmount.setError(false);
         txtPaymentAmount.setSupportingText("");
 
-        String method = selectedMethod();
-        String charge = selectedChargeItem();
-        String member = currentCustomerLabel();
-        String receiptNo = "R-" + nextReceiptNumber++;
-        String row = LocalDate.now() + "|" + member + "|" + method + "|"
-                + String.format(Locale.ROOT, "%.2f", amount) + "|Paid";
-        paymentDataTable.getItems().add(0, row);
-        demoReceipts.put(receiptNo, row);
-        todayRevenue += amount;
-        updateRevenueKpi();
-        feedback.showSnackbar("Recorded " + charge + " — $" + String.format(Locale.ROOT, "%.2f", amount)
-                + " via " + method + " for " + member + " (receipt " + receiptNo + ", demo).");
+        String type = selectedChargeItem();
+        List<UnpaidItem> candidates = unpaidByType.getOrDefault(type, List.of());
+        if (candidates.isEmpty()) {
+            feedback.showSnackbar("No unpaid " + type + " items on file for "
+                    + resolvedCustomer.getFullName() + " — nothing to settle (rule 6).");
+            return;
+        }
+        UnpaidItem item = candidates.get(0); // oldest unpaid item of the selected type
+        PaymentMethod method = selectedMethod();
+
+        Data.submit(
+                () -> {
+                    String receiptNo = nextReceiptNumber(new PaymentDao().findAll());
+                    Payment payment = switch (type) {
+                        case "membership" -> Payment.forMembership(resolvedCustomer.getId(),
+                                item.itemId(), java.math.BigDecimal.valueOf(amount), method,
+                                LocalDate.now().toString(), receiptNo);
+                        case "subscription" -> Payment.forSubscription(resolvedCustomer.getId(),
+                                item.itemId(), java.math.BigDecimal.valueOf(amount), method,
+                                LocalDate.now().toString(), receiptNo);
+                        default -> Payment.forSession(resolvedCustomer.getId(),
+                                item.itemId(), java.math.BigDecimal.valueOf(amount), method,
+                                LocalDate.now().toString(), receiptNo);
+                    };
+                    return new PaymentDao().insert(payment);
+                },
+                recorded -> {
+                    feedback.showSnackbar("Recorded " + type + " payment — $"
+                            + String.format(Locale.ROOT, "%.2f", amount) + " via " + method
+                            + " for " + resolvedCustomer.getFullName() + " (receipt "
+                            + recorded.getReceiptNo() + ").");
+                    txtPaymentAmount.setText("");
+                    resolvedCustomer = null;
+                    unpaidByType.clear();
+                    lblCustomerName.setText("Athlete: Not Selected");
+                    lblCustomerBalance.setText("Unpaid Balance: $0.00");
+                    loadPayments();
+                },
+                error -> feedback.showSnackbar("Could not record payment: " + error.getMessage()));
     }
 
-    /**
-     * Receipt lookup: validates the receipt number, answers the demo register R-8801… and opens
-     * the receipt sheet with the stored row; unknown numbers say so instead of failing silently.
-     */
-    public void onReceiptLookupClick() {
-        String query = txtSearchReceipt.getText() == null ? "" : txtSearchReceipt.getText().trim();
-        if (query.isEmpty()) {
-            feedback.showSnackbar("Enter a receipt number first, for example R-8801 (demo).");
-            return;
-        }
-        String receiptNo = query.toUpperCase(Locale.ROOT);
-        if (!demoReceipts.containsKey(receiptNo)) {
-            feedback.showSnackbar("No receipt matches \"" + query + "\" — the demo register covers R-8801 to R-"
-                    + (nextReceiptNumber - 1) + ".");
-            return;
-        }
-        showReceipt(receiptNo);
-        feedback.showSnackbar("Receipt " + receiptNo + " opened (demo).");
-    }
-
-    /**
-     * Balance lookup: validates the input inline (M3TextField error), finds the member in the
-     * visible register and sums their Pending rows into the balance readout.
-     */
-    public void onCheckBalanceClick() {
-        String query = txtCustomerLookup.getText() == null ? "" : txtCustomerLookup.getText().trim();
-        if (query.isEmpty()) {
-            txtCustomerLookup.setError(true);
-            txtCustomerLookup.setSupportingText("Enter the customer ID, phone or name shown in the register.");
-            feedback.showSnackbar("Enter a customer to look up first.");
-            return;
-        }
-        txtCustomerLookup.setError(false);
-        txtCustomerLookup.setSupportingText("");
-
-        String lower = query.toLowerCase(Locale.ROOT);
-        String match = null;
-        double unpaid = 0;
-        for (String row : paymentDataTable.getItems()) {
-            String[] parts = row.split("\\|");
-            if (parts.length > 4 && (parts[0] + " " + parts[1]).toLowerCase(Locale.ROOT).contains(lower)) {
-                if (match == null) {
-                    match = parts[1];
-                }
-                if ("Pending".equals(parts[4])) {
-                    unpaid += parseAmount(parts[3]);
-                }
+    /** Issues the next unique receipt number from the existing rows (REC-####). */
+    private static String nextReceiptNumber(List<Payment> payments) {
+        int max = 1000;
+        for (Payment payment : payments) {
+            String receipt = payment.getReceiptNo() == null ? "" : payment.getReceiptNo().trim();
+            if (receipt.matches("REC-\\d+")) {
+                max = Math.max(max, Integer.parseInt(receipt.substring(4)));
             }
         }
-        if (match == null) {
-            lblCustomerName.setText("Athlete: Not found for \"" + query + "\"");
-            lblCustomerBalance.setText("Unpaid Balance: $0.00");
-            feedback.showSnackbar("No register row matches \"" + query + "\" (demo).");
-            return;
-        }
-        lblCustomerName.setText("Athlete: " + match);
-        lblCustomerBalance.setText("Unpaid Balance: $" + String.format(Locale.ROOT, "%.2f", unpaid));
-        feedback.showSnackbar(match + " has $" + String.format(Locale.ROOT, "%.2f", unpaid)
-                + " outstanding (demo).");
+        return "REC-" + (max + 1);
     }
 
     /**
-     * Two-step void (destructive action): an M3Dialog confirms first, then the target row
-     * visibly flips to Voided, the revenue/unpaid KPIs adjust and a snackbar confirms.
+     * Rule-19 void: two-step confirm with a reason field, then the void fields are written on
+     * the row (previous amount, reason, date — no hard delete) and a same-item replacement
+     * payment is offered so receipts reconcile.
      */
     public void onVoidClick() {
         String row = voidTargetRow();
         if (row == null) {
-            feedback.showSnackbar("Nothing to void — every register row is already voided (demo).");
+            feedback.showSnackbar("Nothing to void — every ledger row is already voided.");
             return;
         }
-        String[] parts = row.split("\\|");
+        int paymentId = rowPaymentIds.getOrDefault(row, -1);
+        if (paymentId < 0) {
+            feedback.showSnackbar("Select a ledger row first.");
+            return;
+        }
+        String[] parts = row.split("\\|", -1);
+        TextField reasonField = new TextField();
+        reasonField.setPromptText("Required (rule 19) — recorded on the payment");
         M3Button cancel = M3Button.text("Keep Payment");
         M3Button voidButton = M3Button.text("Void Payment");
         M3Dialog dialog = M3Dialog.basic("Void this payment?",
-                new Label("Payment " + parts[1] + " (" + parts[2] + ", $" + parts[3] + ") is reversed"
-                        + (parts[4].equals("Paid") ? " and drops out of today's revenue." : ".")),
+                new VBox(10,
+                        new Label("Payment " + parts[1] + " (" + parts[2] + ", $"
+                                + String.format(Locale.ROOT, "%.2f",
+                                        parseAmount(parts[3]))
+                                + ") is reversed with a recorded reason — the row stays in the"
+                                + " ledger (rule 19, no hard delete)."),
+                        reasonField),
                 cancel, voidButton);
         dialog.setDefaultAction(voidButton::activate);
         cancel.setOnAction(e -> dialog.hide());
         voidButton.setOnAction(e -> {
+            String reason = reasonField.getText() == null ? "" : reasonField.getText().trim();
+            if (reason.isEmpty()) {
+                reasonField.setStyle("-fx-border-color: -md-sys-color-error;");
+                return;
+            }
             dialog.hide();
-            voidRow(row);
+            Data.submit(
+                    () -> {
+                        Payment current = new PaymentDao().findById(paymentId);
+                        if (current == null) {
+                            throw new com.gym.exception.ValidationException(
+                                    "Payment no longer exists in the database");
+                        }
+                        if (current.isVoided()) {
+                            throw new com.gym.exception.ValidationException(
+                                    "Rule 19: Payment #" + paymentId + " is already voided");
+                        }
+                        current.setPreviousAmount(current.getAmount());
+                        current.setVoided(true);
+                        current.setVoidReason(reason);
+                        current.setVoidedDate(LocalDate.now().toString());
+                        new PaymentDao().update(current);
+                        return current;
+                    },
+                    voided -> {
+                        feedback.showSnackbar("Payment " + voided.getReceiptNo() + " voided — $"
+                                + String.format(Locale.ROOT, "%.2f",
+                                        voided.getPreviousAmount() == null
+                                                ? 0 : voided.getPreviousAmount().doubleValue())
+                                + " reversed; the linked item is unpaid again (rule 6).");
+                        offerReplacementPayment(voided);
+                        loadPayments();
+                    },
+                    error -> feedback.showSnackbar("Could not void payment: " + error.getMessage()));
         });
         feedback.showDialog(dialog);
     }
 
+    /**
+     * Rule 19: after a void, offers the same-item replacement payment so receipts reconcile;
+     * the replacement links to the very same membership/subscription/session id.
+     */
+    private void offerReplacementPayment(Payment voided) {
+        if (voided.getPreviousAmount() == null
+                || voided.getPreviousAmount().doubleValue() <= 0) {
+            return;
+        }
+        M3Button later = M3Button.text("Not Now");
+        M3Button replace = M3Button.text("Record Replacement");
+        M3Dialog dialog = M3Dialog.basic("Record a replacement payment?",
+                new Label("The linked item is unpaid again. Record a replacement of $"
+                        + String.format(Locale.ROOT, "%.2f",
+                                voided.getPreviousAmount().doubleValue())
+                        + " for the same item so the receipts reconcile (rule 19)?"),
+                later, replace);
+        dialog.setDefaultAction(replace::activate);
+        later.setOnAction(e -> dialog.hide());
+        replace.setOnAction(e -> {
+            dialog.hide();
+            Data.submit(
+                    () -> {
+                        String receiptNo = nextReceiptNumber(new PaymentDao().findAll());
+                        Payment replacement = new Payment(0, voided.getCustomerId(),
+                                voided.getMembershipId(), voided.getSubscriptionId(),
+                                voided.getSessionId(), voided.getPreviousAmount(),
+                                voided.getMethod(), LocalDate.now().toString(),
+                                receiptNo, false);
+                        return new PaymentDao().insert(replacement);
+                    },
+                    replacement -> {
+                        feedback.showSnackbar("Replacement payment recorded — receipt "
+                                + replacement.getReceiptNo() + ".");
+                        loadPayments();
+                    },
+                    error -> feedback.showSnackbar("Could not record the replacement: "
+                            + error.getMessage()));
+        });
+        feedback.showDialog(dialog);
+    }
+
+    /**
+     * Receipt lookup through {@code PaymentDao.findByReceiptNo}: opens the receipt sheet with
+     * the real, itemized row; unknown numbers say so instead of failing silently.
+     */
+    public void onReceiptLookupClick() {
+        String query = txtSearchReceipt.getText() == null ? "" : txtSearchReceipt.getText().trim();
+        if (query.isEmpty()) {
+            feedback.showSnackbar("Enter a receipt number first, for example REC-1002.");
+            return;
+        }
+        Data.submit(
+                () -> {
+                    Data.ensureReady();
+                    return new PaymentDao().findByReceiptNo(query.toUpperCase(Locale.ROOT));
+                },
+                payment -> {
+                    if (payment == null) {
+                        feedback.showSnackbar("No receipt matches \"" + query + "\".");
+                        return;
+                    }
+                    showReceipt(payment);
+                    feedback.showSnackbar("Receipt " + payment.getReceiptNo() + " opened.");
+                },
+                error -> feedback.showSnackbar("Could not look up the receipt: "
+                        + error.getMessage()));
+    }
+
     public void onShowReceiptClick() {
+        if (selectedPaymentRow == null) {
+            feedback.showSnackbar("Select a ledger row, or look up a receipt number first.");
+            return;
+        }
+        Integer paymentId = rowPaymentIds.get(selectedPaymentRow);
+        if (paymentId == null) {
+            feedback.showSnackbar("Select a ledger row first.");
+            return;
+        }
+        Data.submit(
+                () -> new PaymentDao().findById(paymentId),
+                payment -> {
+                    if (payment == null) {
+                        notice("The selected payment no longer exists.");
+                        return;
+                    }
+                    showReceipt(payment);
+                },
+                error -> notice("Could not load the receipt: " + error.getMessage()));
+    }
+
+    /** Renders the real, itemized payment row into the receipt sheet. */
+    private void showReceipt(Payment payment) {
+        lblReceiptDetails.setText(receiptText(payment));
         receiptBottomSheet.setVisible(true);
     }
 
@@ -567,70 +1010,71 @@ public class PaymentController implements ScreenController {
         txtPaymentAmount.setText("100.00");
     }
 
-    /** Loads the exact due amount of the currently selected charge item into the amount field. */
+    /** Loads the exact outstanding amount of the currently selected charge item type. */
     public void onTenderExact() {
-        txtPaymentAmount.setText(String.format(Locale.ROOT, "%.2f", selectedChargeDue()));
-        txtPaymentAmount.setError(false);
-        feedback.showSnackbar("Exact due amount loaded for " + selectedChargeItem() + " (demo).");
-    }
-
-    /** Voids the payment row of the given member id (demo register lookup), if present. */
-    public void onVoid(int paymentId) {
-        String row = paymentDataTable.getItems().stream()
-                .filter(r -> r.contains("#" + paymentId + ")") && !r.endsWith("Voided"))
-                .findFirst().orElse(null);
-        if (row == null) {
-            feedback.showSnackbar("No voidable payment for member #" + paymentId + " (demo).");
+        if (resolvedCustomer == null) {
+            feedback.showSnackbar("Run a customer lookup first — the exact amount comes from"
+                    + " their rule-6 balance.");
             return;
         }
-        voidRow(row);
+        String type = selectedChargeItem();
+        List<UnpaidItem> candidates = unpaidByType.getOrDefault(type, List.of());
+        double exact = candidates.isEmpty() ? 0 : candidates.get(0).outstanding();
+        txtPaymentAmount.setText(String.format(Locale.ROOT, "%.2f", exact));
+        txtPaymentAmount.setError(false);
+        feedback.showSnackbar("Exact outstanding loaded for the " + type + " item.");
+    }
+
+    /** Voids the payment row of the given member id (ledger lookup), if present. */
+    public void onVoid(int paymentId) {
+        for (String row : paymentDataTable.getItems()) {
+            Integer id = rowPaymentIds.get(row);
+            if (id != null && id == paymentId && !"Voided".equals(rowField(row, 4))) {
+                selectedPaymentRow = row;
+                onVoidClick();
+                return;
+            }
+        }
+        feedback.showSnackbar("No voidable payment for member #" + paymentId + ".");
     }
 
     /**
-     * Renders the stored register row of the given receipt number into the receipt sheet; when
-     * the number is not in the demo register, the sheet shows the bare number instead.
+     * Renders the real, itemized payment into the receipt sheet text (a thermal-copy preview:
+     * receipt number, date, member, method, linked item, amount, status and void fields).
      */
-    public void showReceipt(String receiptNo) {
-        String row = demoReceipts.get(receiptNo);
-        lblReceiptDetails.setText(row == null ? "Receipt: " + receiptNo : receiptText(receiptNo, row));
-        receiptBottomSheet.setVisible(true);
+    private String receiptText(Payment payment) {
+        return "Receipt " + orEmpty(payment.getReceiptNo()) + "\n"
+                + "Date: " + orEmpty(payment.getDate()) + "\n"
+                + "Customer: #" + payment.getCustomerId() + "\n"
+                + "Method: " + (payment.getMethod() == null ? "-" : payment.getMethod().name())
+                + "\nAmount: $" + String.format(Locale.ROOT, "%.2f",
+                        payment.getAmount() == null ? 0 : payment.getAmount().doubleValue()) + "\n"
+                + "Status: " + (payment.isVoided() ? "VOIDED" : "PAID") + "\n"
+                + (payment.getVoidReason() == null ? "" : "Void reason: "
+                        + payment.getVoidReason() + "\n")
+                + (payment.getVoidedDate() == null ? "" : "Voided on: "
+                        + payment.getVoidedDate() + "\n")
+                + "Linked to: "
+                + (payment.getMembershipId() != null ? "membership #" + payment.getMembershipId()
+                : payment.getSubscriptionId() != null ? "subscription #"
+                        + payment.getSubscriptionId()
+                : payment.getSessionId() != null ? "session #" + payment.getSessionId()
+                : "nothing (rule 12 violation)");
     }
 
-    // ------------------------------------------------------------------
-    // Demo register helpers
-    // ------------------------------------------------------------------
-
-    /** Marks the register row Voided, adjusts the revenue/unpaid KPIs and confirms. */
-    private void voidRow(String row) {
-        if (!paymentDataTable.getItems().contains(row)) {
-            return;
-        }
-        String[] parts = row.split("\\|");
-        int index = paymentDataTable.getItems().indexOf(row);
-        paymentDataTable.getItems().set(index, parts[0] + "|" + parts[1] + "|" + parts[2]
-                + "|" + parts[3] + "|Voided");
-        double amount = parseAmount(parts[3]);
-        if ("Paid".equals(parts[4])) {
-            todayRevenue = Math.max(0, todayRevenue - amount);
-            updateRevenueKpi();
-        } else if ("Pending".equals(parts[4])) {
-            todayUnpaid = Math.max(0, todayUnpaid - amount);
-            updateUnpaidKpi();
-        }
-        if (row.equals(selectedPaymentRow)) {
-            selectedPaymentRow = null;
-        }
-        feedback.showSnackbar("Payment voided: " + parts[1] + " — $" + parts[3] + " reversed (demo).");
+    /** A headless-safe snackbar answer (the feedback layer attaches once a scene exists). */
+    private void notice(String message) {
+        feedback.showSnackbar(message);
     }
 
-    /** The Void target: the activated register row, else the most recent voidable row. */
+    /** The Void target: the activated ledger row, else the most recent voidable row. */
     private String voidTargetRow() {
         if (selectedPaymentRow != null && paymentDataTable.getItems().contains(selectedPaymentRow)
-                && !selectedPaymentRow.endsWith("Voided")) {
+                && !"Voided".equals(rowField(selectedPaymentRow, 4))) {
             return selectedPaymentRow;
         }
         return paymentDataTable.getItems().stream()
-                .filter(r -> !r.endsWith("Voided"))
+                .filter(r -> !"Voided".equals(rowField(r, 4)))
                 .findFirst().orElse(null);
     }
 
@@ -638,71 +1082,36 @@ public class PaymentController implements ScreenController {
         selectedPaymentRow = row;
     }
 
-    /** Tender chip selection mapped to the register's method vocabulary; Card is the default. */
-    private String selectedMethod() {
+    /** Tender chip selection mapped to the PaymentMethod vocabulary; Card is the default. */
+    private PaymentMethod selectedMethod() {
         if (methodGroup != null) {
             Toggle selected = methodGroup.getSelectedToggle();
             if (selected == chipMethodCash) {
-                return "Cash";
+                return PaymentMethod.CASH;
             }
             if (selected == chipMethodTransfer) {
-                return "Transfer";
+                return PaymentMethod.TRANSFER;
             }
         }
-        return "Card";
+        return PaymentMethod.CARD;
     }
 
-    /** Charge radio selection mapped to a human label; Membership is the default. */
+    /** Charge radio selection mapped to the rule-12 item type key. */
     private String selectedChargeItem() {
         if (rbSubscription.isSelected()) {
-            return "trainer subscription";
+            return "subscription";
         }
         if (rbSession.isSelected()) {
-            return "single session";
+            return "session";
         }
         return "membership";
     }
 
-    /** Demo dues for the selected charge item (see the constants above for the anchors). */
-    private double selectedChargeDue() {
-        if (rbSubscription.isSelected()) {
-            return SUBSCRIPTION_DUE;
-        }
-        if (rbSession.isSelected()) {
-            return SESSION_DUE;
-        }
-        return MEMBERSHIP_DUE;
+    /** Tolerant amount parsing ("45.00" -> 45.0; anything else -> -1). */
+    private static String orEmpty(String value) {
+        return value == null ? "" : value;
     }
 
-    /**
-     * The charge recipient: the athlete set by the balance lookup, or the walk-in default when
-     * no lookup answered yet.
-     */
-    private String currentCustomerLabel() {
-        String label = lblCustomerName.getText() == null ? "" : lblCustomerName.getText().trim();
-        if (label.startsWith("Athlete: ") && !label.equals("Athlete: Not Selected")
-                && !label.startsWith("Athlete: Not found")) {
-            return label.substring("Athlete: ".length());
-        }
-        return "Walk-in member";
-    }
-
-    private void updateRevenueKpi() {
-        statRevenueCard.setValue(String.format(Locale.ROOT, "$%,.2f", todayRevenue));
-    }
-
-    private void updateUnpaidKpi() {
-        statUnpaidCard.setValue(String.format(Locale.ROOT, "$%,.2f", todayUnpaid));
-    }
-
-    /** Multi-line receipt text rendered into the sheet from a register row. */
-    private static String receiptText(String receiptNo, String row) {
-        String[] parts = row.split("\\|");
-        return "Receipt " + receiptNo + "\nDate: " + parts[0] + "\nMember: " + parts[1]
-                + "\nMethod: " + parts[2] + "\nAmount: $" + parts[3] + "\nStatus: " + parts[4];
-    }
-
-    /** Tolerant demo amount parsing ("45.00" → 45.0; anything else → -1). */
     private static double parseAmount(String raw) {
         try {
             return Double.parseDouble(raw == null ? "" : raw.trim());
@@ -724,7 +1133,7 @@ public class PaymentController implements ScreenController {
                 root.getChildren().add(feedback);
             }
             if (oldScene != null && oldScene.getRoot() instanceof Pane oldRoot) {
-                // Deferred so a screen swap that is mid-mutation of the pane hosting the screen
+                // Deferred so a screen swap that is mid-mutation of the pane hosting this screen
                 // never re-enters a JavaFX children list from inside this listener.
                 Platform.runLater(() -> oldRoot.getChildren().remove(feedback));
             }

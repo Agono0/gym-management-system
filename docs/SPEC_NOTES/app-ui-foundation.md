@@ -346,3 +346,40 @@ transition, so a re-save of an unchanged session is legal.
   "Full Asset Page" navigates through the shell's rail-key handoff
   (`AppShellController.openScreenViaRail("navEquipment", EQUIPMENT)`) with a snackbar
   fallback for standalone previews.
+
+## 13. Membership screen on real data (task C6)
+
+### 13.1 Membership
+
+One `Data.loadAsync` snapshot per view (MembershipDao + PaymentDao + CustomerDao) drives the
+tier carousel (active count + average SOLD price per PlanType — PlanType reality, not marketing
+prices), the funnel replacement and the roster. **The invented conversion funnel is replaced by
+an honest plan-distribution bar chart** (active agreements per PlanType): paid and active
+agreements are overlapping sets, not nested stages, so a funnel shape would misrepresent them
+(documented choice). The roster rows carry the real customer name + M-id, plan, derived status
+(Active/Expiring/Expired/Frozen/Cancelled) and the real end date; the selected row's inspector
+shows the agreement's rule-6 outstanding (price minus non-voided linked payments). Lifecycle
+actions run through `Data.submit` -> `MembershipDao.update` mirroring the CLI rule-7
+arithmetic: freeze (ACTIVE-only, day counter stored, 1-365 day dialog), unfreeze (end date
+shifted by the frozen days, counter cleared), renew (plan window from today/expiry, CANCELLED
+refused with rule copy), cancel (destructive confirm with rule-7 renewal-block copy). Sell
+inserts a real agreement for an ACTIVE customer at the plan price via `MembershipDao.insert`.
+
+### 13.2 Payment
+
+One `Data.loadAsync` snapshot per view: the ledger renders real `PaymentDao` rows (payment id
+in the hidden fifth column), Today's Revenue counts non-voided payments dated today, and
+Accounts Receivable is the rule-6 outstanding summed across every customer — mirroring the
+CLI's `GymRulesHelper.computeOutstandingBalance` exactly (non-CANCELLED memberships and
+subscriptions owed price minus non-voided payments; non-cancelled non-subscription sessions
+with a positive price; voided money never counts). The customer lookup resolves by id
+("6"/"M-0006"), Egyptian phone (`PhoneUtil`) or name fragment, and loads that customer's
+rule-6 outstanding plus their per-type unpaid items. RECORD PAYMENT inserts via
+`PaymentDao.insert` with rule 12: exactly one link (the customer's oldest unpaid item of the
+selected type), the method chips map to the `PaymentMethod` enum, a unique REC-#### receipt is
+generated from the existing rows, and any DAO rule-12 refusal surfaces verbatim. VOID is
+rule 19: a confirm dialog with a required reason writes the void fields on the row (previous
+amount, reason, voided date — NO hard delete), then offers a same-item replacement payment so
+receipts reconcile. The receipt lookup uses `PaymentDao.findByReceiptNo` and the receipt sheet
+renders the real itemized row (including void fields); the dead "Print Thermal Copy" button is
+replaced by a real "Receipt Preview" dialog action.
