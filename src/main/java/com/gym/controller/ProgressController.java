@@ -1,5 +1,12 @@
 package com.gym.controller;
 
+import com.gym.model.Attendance;
+import com.gym.model.Customer;
+import com.gym.model.ProgressRecord;
+import com.gym.dao.AttendanceDao;
+import com.gym.dao.CustomerDao;
+import com.gym.dao.ProgressRecordDao;
+import com.gym.ui.Data;
 import com.gym.ui.UiKit;
 import io.m3fx.controls.appbar.M3TopAppBar;
 import io.m3fx.controls.button.ButtonVariant;
@@ -11,8 +18,6 @@ import io.m3fx.controls.chart.M3DataPoint;
 import io.m3fx.controls.chart.M3DataSeries;
 import io.m3fx.controls.chart.M3DonutChart;
 import io.m3fx.controls.chart.M3ScatterPlot;
-import io.m3fx.controls.chart.M3ScatterPoint;
-import io.m3fx.controls.chart.M3ScatterSeries;
 import io.m3fx.controls.chart.M3SplineChart;
 import io.m3fx.controls.common.M3Badge;
 import io.m3fx.controls.data.M3StatCard;
@@ -21,6 +26,7 @@ import io.m3fx.controls.effect.M3ParticleCanvas;
 import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.iconbutton.IconButtonVariant;
 import io.m3fx.controls.iconbutton.M3IconButton;
+import io.m3fx.controls.menu.M3Menu;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.segmented.M3SegmentedButton;
 import io.m3fx.controls.sheet.M3BottomSheet;
@@ -28,7 +34,6 @@ import io.m3fx.controls.slider.M3Slider;
 import io.m3fx.controls.textfield.M3TextField;
 import io.m3fx.controls.textfield.TextFieldVariant;
 import io.m3fx.core.theme.ColorRole;
-import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -44,37 +49,46 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
- * Controller for Biomechanical Progress &amp; Analytics.
- * Conforms to docs/ui/members/MEMBER_PROGRESS_UI.md Section 7 contract.
- * Pure UI: strictly no backend service, DAO, or database logic.
+ * Controller for Biomechanical Progress &amp; Analytics on real data (C9).
+ * Conforms to docs/ui/members/MEMBER_PROGRESS_UI.md Section 7 and the com.gym.ui foundation
+ * contracts (app-ui-foundation.md §10).
  *
- * <p>UX contract: the time-horizon segments actually reslice the trajectory charts, the log
- * entry bottom sheet opens modally with scrim and drag-to-dismiss, saving validates and
- * answers with a snackbar while appending the reading to the chart, and all demo telemetry
- * renders real data instead of placeholder dashes.
+ * <p>Data: every chart and KPI derives from {@link ProgressRecordDao} rows for a selected
+ * customer (selector button, defaulting to the member whose latest record is the most recent),
+ * the heatmap is the selected customer's real attendance by date (AttendanceDao), and the
+ * header chip counts today's check-ins building-wide. Target weight comes from the records'
+ * {@code targetWeightKg} ("No target set" when absent — never a baked number); logging a
+ * reading persists a real {@code ProgressRecordDao.insert} whose target carries the last
+ * recorded goal forward unless edited. A PR — the new weight strictly below every earlier
+ * record — triggers the celebration canvas; the VBT load-velocity scatter stays an honest
+ * dash (no data source records velocity yet).
  *
- * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
- * former progress.fxml: telemetry ribbon, trajectory chart, density calendar, composition
- * donut, VBT scatter, tape timeline, log-entry sheet.
+ * <p>The node tree is built in the constructor — the programmatic replacement for the former
+ * progress.fxml: telemetry ribbon, trajectory chart, density calendar, composition donut, VBT
+ * scatter, tape timeline, log-entry sheet.
  */
 public class ProgressController implements ScreenController {
 
-    /** Weekly sample count for the full horizon (ALL); shorter horizons slice the tail. */
-    private static final int WEEKLY_SAMPLES = 64;
-    /** Points shown per horizon: 1M / 3M / 6M / 1Y / ALL. */
-    private static final int[] HORIZON_POINTS = {4, 13, 26, 52, WEEKLY_SAMPLES};
+    /** Horizon windows in days for 1M / 3M / 6M / 1Y / ALL. */
+    private static final int[] HORIZON_DAYS = {31, 92, 183, 365, Integer.MAX_VALUE};
 
-    // ---- View fields (the former fx:id injections, now built by buildView) ----
+    // ---- View fields (the former fx:id injections, now built by the constructor) ----
     private StackPane rootPane;
     private BorderPane mainLayout;
     private M3TopAppBar topAppBar;
     private M3IconButton btnBack;
     private M3SegmentedButton segTimeHorizon;
     private M3Button btnLogEntry;
+    private M3Button btnCustomerPicker;
+    private VBox compositionLegend;
     private M3StatCard statCurrentWeight;
     private M3StatCard statBodyFat;
     private M3StatCard statLeanMass;
@@ -99,20 +113,21 @@ public class ProgressController implements ScreenController {
     /** Trajectory series kept as fields so horizons and new log entries can reslice them. */
     private M3DataSeries weightSeries;
     private M3DataSeries bodyFatSeries;
+    /** The analytics workspace host (loadAsync swaps inside it; charts stay mounted). */
+    private StackPane workspaceStateHost;
+    /** Empty/error state overlay shown instead of the workspace when a load fails. */
+    private StackPane workspaceStateOverlay;
 
-    /**
-     * Builds the complete Biomechanical Progress view and initializes all behavior. Same
-     * ordering semantics the FXMLLoader used to provide: the node tree exists and every field
-     * is assigned before the former {@code initialize()} work runs.
-     */
+    // ---- Loaded state ----
+    private List<Customer> customers = List.of();
+    private List<ProgressRecord> records = List.of();
+    private Map<Integer, List<ProgressRecord>> recordsByCustomer = Map.of();
+    private Customer selectedCustomer;
+    private List<ProgressRecord> selectedRecords = List.of();
+
+    /** Creates the screen, builds the tree and starts the first real data load. */
     public ProgressController() {
         viewRootSetup();
-
-        prefillTelemetry();
-        populateTrajectoryChart();
-        populateActivityHeatmap();
-        populateCompositionDonut();
-        populateVbtScatter();
 
     // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
     // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
@@ -141,14 +156,13 @@ public class ProgressController implements ScreenController {
         txtBodyFat.setId("txtBodyFat");
         txtTargetWeight.setId("txtTargetWeight");
         txtMeasurements.setId("txtMeasurements");
-        populateTapeTimeline();
         // The segmented control is an HBox (no onAction property), so the horizon answer is
         // wired through its selection model; the handler stays the single entry point.
         segTimeHorizon.selectedIndexProperty().addListener((obs, oldV, newV) -> onHorizonChanged());
         // Dragging the slider drafts the weight reading in the open sheet.
         sliderWeight.valueProperty().addListener((obs, oldV, newV) ->
                 txtWeight.setText(String.format(Locale.ROOT, "%.1f", newV.doubleValue())));
-        onHorizonChanged();
+        loadProgress();
     }
 
     /** Builds the whole node tree and mounts the overlay (the constructor's first step). */
@@ -168,11 +182,12 @@ public class ProgressController implements ScreenController {
         appActions.setAlignment(Pos.CENTER_RIGHT);
         appActions.setPadding(new Insets(0, 16, 0, 0));
         segTimeHorizon = new M3SegmentedButton(List.of("1M", "3M", "6M", "1Y", "ALL"));
-        segTimeHorizon.setSelectedIndex(1);
+        segTimeHorizon.setSelectedIndex(4);
+        btnCustomerPicker = customerPickerButton();
         btnLogEntry = new M3Button("Log Entry", ButtonVariant.FILLED);
         btnLogEntry.setGraphic(M3Icon.symbol("stats"));
         btnLogEntry.setOnAction(e -> onOpenLogDialog());
-        appActions.getChildren().addAll(segTimeHorizon, btnLogEntry);
+        appActions.getChildren().addAll(btnCustomerPicker, segTimeHorizon, btnLogEntry);
 
         HBox appBarRow = new HBox();
         appBarRow.setAlignment(Pos.CENTER_LEFT);
@@ -180,17 +195,17 @@ public class ProgressController implements ScreenController {
         appBarRow.getChildren().addAll(topAppBar, appActions);
         mainLayout.setTop(appBarRow);
 
-        // Center scrollable analytics workspace.
+        // Center scrollable analytics workspace, wrapped in the load/empty/error state host.
         VBox workspace = new VBox(20);
         workspace.setPadding(new Insets(20, 24, 64, 24));
 
         // Telemetry ribbon cards.
         HBox telemetryRibbon = new HBox(16);
         telemetryRibbon.setFillHeight(true);
-        statCurrentWeight = new M3StatCard("CURRENT WEIGHT", "-- kg", "Target: 80.0 kg");
-        statBodyFat = new M3StatCard("BODY FAT %", "-- %", "Optimal Range");
-        statLeanMass = new M3StatCard("LEAN MUSCLE MASS", "-- kg", "86.1% of Total");
-        statVbtMax = new M3StatCard("ESTIMATED 1RM (VBT)", "-- kg", "Back Squat (R²=0.98)");
+        statCurrentWeight = new M3StatCard("CURRENT WEIGHT", "—", "No readings yet");
+        statBodyFat = new M3StatCard("BODY FAT %", "—", "No readings yet");
+        statLeanMass = new M3StatCard("LEAN MUSCLE MASS", "—", "Derived from the latest record");
+        statVbtMax = new M3StatCard("ESTIMATED 1RM (VBT)", "—", "No VBT data recorded yet");
         for (M3StatCard card : List.of(statCurrentWeight, statBodyFat, statLeanMass, statVbtMax)) {
             HBox.setHgrow(card, Priority.ALWAYS);
         }
@@ -224,7 +239,7 @@ public class ProgressController implements ScreenController {
         densityColumn.setPrefWidth(420);
         densityColumn.setMinWidth(380);
 
-        // 52-week training density card.
+        // Training density card (the selected customer's real attendance).
         M3Card densityCard = new M3Card(CardVariant.OUTLINED);
         VBox densityContent = new VBox(10);
         densityContent.setPadding(new Insets(14));
@@ -233,28 +248,24 @@ public class ProgressController implements ScreenController {
         Region densitySpacer = new Region();
         HBox.setHgrow(densitySpacer, Priority.ALWAYS);
         densityHeader.getChildren().addAll(
-                styledLabel("52-WEEK TRAINING DENSITY", "title-small"),
+                styledLabel("ATTENDANCE DENSITY", "title-small"),
                 densitySpacer,
-                styledLabel("2026 Year To Date", "label-small"));
+                styledLabel("Check-ins by date", "label-small"));
         activityHeatmap = new M3ActivityCalendar();
         activityHeatmap.setPrefHeight(130);
         densityContent.getChildren().addAll(densityHeader, activityHeatmap);
         densityCard.setContent(densityContent);
 
-        // Body composition donut card.
+        // Body composition donut card (real latest-record math).
         M3Card compositionCard = new M3Card(CardVariant.OUTLINED);
         HBox compositionContent = new HBox(16);
         compositionContent.setAlignment(Pos.CENTER);
         compositionContent.setPadding(new Insets(12, 14, 12, 14));
         donutComposition = new M3DonutChart();
         donutComposition.setPrefSize(140, 140);
-        VBox compositionLegend = new VBox(6);
+        compositionLegend = new VBox(6);
         compositionLegend.setAlignment(Pos.CENTER_LEFT);
-        compositionLegend.getChildren().addAll(
-                styledLabel("BODY COMPOSITION", "title-small"),
-                styledLabel("Lean Mass: 72.5 kg", "body-small"),
-                styledLabel("Fat Mass: 11.7 kg", "body-small"),
-                styledLabel("Water: 52.4 L", "body-small"));
+        compositionLegend.getChildren().add(styledLabel("BODY COMPOSITION", "title-small"));
         compositionContent.getChildren().addAll(donutComposition, compositionLegend);
         compositionCard.setContent(compositionContent);
 
@@ -264,7 +275,7 @@ public class ProgressController implements ScreenController {
         // Lower row: VBT scatter plot & timeline.
         HBox lowerRow = new HBox(20);
 
-        // VBT load-velocity scatter plot card.
+        // VBT load-velocity scatter plot card (honest dash: nothing records velocity yet).
         M3Card vbtCard = new M3Card(CardVariant.ELEVATED);
         HBox.setHgrow(vbtCard, Priority.ALWAYS);
         VBox vbtContent = new VBox(12);
@@ -273,7 +284,7 @@ public class ProgressController implements ScreenController {
         vbtHeader.setAlignment(Pos.CENTER_LEFT);
         Region vbtSpacer = new Region();
         HBox.setHgrow(vbtSpacer, Priority.ALWAYS);
-        lblRegressionStats = new Label("v = -0.0094L + 1.71 | R² = 0.982");
+        lblRegressionStats = new Label("No VBT data recorded yet");
         lblRegressionStats.getStyleClass().add("label-small");
         vbtHeader.getChildren().addAll(
                 styledLabel("VELOCITY-BASED TRAINING (VBT) LOAD-VELOCITY PROFILE", "title-small"),
@@ -284,7 +295,7 @@ public class ProgressController implements ScreenController {
         vbtContent.getChildren().addAll(vbtHeader, scatterVbt);
         vbtCard.setContent(vbtContent);
 
-        // Anthropometric tape timeline card.
+        // Anthropometric tape timeline card (real records, latest first).
         M3Card tapeCard = new M3Card(CardVariant.OUTLINED);
         tapeCard.setPrefWidth(420);
         tapeCard.setMinWidth(380);
@@ -303,7 +314,9 @@ public class ProgressController implements ScreenController {
         workspaceScroll.setFitToWidth(true);
         workspaceScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         workspaceScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        mainLayout.setCenter(workspaceScroll);
+        // The workspace stays mounted through every load (loadAsync swaps inside this host).
+        workspaceStateHost = new StackPane(workspaceScroll);
+        mainLayout.setCenter(workspaceStateHost);
 
         // Celebration confetti particle canvas.
         celebrationCanvas = new M3ParticleCanvas();
@@ -329,12 +342,13 @@ public class ProgressController implements ScreenController {
                 logSpacer,
                 closeLogBtn);
         txtEntryDate = outlinedField("Entry Date", "YYYY-MM-DD");
+        txtEntryDate.setText(LocalDate.now().toString());
         txtWeight = outlinedField("Weight (kg)", "e.g., 84.2");
         sliderWeight = new M3Slider(40, 160, 84.2);
         sliderWeight.setAccessibleLabel("Weight in kilograms");
-        txtBodyFat = outlinedField("Body Fat (%)", "e.g., 13.8");
-        txtTargetWeight = outlinedField("Target Goal Weight (kg)", "e.g., 80.0");
-        txtMeasurements = outlinedField("Circumferences (JSON/Notes)", "Chest, Waist, Arms");
+        txtBodyFat = outlinedField("Body Fat (%)", "e.g., 13.8 — optional");
+        txtTargetWeight = outlinedField("Target Goal Weight (kg)", "Carries the last goal; optional");
+        txtMeasurements = outlinedField("Circumferences (Notes)", "Chest, Waist, Arms");
         M3Button saveEntryBtn = new M3Button("Save Telemetry Entry", ButtonVariant.FILLED);
         saveEntryBtn.setMaxWidth(Double.MAX_VALUE);
         saveEntryBtn.setOnAction(e -> onSaveRecord());
@@ -342,9 +356,33 @@ public class ProgressController implements ScreenController {
                 txtBodyFat, txtTargetWeight, txtMeasurements, saveEntryBtn);
         sheetLogEntry.setContent(logContent);
 
+        // Empty/error state overlay (shown instead of the workspace on a failed or empty load).
+        workspaceStateOverlay = new StackPane();
+        workspaceStateOverlay.setVisible(false);
+        workspaceStateOverlay.getStyleClass().add("progress-state-overlay");
+
         rootPane = new StackPane();
         rootPane.getStyleClass().add("member-progress-root");
-        rootPane.getChildren().addAll(mainLayout, celebrationCanvas, sheetLogEntry, overlay);
+        rootPane.getChildren().addAll(mainLayout, celebrationCanvas, sheetLogEntry,
+                workspaceStateOverlay, overlay);
+    }
+
+    /** The customer selector: a button opening an M3Menu over the loaded members. */
+    private M3Button customerPickerButton() {
+        M3Button picker = new M3Button("Select member", ButtonVariant.OUTLINED);
+        picker.getStyleClass().add("customer-picker-btn");
+        picker.setOnAction(e -> {
+            M3Menu menu = new M3Menu();
+            for (Customer customer : customers) {
+                String name = customer.getFullName();
+                menu.item(name, () -> selectCustomer(customer));
+            }
+            if (customers.isEmpty()) {
+                menu.item("No members on record", () -> { });
+            }
+            menu.showBelow(picker);
+        });
+        return picker;
     }
 
     /** One M3TextField with an outlined variant, label and supporting text. */
@@ -367,6 +405,108 @@ public class ProgressController implements ScreenController {
     }
 
     // ------------------------------------------------------------------
+    // Data loading (CustomerDao + ProgressRecordDao + AttendanceDao)
+    // ------------------------------------------------------------------
+
+    /**
+     * Loads members, progress records and attendance on a background task; defaults the
+     * selection to the member whose latest record is the most recent (the app-ui-foundation
+     * §10 contract) and renders the honest empty state when nobody has records yet.
+     */
+    public void loadProgress() {
+        workspaceStateOverlay.getChildren().clear();
+        workspaceStateOverlay.setVisible(false);
+        Data.loadAsync(workspaceStateHost,
+                () -> {
+                    Data.ensureReady();
+                    List<Customer> loadedCustomers = new CustomerDao().findAll();
+                    List<ProgressRecord> allRecords = new ProgressRecordDao().findAll();
+                    List<Attendance> allAttendance = new AttendanceDao().findAll();
+                    return new ProgressSnapshot(loadedCustomers, allRecords, allAttendance);
+                },
+                snapshot -> {
+                    customers = snapshot.customers();
+                    records = snapshot.records();
+                    recordsByCustomer = records.stream().collect(Collectors.groupingBy(
+                            ProgressRecord::getCustomerId));
+                    if (selectedCustomer != null) {
+                        // Keep the current selection if the member still exists.
+                        Customer kept = customers.stream()
+                                .filter(c -> c.getId() == selectedCustomer.getId())
+                                .findFirst().orElse(null);
+                        selectCustomer(kept);
+                        return;
+                    }
+                    // Default: the member whose latest record is the most recent (C9 contract).
+                    Customer defaultCustomer = records.stream()
+                            .collect(Collectors.toMap(ProgressRecord::getCustomerId,
+                                    ProgressRecord::getDate, (a, b) -> a.compareTo(b) >= 0 ? a : b))
+                            .entrySet().stream()
+                            .max(Map.Entry.comparingByValue())
+                            .map(entry -> customers.stream()
+                                    .filter(c -> c.getId() == entry.getKey())
+                                    .findFirst().orElse(null))
+                            .orElse(null);
+                    if (defaultCustomer == null && !customers.isEmpty()) {
+                        defaultCustomer = customers.get(0);
+                    }
+                    if (defaultCustomer == null) {
+                        workspaceStateOverlay.getChildren().setAll(UiKit.emptyState(
+                                "No members on record yet.", null, null));
+                        workspaceStateOverlay.setVisible(true);
+                        return;
+                    }
+                    selectCustomer(defaultCustomer);
+                },
+                error -> {
+                    workspaceStateOverlay.getChildren().setAll(
+                            UiKit.errorState(error.getMessage(), this::loadProgress));
+                    workspaceStateOverlay.setVisible(true);
+                });
+    }
+
+    /** One load's worth of DAO data. */
+    private record ProgressSnapshot(List<Customer> customers, List<ProgressRecord> records,
+                                    List<Attendance> attendance) {
+    }
+
+    /** Selects a member and re-derives every chart, KPI and the heatmap from their records. */
+    private void selectCustomer(Customer customer) {
+        selectedCustomer = customer;
+        btnCustomerPicker.setText(customer == null
+                ? "Select member" : "Member: " + customer.getFullName());
+        selectedRecords = customer == null
+                ? List.of()
+                : recordsByCustomer.getOrDefault(customer.getId(), List.of()).stream()
+                        .sorted(Comparator.comparing(ProgressRecord::getDate))
+                        .collect(Collectors.toList());
+        refreshAttendanceHeatmap();
+        refreshChartsAndKpis();
+        refreshCompositionAndTimeline();
+    }
+
+    /** The selected customer's real attendance by date drives the density heatmap. */
+    private void refreshAttendanceHeatmap() {
+        activityHeatmap.clearActivities();
+        if (selectedCustomer == null) {
+            return;
+        }
+        Data.submit(
+                () -> new AttendanceDao().findByCustomerId(selectedCustomer.getId()),
+                attendanceRows -> {
+                    Map<String, Integer> perDay = attendanceRows.stream().collect(
+                            Collectors.groupingBy(Attendance::getDate,
+                                    Collectors.summingInt(row -> 1)));
+                    for (Map.Entry<String, Integer> day : perDay.entrySet()) {
+                        activityHeatmap.setActivity(LocalDate.parse(day.getKey()),
+                                day.getValue());
+                    }
+                },
+                error -> overlay.showSnackbar(
+                        "Could not load attendance: " + error.getMessage()));
+    }
+
+    // ------------------------------------------------------------------
     // Event handlers (answers for every visible action)
     // ------------------------------------------------------------------
 
@@ -376,19 +516,21 @@ public class ProgressController implements ScreenController {
                 "Open the member roster from the navigation rail (this preview is standalone).");
     }
 
-    /** Reslices the trajectory charts to the selected horizon (the visible answer). */
+    /** Reslices the trajectory charts to the selected horizon (date-range based). */
     public void onHorizonChanged() {
-        if (weightSeries == null || bodyFatSeries == null) {
-            return;
-        }
         int index = segTimeHorizon.getSelectedIndex();
-        int points = (index >= 0 && index < HORIZON_POINTS.length)
-                ? HORIZON_POINTS[index] : WEEKLY_SAMPLES;
-        applyHorizon(points);
+        int days = (index >= 0 && index < HORIZON_DAYS.length)
+                ? HORIZON_DAYS[index] : Integer.MAX_VALUE;
+        applyHorizon(days);
     }
 
     /** Opens the log-entry bottom sheet as a true modal (scrim, focus, drag-to-dismiss). */
     public void onOpenLogDialog() {
+        txtEntryDate.setText(LocalDate.now().toString());
+        ProgressRecord latest = selectedRecords.isEmpty()
+                ? null : selectedRecords.get(selectedRecords.size() - 1);
+        txtTargetWeight.setText(latest != null && latest.getTargetWeightKg() != null
+                ? String.format(Locale.ROOT, "%.1f", latest.getTargetWeightKg()) : "");
         sheetLogEntry.setVisible(true);
         overlay.showSheet(sheetLogEntry);
     }
@@ -399,150 +541,181 @@ public class ProgressController implements ScreenController {
     }
 
     /**
-     * Saves the telemetry entry: field errors name the problem, success updates the KPIs,
-     * appends the reading to the trajectory chart and confirms via snackbar.
+     * Saves the telemetry entry as a real {@link ProgressRecordDao#insert}: field errors name
+     * the problem, the DAO's verdict surfaces verbatim, and the new reading re-derives the
+     * KPIs, charts and timeline. A PR — the weight strictly below every earlier record —
+     * fires the celebration canvas.
      */
     public void onSaveRecord() {
+        if (selectedCustomer == null) {
+            overlay.showSnackbar("Select a member first, then log the reading.");
+            return;
+        }
         Double weight = parseDouble(txtWeight, 30.0, 300.0);
-        Double bodyFat = txtBodyFat.getText().isBlank()
-                ? Double.valueOf(0.0) : parseDouble(txtBodyFat, 0.0, 70.0);
-        boolean valid = weight != null && bodyFat != null;
+        boolean bodyFatBlank = txtBodyFat.getText().isBlank();
+        Double bodyFat = bodyFatBlank ? Double.valueOf(0.0)
+                : parseDouble(txtBodyFat, 0.0, 70.0);
+        Double target = txtTargetWeight.getText().isBlank()
+                ? null : parseDouble(txtTargetWeight, 1.0, 300.0);
+        boolean targetOk = txtTargetWeight.getText().isBlank() || target != null;
+        boolean dateOk = txtEntryDate.getText().trim().matches("\\d{4}-\\d{2}-\\d{2}");
         txtWeight.setError(weight == null);
-        txtBodyFat.setError(bodyFat == null);
-        if (!valid) {
+        txtBodyFat.setError(!bodyFatBlank && bodyFat == null);
+        txtTargetWeight.setError(!targetOk);
+        txtEntryDate.setError(!dateOk);
+        if (weight == null || bodyFat == null || !targetOk || !dateOk) {
             overlay.showSnackbar("Fix the highlighted fields, then save the entry.");
             return;
         }
-        // Reflect the entry across the screen: slider, KPI, lean-mass math, chart, timeline.
-        sliderWeight.setValue(weight);
-        statCurrentWeight.setValue(String.format("%.1f kg", weight));
-        statCurrentWeight.setDeltaPositive(weight <= 80.0);
-        if (bodyFat > 0) {
-            statLeanMass.setValue(String.format(Locale.ROOT, "%.1f kg", weight * (1 - bodyFat / 100.0)));
-        }
-        appendReading(weight, bodyFat);
-        boolean goalReached = weight <= 80.0;
-        overlay.showSnackbar(goalReached
-                ? String.format(Locale.ROOT, "Entry saved — %.1f kg hits the 80.0 kg goal!", weight)
-                : String.format(Locale.ROOT, "Entry saved — %.1f kg at %.1f%% body fat.", weight, bodyFat));
-        onCloseLogSheet();
+        // Carry the last recorded goal forward when the field is left blank.
+        Double carriedTarget = target != null
+                ? target
+                : (selectedRecords.isEmpty() ? null
+                    : selectedRecords.get(selectedRecords.size() - 1).getTargetWeightKg());
+        boolean pr = selectedRecords.stream()
+                .noneMatch(record -> record.getWeightKg() < weight);
+        ProgressRecordDao dao = new ProgressRecordDao();
+        Data.submit(
+                () -> dao.insert(new ProgressRecord(0, selectedCustomer.getId(),
+                        txtEntryDate.getText().trim(), weight,
+                        bodyFat, txtMeasurements.getText().trim(), carriedTarget, "Logged via app")),
+                inserted -> {
+                    refreshAttendanceHeatmap();
+                    loadProgress();
+                    if (pr) {
+                        celebrationCanvas.setVisible(true);
+                        overlay.showSnackbar(String.format(Locale.ROOT,
+                                "New personal best — %.1f kg is the lowest on record!",
+                                inserted.getWeightKg()));
+                    } else {
+                        overlay.showSnackbar(String.format(Locale.ROOT,
+                                "Entry saved — %.1f kg at %.1f%% body fat.",
+                                inserted.getWeightKg(), inserted.getBodyFatPct()));
+                    }
+                    onCloseLogSheet();
+                },
+                error -> overlay.showSnackbar(
+                        "Could not save the entry: " + error.getMessage()));
     }
 
     // ------------------------------------------------------------------
-    // Demo telemetry
+    // Chart and KPI derivation from the selected records
     // ------------------------------------------------------------------
 
-    private void prefillTelemetry() {
-        statCurrentWeight.setValue("84.2 kg");
-        statBodyFat.setValue("13.8 %");
-        statLeanMass.setValue("72.5 kg");
-        statVbtMax.setValue("142.5 kg");
-        txtEntryDate.setText(LocalDate.now().toString());
-        txtTargetWeight.setText("80.0");
-    }
-
-    /** Weekly weight/body-fat trajectory trending toward the target. */
-    private void populateTrajectoryChart() {
+    /** Re-derives KPIs, trajectory slices, composition and the timeline from real records. */
+    private void refreshChartsAndKpis() {
         weightSeries = new M3DataSeries("Weight (kg)");
         bodyFatSeries = new M3DataSeries("Body fat (%)");
-        for (int week = 1; week <= WEEKLY_SAMPLES; week++) {
-            double progress = week / (double) WEEKLY_SAMPLES;
-            double weight = 86.4 - 2.2 * progress + weeklyNoise(week, 0.12);
-            double bodyFat = 15.2 - 1.4 * progress + weeklyNoise(week * 7, 0.08);
-            weightSeries.getData().add(new M3DataPoint("W" + week, round1(weight)));
-            bodyFatSeries.getData().add(new M3DataPoint("W" + week, round1(bodyFat)));
+        for (ProgressRecord record : selectedRecords) {
+            String label = shortDate(record.getDate());
+            weightSeries.getData().add(new M3DataPoint(label, round1(record.getWeightKg())));
+            bodyFatSeries.getData().add(new M3DataPoint(label,
+                    round1(record.getBodyFatPct())));
         }
-    }
+        onHorizonChanged();
 
-    private double weeklyNoise(int seed, double amplitude) {
-        return Math.sin(seed * 12.9898) * amplitude;
-    }
-
-    private double round1(double value) {
-        return Math.round(value * 10.0) / 10.0;
-    }
-
-    /** Shows only the tail of each series for the chosen horizon. */
-    private void applyHorizon(int points) {
-        splineBiometrics.getSeriesList().setAll(
-                slice(weightSeries, points), slice(bodyFatSeries, points));
-    }
-
-    private M3DataSeries slice(M3DataSeries source, int points) {
-        int from = Math.max(0, source.getData().size() - points);
-        M3DataSeries sliced = new M3DataSeries(source.getName());
-        sliced.setColor(source.getColor());
-        sliced.getData().addAll(source.getData().subList(from, source.getData().size()));
-        return sliced;
-    }
-
-    /** Deterministic 2026 training density up to today (184 planned sessions). */
-    private void populateActivityHeatmap() {
-        LocalDate today = LocalDate.of(2026, 10, 29);
-        LocalDate day = LocalDate.of(2026, 1, 1);
-        while (!day.isAfter(today)) {
-            int dayOfYear = day.getDayOfYear();
-            int count = dayOfYear % 7 < 4 ? 1 + dayOfYear % 2 : 0;
-            if (count > 0) {
-                activityHeatmap.setActivity(day, count);
-            }
-            day = day.plusDays(1);
+        if (selectedRecords.isEmpty()) {
+            statCurrentWeight.setValue("—");
+            statCurrentWeight.setDeltaText("No readings yet");
+            statBodyFat.setValue("—");
+            statBodyFat.setDeltaText("No readings yet");
+            statLeanMass.setValue("—");
+            statLeanMass.setDeltaText("Derived from the latest record");
+            donutComposition.setCenterHeadline("—");
+            donutComposition.setCenterSubtitle("No records");
+            timelineAnthropometrics.getItems().clear();
+            return;
         }
+
+        ProgressRecord latest = selectedRecords.get(selectedRecords.size() - 1);
+        Double target = latest.getTargetWeightKg();
+        statCurrentWeight.setValue(String.format(Locale.ROOT, "%.1f kg", latest.getWeightKg()));
+        statCurrentWeight.setDeltaText(target == null
+                ? "No target set" : String.format(Locale.ROOT, "Target: %.1f kg", target));
+        statBodyFat.setValue(String.format(Locale.ROOT, "%.1f %%", latest.getBodyFatPct()));
+        statBodyFat.setDeltaText("Latest reading");
+        double leanMass = latest.getWeightKg() * (1 - latest.getBodyFatPct() / 100.0);
+        statLeanMass.setValue(String.format(Locale.ROOT, "%.1f kg", leanMass));
+        statLeanMass.setDeltaText(String.format(Locale.ROOT, "%.1f%% of total",
+                100.0 - latest.getBodyFatPct()));
     }
 
-    private void populateCompositionDonut() {
-        donutComposition.setCenterHeadline("84.2 kg");
+    /** Rebuilds the composition donut and the tape timeline from the selected records. */
+    private void refreshCompositionAndTimeline() {
+        donutComposition.getRings().clear();
+        compositionLegend.getChildren().removeIf(node ->
+                node instanceof Label label && "body-small".equals(
+                        label.getStyleClass().size() > 1
+                                ? label.getStyleClass().get(1) : ""));
+        if (selectedRecords.isEmpty()) {
+            donutComposition.setCenterHeadline("—");
+            donutComposition.setCenterSubtitle("No records");
+            timelineAnthropometrics.getItems().clear();
+            return;
+        }
+        ProgressRecord latest = selectedRecords.get(selectedRecords.size() - 1);
+        double lean = latest.getWeightKg() * (1 - latest.getBodyFatPct() / 100.0);
+        double fat = latest.getWeightKg() * latest.getBodyFatPct() / 100.0;
+        donutComposition.setCenterHeadline(
+                String.format(Locale.ROOT, "%.1f kg", latest.getWeightKg()));
         donutComposition.setCenterSubtitle("Total mass");
         // Semantic role mapping, no hardcoded hex: lean mass = the favorable state → the
         // tertiary accent (green family under this seed), fat mass = the counter-state → the
         // error role.
-        donutComposition.addRing("Lean mass", 72.5, 84.2, UiKit.themeRole(ColorRole.TERTIARY));
-        donutComposition.addRing("Fat mass", 11.7, 84.2, UiKit.themeRole(ColorRole.ERROR));
-    }
+        donutComposition.addRing("Lean mass", lean, latest.getWeightKg(),
+                UiKit.themeRole(ColorRole.TERTIARY));
+        donutComposition.addRing("Fat mass", fat, latest.getWeightKg(),
+                UiKit.themeRole(ColorRole.ERROR));
+        compositionLegend.getChildren().addAll(
+                styledLabel(String.format(Locale.ROOT, "Lean Mass: %.1f kg", lean), "body-small"),
+                styledLabel(String.format(Locale.ROOT, "Fat Mass: %.1f kg", fat), "body-small"));
 
-    /** Load-velocity samples around the regression v = -0.0094L + 1.71. */
-    private void populateVbtScatter() {
-        // The load series carries the primary accent (the seed-purple family the whole UI uses).
-        M3ScatterSeries loads = new M3ScatterSeries("Back squat sets", UiKit.themeRole(ColorRole.PRIMARY));
-        double[] barLoads = {40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170};
-        for (int i = 0; i < barLoads.length; i++) {
-            double load = barLoads[i];
-            double velocity = Math.max(0.1, 1.71 - 0.0094 * load + weeklyNoise(i * 3 + 1, 0.04));
-            loads.getPoints().add(new M3ScatterPoint(load, round2(velocity)));
+        timelineAnthropometrics.getItems().clear();
+        List<ProgressRecord> latestFirst = new java.util.ArrayList<>(selectedRecords);
+        java.util.Collections.reverse(latestFirst);
+        for (int i = 0; i < latestFirst.size(); i++) {
+            ProgressRecord record = latestFirst.get(i);
+            timelineAnthropometrics.addItem(record.getDate(),
+                    i == 0 ? "Latest reading" : "Check-in",
+                    String.format(Locale.ROOT, "Weight %.1f kg · Body fat %.1f%%",
+                            record.getWeightKg(), record.getBodyFatPct())
+                            + (record.getMeasurements() == null
+                                    || record.getMeasurements().isBlank()
+                                    ? "" : " · " + record.getMeasurements()),
+                    i == 0 ? M3Timeline.Status.ACTIVE : M3Timeline.Status.COMPLETED);
         }
-        scatterVbt.getSeriesList().setAll(loads);
-        scatterVbt.setShowTrendline(true);
     }
 
-    private double round2(double value) {
-        return Math.round(value * 100.0) / 100.0;
-    }
-
-    private void populateTapeTimeline() {
-        timelineAnthropometrics.addItem("2026-01-05", "Baseline tape",
-                "Weight 86.4 kg · Body fat 15.2% · Waist 84 cm", M3Timeline.Status.COMPLETED);
-        timelineAnthropometrics.addItem("2026-04-18", "Mid-cycle check",
-                "Weight 85.1 kg · Body fat 14.4% · Waist 82 cm", M3Timeline.Status.COMPLETED);
-        timelineAnthropometrics.addItem("2026-08-02", "Strength block end",
-                "Weight 84.6 kg · Body fat 14.0% · Waist 81 cm", M3Timeline.Status.COMPLETED);
-        timelineAnthropometrics.addItem("2026-10-29", "Current reading",
-                "Weight 84.2 kg · Body fat 13.8% · Waist 80 cm", M3Timeline.Status.ACTIVE);
-    }
-
-    /** Appends the saved reading as the newest weekly sample (visible in every horizon). */
-    private void appendReading(double weight, double bodyFat) {
-        int next = weightSeries.getData().size() + 1;
-        weightSeries.getData().add(new M3DataPoint("W" + next, round1(weight)));
-        bodyFatSeries.getData().add(new M3DataPoint("W" + next,
-                bodyFat > 0 ? round1(bodyFat)
-                        : bodyFatSeries.getData().get(bodyFatSeries.getData().size() - 1).getValue()));
-        onHorizonChanged();
-        if (LocalDate.now().toString().equals(txtEntryDate.getText())) {
-            timelineAnthropometrics.addItem(txtEntryDate.getText(), "Logged today",
-                    String.format(Locale.ROOT, "Weight %.1f kg%s", weight,
-                            bodyFat > 0 ? String.format(Locale.ROOT, " · Body fat %.1f%%", bodyFat) : ""),
-                    M3Timeline.Status.ACTIVE);
+    /** Shows only the records inside the selected horizon window (date-range based). */
+    private void applyHorizon(int days) {
+        LocalDate cutoff = LocalDate.now().minusDays(days);
+        List<ProgressRecord> inRange = selectedRecords.stream()
+                .filter(record -> !record.getDate().isBlank())
+                .filter(record -> LocalDate.parse(record.getDate()).isAfter(cutoff)
+                        || LocalDate.parse(record.getDate()).equals(cutoff))
+                .collect(Collectors.toList());
+        if (inRange.isEmpty() && !selectedRecords.isEmpty()) {
+            // Older than the window: keep at least the latest reading visible.
+            inRange = List.of(selectedRecords.get(selectedRecords.size() - 1));
         }
+        weightSeries = new M3DataSeries("Weight (kg)");
+        bodyFatSeries = new M3DataSeries("Body fat (%)");
+        for (ProgressRecord record : inRange) {
+            String label = shortDate(record.getDate());
+            weightSeries.getData().add(new M3DataPoint(label, round1(record.getWeightKg())));
+            bodyFatSeries.getData().add(new M3DataPoint(label,
+                    round1(record.getBodyFatPct())));
+        }
+        splineBiometrics.getSeriesList().setAll(weightSeries, bodyFatSeries);
+    }
+
+    /** "2026-11-21" → "11-21" chart labels. */
+    private static String shortDate(String isoDate) {
+        return isoDate.length() == 10 ? isoDate.substring(5) : isoDate;
+    }
+
+    private double round1(double value) {
+        return Math.round(value * 10.0) / 10.0;
     }
 
     // ------------------------------------------------------------------
