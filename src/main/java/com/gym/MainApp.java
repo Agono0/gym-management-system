@@ -109,6 +109,8 @@ import io.m3fx.controls.scene3d.M3TiltCard3D;
 import io.m3fx.core.theme.ColorRole;
 import io.m3fx.core.theme.M3Theme;
 import io.m3fx.core.theme.ThemeVariant;
+import io.m3fx.core.token.MotionTokens;
+import io.m3fx.core.token.MotionTokens.MotionScheme;
 import io.m3fx.core.token.ElevationLevel;
 import io.m3fx.core.token.ShapeTokens;
 import javafx.application.Application;
@@ -129,7 +131,6 @@ import javafx.scene.control.ToggleGroup;
 import java.io.File;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.image.WritableImage;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
@@ -161,6 +162,7 @@ public class MainApp extends Application {
     private Scene scene;
     private M3Overlay overlay;
     private boolean expressivePhysics = true;
+    private Label motionStateLabel;
 
     private M3NavigationDrawer sidebar;
     private List<String> pageNames;
@@ -441,6 +443,13 @@ public class MainApp extends Application {
 
         // Typography scale preview
         VBox typeBox = new VBox(6);
+        Label headlineLarge = new Label("Headline Large (32px, .headline-large)");
+        headlineLarge.getStyleClass().add("headline-large");
+        Label headlineMedium = new Label("Headline Medium (28px, .headline-medium)");
+        headlineMedium.getStyleClass().add("headline-medium");
+        Label headlineSmall = new Label("Headline Small (24px, .headline-small)");
+        headlineSmall.getStyleClass().add("headline-small");
+        typeBox.getChildren().addAll(headlineLarge, headlineMedium, headlineSmall);
         typeBox.getChildren().addAll(
                 styledLabel("Display Large (57px)", 36, true),
                 styledLabel("Headline Medium (28px)", 24, true),
@@ -926,9 +935,41 @@ public class MainApp extends Application {
                 morphButtons,
                 new StackPane(morphNode));
 
+        // B7 motion-scheme + reduced-motion switches (global MotionTokens state).
+        M3Switch reducedMotionSwitch = new M3Switch(false);
+        reducedMotionSwitch.selectedProperty().addListener((o, ov, reduced) -> {
+            MotionTokens.setReducedMotion(reduced);
+            motionStateLabel.setText(reduced
+                    ? "Reduced motion ON — springs snap to target, transitions fade in 150 ms"
+                    : "Reduced motion OFF — springs and transitions play in full");
+        });
+        M3Switch standardSchemeSwitch = new M3Switch(false);
+        standardSchemeSwitch.selectedProperty().addListener((o, ov, standard) -> {
+            MotionTokens.setMotionScheme(standard
+                    ? MotionScheme.STANDARD : MotionScheme.EXPRESSIVE);
+            motionStateLabel.setText(standard
+                    ? "Standard scheme — spatial springs settle without bounce"
+                    : "Expressive scheme — spatial springs play with natural overshoot");
+        });
+        motionStateLabel = new Label("Expressive scheme, full motion — click the box above to feel it.");
+        motionStateLabel.setWrapText(true);
+        HBox motionToggles = new HBox(24,
+                new VBox(6, styledLabel("Reduced Motion (accessibility)", 13, false),
+                        reducedMotionSwitch),
+                new VBox(6, styledLabel("Standard Motion Scheme (vs Expressive)", 13, false),
+                        standardSchemeSwitch));
+        Label motionCopy = new Label("Expressive springs (stiffness 380, damping 0.65) overshoot like the spec's"
+                + " expressive presets; standard springs (350, 0.90) settle without bounce. Reduced motion is the"
+                + " WCAG 2.3.3 accessibility switch: springs snap, transitions become fades capped at 150 ms.");
+        motionCopy.setWrapText(true);
+
+        Label motionHeading = styledLabel("MOTION SCHEME & REDUCED MOTION", 15, true);
+
         return new VBox(20,
                 section("Spring Physics Engine Sandbox", desc, bouncyBox, controlsBox),
-                section("M3 Expressive Shape Morphing System", morphSection)
+                section("M3 Expressive Shape Morphing System", morphSection),
+                section("Motion Scheme & Reduced Motion (Global State)", motionHeading,
+                        motionToggles, motionCopy, motionStateLabel)
         );
     }
 
@@ -1846,9 +1887,20 @@ public class MainApp extends Application {
         card3.setSparkline(12, 10, 8, 9, 6, 5, 4);
 
         M3StatCard card4 = new M3StatCard("Facility Capacity", "91.5%", "+5.8%");
+        // B10 badge contract: a delta that cannot fit beside the title hides entirely (the
+        // tooltip carries "title — delta") instead of truncating mid-word. Narrow the host to
+        // force the case.
+        M3StatCard cardNarrow = new M3StatCard("Peak Hour Utilization",
+                "94.2%", "Long weekend surge +22.8% versus baseline");
+        StackPane narrowHost = new StackPane(cardNarrow);
+        narrowHost.setPrefWidth(190);
+        narrowHost.setMinWidth(170);
+        cardNarrow.setMaxWidth(Double.MAX_VALUE);
+        javafx.scene.control.Tooltip.install(narrowHost, new javafx.scene.control.Tooltip(
+                "Peak Hour Utilization — Long weekend surge +22.8% versus baseline"));
         card4.setSparkline(65, 70, 75, 82, 88, 89, 92);
 
-        HBox kpiRow = new HBox(16, card1, card2, card3, card4);
+        HBox kpiRow = new HBox(16, card1, card2, card3, card4, narrowHost);
         kpiRow.setAlignment(Pos.CENTER_LEFT);
 
         // High-Density Data Table
@@ -1962,8 +2014,23 @@ public class MainApp extends Application {
             }
         });
 
+        // B16 layer visibility switches (drawn layers: pins + zone boundaries).
+        M3Switch pinsSwitch = new M3Switch(true);
+        pinsSwitch.selectedProperty().addListener((o, ov, visible) ->
+                floorMap.setPinsVisible(visible));
+        M3Switch zonesSwitch = new M3Switch(true);
+        zonesSwitch.selectedProperty().addListener((o, ov, visible) ->
+                floorMap.setZonesVisible(visible));
+        HBox layerSwitches = new HBox(24,
+                new VBox(6, styledLabel("Equipment Pins Layer", 13, false), pinsSwitch),
+                new VBox(6, styledLabel("Zone Boundaries Layer", 13, false), zonesSwitch));
+        Label layerCopy = new Label("The pins and zone-boundary layers render through the map's"
+                + " visibility properties; hidden pins also drop out of hover/click hit-testing.");
+        layerCopy.setWrapText(true);
+
         return new VBox(20,
                 section("Facility Blueprint & Equipment Map", desc),
+                section("Layer Visibility (B16 Properties)", layerSwitches, layerCopy),
                 section("Real-Time Fitness Floor Status (Click node to inspect in 3D)", floorMap)
         );
     }
