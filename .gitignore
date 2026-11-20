@@ -112,7 +112,6 @@ backups/
 !submission/lib/*.jar
 
 # Testing-only sample (never commit)
-src/main/java/com/gym/M3Samples.java
 
 # m3fx module build outputs (explicit; root build/ rule already covers these)
 m3fx-core/build/
