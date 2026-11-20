@@ -217,7 +217,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   role. Give it a TOOL_BAR role + accessible text summarizing the title (and nav/actions count);
   keep it out of the tab-focus cycle (it is presentational) unless a child is focusable.
   done-when: B9's flagged assertion flips green (updated to spec behavior), suite green.
-  claimed-by: — | status: READY
+  claimed-by: A | status: DONE (round 8, commit 1cce386 — TOOL_BAR role + live summary text,
+  focus contract; bonus: fixed the M3TopAppBarTest missing-FX-bootstrap ordering-luck hole;
+  controls tests 241)
 
 - [ ] B7 | lane:B | deps:A3 | files: m3fx-controls/.../internal/MotionUtil.java, internal/SpringAnimation.java, internal/StateLayer.java
   goal: Honor `MotionTokens.isReducedMotion()` in the controls internals: `MotionUtil.enter/exit/
