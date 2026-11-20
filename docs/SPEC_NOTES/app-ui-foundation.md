@@ -212,3 +212,36 @@ are never mutated re-entrantly mid-layout):
 - Deliberately rejected: width-bound ScrollPane wrappers — measured evidence showed binding a
   row's pref width to the scroll pane corrupts the HBox's computed pref height (716px for a
   ~110px row), collapsing the rows at every width.
+
+## 9. Dashboard + profile real data (task C3)
+
+### 9.1 Dashboard
+
+One `Data.loadAsync` snapshot per view: `buildSnapshot()` runs off the FX thread (bootstrap +
+Customer/Membership/Payment/Session/Trainer/Attendance/Equipment/TrainerAvailability queries)
+and returns an immutable `DashboardSnapshot` record; `applySnapshot` is the only FX-touching
+step. Figures: ACTIVE members of the roster, today's non-voided revenue (rules 6/19), today's
+session list with per-slot capacity (rule 17: CONFIRMED-only occupancy against the slot cap;
+ad-hoc sessions show "-"), equipment availability, ACTIVE plan distribution, the hourly
+check-in load for today against the trailing-14-day hourly baseline, 14-day attendance/revenue
+sparklines, and live occupancy ("inside" = checked in today with no check-out). REFRESH
+re-queries the database; the demo `Random` jitter is deleted. QUICK CHECK-IN lists the rule-5
+eligible members (ACTIVE customer + unexpired ACTIVE membership at snapshot time) and runs the
+check-in through `AttendanceDao`: a same-day re-check-in UPDATES the existing row (rule 5)
+rather than inserting a duplicate; every answer re-queries the snapshot. The session agenda's
+row action confirms a REQUESTED session through `SessionDao.update` (rule 18 owned by the DAO).
+
+### 9.2 Customer profile
+
+`showMember` (the roster handoff) parses the "M-0012"-style id and loads the dossier via
+`Data.loadAsync` (`ProfileSnapshot`: customer, latest membership by end date, all biometric
+readings, assigned coach, medical profile). Standalone previews without a handoff show the
+designed empty state (no demo person). Actions, all via `Data.submit` with the DAO's
+`ValidationException` surfaced verbatim: save -> `CustomerDao.update`; freeze -> status FROZEN
+with the stored day counter (rule 7, ACTIVE-only); unfreeze -> end date shifted by the frozen
+days, counter cleared (rule 7 arithmetic mirrors the CLI's `GymRulesHelper`); renew -> end date
+extended by the plan window from today, CANCELLED refused (rule 7); coach change/unassign ->
+`CustomerDao.update` (rule 15); biometric log -> `ProgressRecordDao.insert` with the target
+weight carried over. Program assign/view uses `WorkoutProgramDao` (version continues the
+customer's sequence; the record names its creator coach, so assigning requires a coach first).
+The VBT 1RM card stays an honest dash — no data source records it yet.

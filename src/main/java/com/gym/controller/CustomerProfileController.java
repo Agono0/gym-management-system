@@ -1,5 +1,21 @@
 package com.gym.controller;
 
+import com.gym.dao.CustomerDao;
+import com.gym.dao.MedicalProfileDao;
+import com.gym.dao.MembershipDao;
+import com.gym.dao.ProgressRecordDao;
+import com.gym.dao.TrainerDao;
+import com.gym.dao.WorkoutProgramDao;
+import com.gym.model.Customer;
+import com.gym.model.MedicalProfile;
+import com.gym.model.Membership;
+import com.gym.model.MembershipStatus;
+import com.gym.model.PlanType;
+import com.gym.model.ProgressRecord;
+import com.gym.model.Trainer;
+import com.gym.model.WorkoutProgram;
+import com.gym.ui.Data;
+import com.gym.ui.UiKit;
 import com.gym.util.PhoneUtil;
 import io.m3fx.controls.appbar.M3TopAppBar;
 import io.m3fx.controls.button.ButtonVariant;
@@ -37,21 +53,42 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
 /**
  * Controller for the Athlete 360 VIP Dossier.
  * Conforms to docs/ui/members/CUSTOMER_PROFILE_UI.md Section 7 contract.
- * Pure UI: strictly no backend service, DAO, or database logic.
  *
- * <p>UX contract: saving validates with inline field errors plus a snackbar answer,
- * Freeze is a two-step confirm, plan/coach/program changes visibly update the dossier
- * (badges, labels, capacity radar), and the demo biometrics render in the stat cards and
- * radar chart instead of placeholder dashes.
+ * <p>Data contract (DECISIONS.md 77/78, task C3): the dossier loads the selected customer
+ * from {@code CustomerDao} on a background task ({@link Data#loadAsync}) — identity fields,
+ * membership lifecycle, latest biometrics, assigned coach and medical summary are all real.
+ * The lifecycle actions enforce the rules through the DAOs: save updates the customer,
+ * freeze/unfreeze/renew follow rule 7 via {@code MembershipDao.update} (mirroring the CLI's
+ * arithmetic), the coach change follows rule 15 via {@code CustomerDao.update}, biometric
+ * logging writes {@code ProgressRecordDao}, and every DAO {@code ValidationException}
+ * surfaces verbatim in a snackbar.
+ *
+ * <p>UX contract: saving validates with inline field errors plus a snackbar answer, freeze is
+ * a two-step confirm, and the roster handoff ({@code showMember}) reloads the dossier for the
+ * selected member. Standalone previews without a handoff show the designed empty state.
  *
  * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
  * former customer-profile.fxml: identity/biometrics zone, performance zone, lifecycle/dossier
  * zone.
  */
 public class CustomerProfileController implements ScreenController {
+
+    /**
+     * The immutable result of one background profile load: the customer, its latest
+     * membership, all biometric readings, the assigned coach and the medical profile.
+     */
+    private record ProfileSnapshot(Customer customer, Membership membership,
+                                   List<ProgressRecord> progress, Trainer trainer,
+                                   MedicalProfile medicalProfile) {
+    }
 
     // ---- View fields (the former fx:id injections, now built by buildView) ----
     private StackPane rootPane;
@@ -91,14 +128,21 @@ public class CustomerProfileController implements ScreenController {
     private M3TextField txtEmergencyName;
     private M3TextField txtEmergencyPhone;
 
+    /** Content host around the dossier: swaps loading/error states around DAO loads. */
+    private BorderPane contentHost;
+    /** The scrollable dossier node, restored after loading/error states. */
+    private javafx.scene.Node cockpitDossier;
+    /** The customer currently loaded from the database, or null before the first handoff. */
+    private Customer loadedCustomer;
+    /** The member's latest membership, or null when none is on file. */
+    private Membership loadedMembershipRef;
+    /** The coach roster for the assign menu, refreshed with every profile load. */
+    private List<Trainer> trainerRoster = new ArrayList<>();
+
     /** Overlay host for snackbars and dialogs, added to the screen root in code (no fx:id). */
     private final M3Overlay overlay = new M3Overlay();
-    /** True while the membership badge shows FROZEN; drives the Freeze/Unfreeze pair. */
-    private boolean membershipFrozen;
-    /** Name of the currently assigned demo program, or {@code null} when unassigned. */
-    private String assignedProgram;
-    /** Member identity on the holographic pass ("M-1007" until the roster handoff replaces it). */
-    private String currentMemberId = "M-1007";
+    /** Member identity on the holographic pass ("M-—" until the roster handoff replaces it). */
+    private String currentMemberId = "M-\u2014";
 
     /**
      * Builds the complete Athlete 360 VIP Dossier and initializes all behavior. Same ordering
@@ -325,13 +369,17 @@ public class CustomerProfileController implements ScreenController {
         cockpitScroll.setFitToWidth(true);
         cockpitScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         cockpitScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        mainLayout.setCenter(cockpitScroll);
+        // Content host so the real-data load can swap the dossier for loading/error states.
+        cockpitDossier = cockpitScroll;
+        contentHost = new BorderPane();
+        contentHost.setCenter(cockpitDossier);
+        mainLayout.setCenter(contentHost);
 
         rootPane = new StackPane();
         rootPane.getStyleClass().add("customer-profile-root");
         rootPane.getChildren().addAll(mainLayout, overlay);
 
-        prefillDemoDossier();
+        resetToEmptyState();
 
     // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
     // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
@@ -411,25 +459,226 @@ public class CustomerProfileController implements ScreenController {
     }
 
     /**
-     * Prefills the dossier from the roster selection (the "Open Full Profile" handoff in
-     * {@code CustomerListController}): the name field and the holographic pass identity. Demo
-     * facts the roster does not carry keep their dossier values.
+     * The roster handoff (the "Open Full Profile" action in {@code CustomerListController}):
+     * parses the "M-0012"-style member id and loads that customer's real dossier on a
+     * background task. Non-numeric ids answer with a snackbar instead of guessing.
      */
     public void showMember(String memberName, String memberId) {
+        int customerId = parseMemberId(memberId);
+        if (customerId <= 0) {
+            overlay.showSnackbar("Could not resolve member id " + memberId
+                    + " — open the profile from the member roster.");
+            return;
+        }
         if (memberName != null && !memberName.isBlank()) {
             txtFullName.setText(memberName.trim());
         }
-        if (memberId != null && !memberId.isBlank()) {
-            currentMemberId = memberId.trim();
+        currentMemberId = memberId.trim();
+        renderIdentityPass();
+        loadMember(customerId);
+    }
+
+    /** Parses "M-0012" (or a plain number) into a database id; -1 when unparseable. */
+    private static int parseMemberId(String memberId) {
+        if (memberId == null) {
+            return -1;
         }
+        String digits = memberId.trim().replaceFirst("^M-?", "");
+        try {
+            return Integer.parseInt(digits);
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    /**
+     * Loads one member's full dossier (customer, latest membership, biometrics, coach, medical
+     * profile) on a background task; shows {@link UiKit#loadingState()} while running and
+     * {@link UiKit#errorState()} with retry on failure.
+     */
+    private void loadMember(int customerId) {
+        Data.loadAsync(contentHost,
+            () -> {
+                Data.ensureReady();
+                Customer customer = new CustomerDao().findById(customerId);
+                if (customer == null) {
+                    return new ProfileSnapshot(null, null, List.of(), null, null);
+                }
+                Membership membership = latestMembership(customerId);
+                List<ProgressRecord> progress = new ProgressRecordDao().findByCustomerId(customerId);
+                Trainer trainer = customer.getTrainerId() == null ? null
+                        : new TrainerDao().findById(customer.getTrainerId());
+                MedicalProfile medical = new MedicalProfileDao().findByCustomerId(customerId);
+                return new ProfileSnapshot(customer, membership, progress, trainer, medical);
+            },
+            snapshot -> {
+                contentHost.setCenter(cockpitDossier);
+                applyProfile(snapshot);
+            },
+            error -> contentHost.setCenter(UiKit.errorState(
+                    error.getMessage() == null ? error.toString() : error.getMessage(),
+                    () -> loadMember(customerId))));
+    }
+
+    /** The latest membership by end date, or null when the customer has none. */
+    private static Membership latestMembership(int customerId) throws Exception {
+        Membership latest = null;
+        for (Membership membership : new MembershipDao().findByCustomerId(customerId)) {
+            if (latest == null
+                    || (membership.getEndDate() != null
+                        && membership.getEndDate().compareTo(latest.getEndDate()) > 0)) {
+                latest = membership;
+            }
+        }
+        return latest;
+    }
+
+    /** Applies a finished snapshot to the dossier (fields, badges, stat cards, coach, medical). */
+    private void applyProfile(ProfileSnapshot snapshot) {
+        loadedCustomer = snapshot.customer();
+        if (loadedCustomer == null) {
+            resetToEmptyState();
+            overlay.showSnackbar("No customer with id " + currentMemberId
+                    + " exists in the database.");
+            return;
+        }
+        trainerRoster = loadTrainersQuietly();
+
+        txtFullName.setText(orEmpty(loadedCustomer.getFullName()));
+        txtPhone.setText(orEmpty(loadedCustomer.getPhone()));
+        txtEmail.setText(orEmpty(loadedCustomer.getEmail()));
+        txtAddress.setText(orEmpty(loadedCustomer.getAddress()));
+        txtDateOfBirth.setText(orEmpty(loadedCustomer.getDateOfBirth()));
+        txtEmergencyName.setText(orEmpty(loadedCustomer.getEmergencyName()));
+        txtEmergencyPhone.setText(orEmpty(loadedCustomer.getEmergencyPhone()));
+        txtFullName.setError(false);
+        txtPhone.setError(false);
+
+        // Biometric telemetry: the latest reading drives the stat cards (rule: weight and
+        // body fat are required, target weight is optional on a record).
+        List<ProgressRecord> progress = snapshot.progress();
+        if (progress.isEmpty()) {
+            statWeight.setValue("-- kg");
+            statBodyFat.setValue("-- %");
+            statTarget.setValue("-- kg");
+        } else {
+            ProgressRecord latest = progress.get(progress.size() - 1);
+            statWeight.setValue(String.format("%.1f kg", latest.getWeightKg()));
+            statBodyFat.setValue(String.format("%.1f %%", latest.getBodyFatPct()));
+            statTarget.setValue(latest.getTargetWeightKg() == null
+                    ? "-- kg" : String.format("%.1f kg", latest.getTargetWeightKg()));
+        }
+        statVbt.setValue("-- kg"); // no VBT data source yet — honest dash until one exists
+
+        applyMembership(snapshot.membership());
+
+        if (snapshot.trainer() != null) {
+            lblTrainerName.setText(snapshot.trainer().getFullName());
+            lblTrainerSpecialization.setText(orEmpty(snapshot.trainer().getSpecialization()));
+        } else {
+            lblTrainerName.setText("Unassigned");
+            lblTrainerSpecialization.setText("No coach assigned for this member yet");
+        }
+
+        MedicalProfile medical = snapshot.medicalProfile();
+        if (medical == null) {
+            lblMedicalSummary.setText("No medical profile on file — it is created on demand (rule 3).");
+        } else {
+            lblMedicalSummary.setText("Blood type " + orEmpty(medical.getBloodType())
+                    + " · conditions: " + orEmpty(medical.getConditions())
+                    + " · allergies: " + orEmpty(medical.getAllergies()));
+        }
+
+        renderIdentityPass();
+    }
+
+    /** Loads the coach roster without letting a failure break the profile load. */
+    private List<Trainer> loadTrainersQuietly() {
+        try {
+            return new TrainerDao().findAll();
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /** Applies one membership (badge, plan copy, dates, and the freeze/unfreeze pair). */
+    private void applyMembership(Membership membership) {
+        loadedMembershipRef = membership;
+        if (membership == null) {
+            badgeMembershipStatus.setText("NO PLAN");
+            lblPlanType.setText("No membership on file");
+            lblPlanDates.setText("Sell a plan from the Membership screen to activate this member.");
+            btnFreezePlan.setDisable(true);
+            btnUnfreezePlan.setDisable(true);
+            btnRenewPlan.setDisable(true);
+            return;
+        }
+        MembershipStatus status = membership.getStatus() == null
+                ? MembershipStatus.ACTIVE : membership.getStatus();
+        badgeMembershipStatus.setText(status.name());
+        lblPlanType.setText("Plan: " + planLabel(membership.getPlan())
+                + (status == MembershipStatus.FROZEN ? " (frozen)" : ""));
+        lblPlanDates.setText("Valid: " + orEmpty(membership.getStartDate()) + " -> "
+                + orEmpty(membership.getEndDate()));
+        // Rule 7 drives the pair: only ACTIVE freezes, only FROZEN unfreezes; renew stays
+        // available so the DAO's refusal of a CANCELLED renewal can answer with its rule copy.
+        btnFreezePlan.setDisable(status != MembershipStatus.ACTIVE);
+        btnUnfreezePlan.setDisable(status != MembershipStatus.FROZEN);
+        btnRenewPlan.setDisable(false);
+    }
+
+    /** Human-readable plan label ("Monthly", "Quarterly", "Yearly"). */
+    private static String planLabel(PlanType plan) {
+        return switch (plan == null ? PlanType.MONTHLY : plan) {
+            case MONTHLY -> "Monthly";
+            case QUARTERLY -> "Quarterly";
+            case YEARLY -> "Yearly";
+        };
+    }
+
+    private static String orEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    /**
+     * Standalone preview without a roster handoff: an honest empty dossier (no demo person).
+     */
+    private void resetToEmptyState() {
+        loadedCustomer = null;
+        loadedMembershipRef = null;
+        txtFullName.setText("");
+        txtPhone.setText("");
+        txtEmail.setText("");
+        txtAddress.setText("");
+        txtDateOfBirth.setText("");
+        txtEmergencyName.setText("");
+        txtEmergencyPhone.setText("");
+        statWeight.setValue("-- kg");
+        statBodyFat.setValue("-- %");
+        statTarget.setValue("-- kg");
+        statVbt.setValue("-- kg");
+        badgeMembershipStatus.setText("NO PLAN");
+        lblPlanType.setText("No membership on file");
+        lblPlanDates.setText("Open a member from the roster to load their real dossier.");
+        btnFreezePlan.setDisable(true);
+        btnUnfreezePlan.setDisable(true);
+        btnRenewPlan.setDisable(true);
+        lblTrainerName.setText("Unassigned");
+        lblTrainerSpecialization.setText("No coach assigned for this member yet");
+        lblMedicalSummary.setText("No medical profile on file — it is created on demand (rule 3).");
         renderIdentityPass();
     }
 
     /**
-     * Saves the dossier: inline field errors name the problem, a snackbar confirms success
-     * and the identity pass re-renders with the saved name.
+     * Saves the dossier through {@code CustomerDao.update} on a background task: inline field
+     * errors name the problem first, any DAO {@code ValidationException} surfaces verbatim,
+     * and the dossier re-queries so the view is exactly the database.
      */
     public void onSave() {
+        if (loadedCustomer == null) {
+            overlay.showSnackbar("No member loaded — open one from the member roster first.");
+            return;
+        }
         String name = txtFullName.getText() == null ? "" : txtFullName.getText().trim();
         String phone = txtPhone.getText() == null ? "" : txtPhone.getText().trim();
         boolean nameOk = !name.isEmpty();
@@ -440,12 +689,37 @@ public class CustomerProfileController implements ScreenController {
             overlay.showSnackbar("Fix the highlighted fields, then save again.");
             return;
         }
-        renderIdentityPass();
-        overlay.showSnackbar("Profile changes saved for " + name + ".");
+        Customer toSave = loadedCustomer;
+        toSave.setFullName(name);
+        toSave.setPhone(phone);
+        toSave.setEmail(txtEmail.getText() == null ? "" : txtEmail.getText().trim());
+        toSave.setAddress(txtAddress.getText() == null ? "" : txtAddress.getText().trim());
+        toSave.setDateOfBirth(txtDateOfBirth.getText() == null ? "" : txtDateOfBirth.getText().trim());
+        toSave.setEmergencyName(txtEmergencyName.getText() == null ? "" : txtEmergencyName.getText().trim());
+        toSave.setEmergencyPhone(txtEmergencyPhone.getText() == null ? "" : txtEmergencyPhone.getText().trim());
+        Data.submit(
+                () -> {
+                    new CustomerDao().update(toSave);
+                    return toSave;
+                },
+                saved -> {
+                    overlay.showSnackbar("Profile changes saved for " + saved.getFullName() + ".");
+                    renderIdentityPass();
+                    loadMember(saved.getId());
+                },
+                error -> overlay.showSnackbar("Could not save profile: " + error.getMessage()));
     }
 
-    /** Logs a new biometric reading through a dialog and updates the telemetry cards. */
+    /**
+     * Logs a real biometric reading through a dialog: the record persists via
+     * {@code ProgressRecordDao} (the target weight carries over from the latest record) and
+     * the dossier re-queries so the stat cards show the database state.
+     */
     public void onLogBiometric() {
+        if (loadedCustomer == null) {
+            overlay.showSnackbar("No member loaded — open one from the member roster first.");
+            return;
+        }
         M3TextField weightField = new M3TextField("Weight (kg)", TextFieldVariant.OUTLINED);
         weightField.setSupportingText("30 - 300, e.g. 84.2");
         M3TextField bodyFatField = new M3TextField("Body fat (%)", TextFieldVariant.OUTLINED);
@@ -463,12 +737,30 @@ public class CustomerProfileController implements ScreenController {
                 return;
             }
             dialog.hide();
-            statWeight.setValue(String.format("%.1f kg", weight));
-            statBodyFat.setValue(String.format("%.1f %%", bodyFat));
-            double lean = weight * (1 - bodyFat / 100.0);
-            statTarget.setValue(String.format("%.1f kg", lean));
-            overlay.showSnackbar(String.format(
-                    "Reading saved — %.1f kg at %.1f%% body fat.", weight, bodyFat));
+            Customer customer = loadedCustomer;
+            Data.submit(
+                    () -> {
+                        List<ProgressRecord> existing =
+                                new ProgressRecordDao().findByCustomerId(customer.getId());
+                        ProgressRecord latest = existing.isEmpty()
+                                ? null : existing.get(existing.size() - 1);
+                        Double targetWeight = latest == null ? null : latest.getTargetWeightKg();
+                        ProgressRecord record = new ProgressRecord(0, customer.getId(),
+                                LocalDate.now().toString(), weight, bodyFat,
+                                "Logged from the profile screen", targetWeight,
+                                String.format("Profile log: %.1f kg at %.1f%% body fat.",
+                                        weight, bodyFat));
+                        new ProgressRecordDao().insert(record);
+                        return record;
+                    },
+                    saved -> {
+                        overlay.showSnackbar(String.format(
+                                "Reading saved — %.1f kg at %.1f%% body fat.",
+                                saved.getWeightKg(), saved.getBodyFatPct()));
+                        loadMember(customer.getId());
+                    },
+                    error -> overlay.showSnackbar(
+                            "Could not save reading: " + error.getMessage()));
         });
         cancel.setOnAction(e -> dialog.hide());
         overlay.showDialog(dialog);
@@ -483,105 +775,297 @@ public class CustomerProfileController implements ScreenController {
         overlay.showDialog(dialog);
     }
 
-    /** Shows the assigned program's sessions; without a program it says exactly that. */
+    /** Shows the latest real program (WorkoutProgramDao) or the honest empty answer. */
     public void onViewProgram() {
-        if (assignedProgram == null) {
-            overlay.showSnackbar("No program assigned yet — use Assign Program first.");
+        if (loadedCustomer == null) {
+            overlay.showSnackbar("No member loaded — open one from the member roster first.");
             return;
         }
-        M3Button close = M3Button.text("Close");
-        M3Dialog dialog = M3Dialog.basic(assignedProgram, programContent(assignedProgram), close);
-        close.setOnAction(e -> dialog.hide());
-        dialog.setDefaultAction(close::activate);
-        overlay.showDialog(dialog);
+        Customer customer = loadedCustomer;
+        Data.submit(
+                () -> {
+                    List<WorkoutProgram> programs =
+                            new WorkoutProgramDao().findByCustomerId(customer.getId());
+                    return programs.isEmpty() ? null : programs.get(programs.size() - 1);
+                },
+                program -> {
+                    if (program == null) {
+                        overlay.showSnackbar("No program assigned yet — use Assign Program first.");
+                        return;
+                    }
+                    badgeProgramVersion.setText("v" + program.getVersion());
+                    lblProgramName.setText(program.getName());
+                    lblProgramDetails.setText("Created " + orEmpty(program.getCreatedDate())
+                            + " by coach #" + program.getCreatorTrainerId() + ".");
+                    M3Button close = M3Button.text("Close");
+                    M3Dialog dialog = M3Dialog.basic(program.getName(),
+                            programContent(program), close);
+                    close.setOnAction(e2 -> dialog.hide());
+                    dialog.setDefaultAction(close::activate);
+                    overlay.showDialog(dialog);
+                },
+                error -> overlay.showSnackbar("Could not load the program: " + error.getMessage()));
     }
 
-    /** Assigns one of the demo programs; the card and badge update in place. */
+    /**
+     * Assigns one of the starter programs through {@code WorkoutProgramDao} (version continues
+     * the customer's sequence; the record names its creator coach). Requires an assigned coach
+     * — the program record stores its creator (rule: every program is coach-authored).
+     */
     public void onAssignProgram() {
+        if (loadedCustomer == null) {
+            overlay.showSnackbar("No member loaded — open one from the member roster first.");
+            return;
+        }
+        if (loadedCustomer.getTrainerId() == null) {
+            overlay.showSnackbar("Assign a coach first — every program records its creator.");
+            return;
+        }
         M3Menu menu = new M3Menu();
-        menu.item("Hypertrophy Base (6 weeks)", () -> assignProgram("Hypertrophy Base"));
-        menu.item("VBT Strength Peak (4 weeks)", () -> assignProgram("VBT Strength Peak"));
-        menu.item("Return-to-Play Rehab (stage 3)", () -> assignProgram("Return-to-Play Rehab"));
+        menu.item("Hypertrophy Base (6 weeks)", () -> assignProgram("Hypertrophy Base",
+                "Bench 4x8 @ RIR 2 · Row 4x8 · Pull-up 3xAMRAP · Squat 4x8 · RDL 3x10"));
+        menu.item("VBT Strength Peak (4 weeks)", () -> assignProgram("VBT Strength Peak",
+                "Back squat 5x3 @ 0.55 m/s · Bench 5x2 @ 0.45 m/s · Trap-bar jump 4x3"));
+        menu.item("Return-to-Play Rehab (stage 3)", () -> assignProgram("Return-to-Play Rehab",
+                "Leg press 3x12 pain-free · Hip hinge 3x12 · Bike 15 min Z2"));
         showMenuBelow(btnAssignProgram, menu, "Open this profile in the app window to pick a program.");
     }
 
-    /** Freezing pauses billing and bookings — destructive, so it confirms first. */
+    /** Inserts the chosen program template as the customer's next version. */
+    private void assignProgram(String name, String description) {
+        Customer customer = loadedCustomer;
+        Data.submit(
+                () -> {
+                    List<WorkoutProgram> existing =
+                            new WorkoutProgramDao().findByCustomerId(customer.getId());
+                    int nextVersion = 1;
+                    for (WorkoutProgram program : existing) {
+                        nextVersion = Math.max(nextVersion, program.getVersion() + 1);
+                    }
+                    WorkoutProgram program = new WorkoutProgram(0, customer.getId(),
+                            customer.getTrainerId(), name, description, nextVersion,
+                            LocalDate.now().toString());
+                    new WorkoutProgramDao().insert(program);
+                    return program;
+                },
+                program -> {
+                    badgeProgramVersion.setText("v" + program.getVersion());
+                    lblProgramName.setText(program.getName());
+                    lblProgramDetails.setText("Assigned just now — reviewed by the head coach.");
+                    overlay.showSnackbar(program.getName() + " assigned as v"
+                            + program.getVersion() + ".");
+                },
+                error -> overlay.showSnackbar("Could not assign program: " + error.getMessage()));
+    }
+
+    /**
+     * Rule 7 freeze through {@code MembershipDao.update}: only an ACTIVE membership freezes,
+     * the frozen-day counter is stored, and billing/bookings pause. Destructive, so it
+     * confirms first.
+     */
     public void onFreezeMembership() {
+        Membership membership = loadedMembershipRef;
+        if (membership == null) {
+            overlay.showSnackbar("No membership on file for this member.");
+            return;
+        }
+        M3TextField daysField = new M3TextField("Days to freeze", TextFieldVariant.OUTLINED);
+        daysField.setSupportingText("1 - 365, e.g. 14");
         M3Button cancel = M3Button.text("Keep Active");
         M3Button freeze = M3Button.text("Freeze Plan");
         M3Dialog dialog = M3Dialog.basic("Freeze this membership?",
-                new Label("Bookings are held, billing pauses, and the athlete keeps gym-floor "
-                        + "access until the next billing date."),
+                new VBox(10,
+                        new Label("Bookings are held and billing pauses for the freeze window."),
+                        daysField),
                 cancel, freeze);
         dialog.setDefaultAction(freeze::activate);
         freeze.setOnAction(e -> {
+            Double daysValue = parseInRange(daysField, 1, 365);
+            if (daysValue == null) {
+                return;
+            }
+            int days = daysValue.intValue();
             dialog.hide();
-            membershipFrozen = true;
-            badgeMembershipStatus.setText("FROZEN");
-            lblPlanType.setText("Plan: Monthly Standard (frozen)");
-            btnFreezePlan.setDisable(true);
-            btnUnfreezePlan.setDisable(false);
-            overlay.showSnackbar("Membership frozen — billing and bookings paused.");
+            Data.submit(
+                    () -> {
+                        Membership current = new MembershipDao().findById(membership.getId());
+                        if (current == null) {
+                            throw new com.gym.exception.ValidationException(
+                                    "Membership no longer exists in the database");
+                        }
+                        current.setStatus(MembershipStatus.FROZEN);
+                        current.setFrozenDays(days);
+                        new MembershipDao().update(current);
+                        return current;
+                    },
+                    frozen -> {
+                        overlay.showSnackbar("Membership frozen for " + days
+                                + " days — billing and bookings paused.");
+                        loadMember(loadedCustomer.getId());
+                    },
+                    error -> overlay.showSnackbar("Could not freeze: " + error.getMessage()));
         });
         cancel.setOnAction(e -> dialog.hide());
         overlay.showDialog(dialog);
     }
 
-    /** Unfreezing restores the plan immediately (non-destructive: no confirm needed). */
+    /**
+     * Rule 7 unfreeze through {@code MembershipDao.update}: the end date shifts forward by the
+     * stored frozen days and the counter clears. Non-destructive, so no confirm.
+     */
     public void onUnfreezeMembership() {
-        membershipFrozen = false;
-        badgeMembershipStatus.setText("ACTIVE");
-        lblPlanType.setText("Plan: Monthly Standard");
-        btnFreezePlan.setDisable(false);
-        btnUnfreezePlan.setDisable(true);
-        overlay.showSnackbar("Membership reactivated — billing resumes on the next cycle.");
+        Membership membership = loadedMembershipRef;
+        if (membership == null) {
+            overlay.showSnackbar("No membership on file for this member.");
+            return;
+        }
+        Data.submit(
+                () -> {
+                    Membership current = new MembershipDao().findById(membership.getId());
+                    if (current == null) {
+                        throw new com.gym.exception.ValidationException(
+                                "Membership no longer exists in the database");
+                    }
+                    if (current.getStatus() != MembershipStatus.FROZEN) {
+                        throw new com.gym.exception.ValidationException(
+                                "Rule 7: Only FROZEN memberships can be unfrozen");
+                    }
+                    LocalDate newEnd = LocalDate.parse(current.getEndDate())
+                            .plusDays(current.getFrozenDays());
+                    current.setEndDate(newEnd.toString());
+                    current.setFrozenDays(0);
+                    current.setStatus(MembershipStatus.ACTIVE);
+                    new MembershipDao().update(current);
+                    return current;
+                },
+                unfrozen -> {
+                    overlay.showSnackbar("Membership reactivated — valid through "
+                            + unfrozen.getEndDate() + " (the freeze window shifted the end date).");
+                    loadMember(loadedCustomer.getId());
+                },
+                error -> overlay.showSnackbar("Could not unfreeze: " + error.getMessage()));
     }
 
-    /** Renews through a confirm dialog and visibly extends the validity window. */
+    /**
+     * Rule 7 renew through {@code MembershipDao.update}: extends the end date by the plan
+     * window from today (an expired plan reactivates; a CANCELLED one is refused with the
+     * rule copy).
+     */
     public void onRenewMembership() {
+        Membership membership = loadedMembershipRef;
+        if (membership == null) {
+            overlay.showSnackbar("No membership on file for this member.");
+            return;
+        }
         M3Button cancel = M3Button.text("Not Now");
-        M3Button renew = M3Button.text("Renew 12 Months");
-        M3Dialog dialog = M3Dialog.basic("Renew for another 12 months?",
-                new Label("The validity window extends by one year from the current end date "
-                        + "at the Monthly Standard rate."),
+        M3Button renew = M3Button.text("Renew " + planLabel(membership.getPlan()));
+        M3Dialog dialog = M3Dialog.basic("Renew for another "
+                        + planLabel(membership.getPlan()).toLowerCase(Locale.ROOT) + " cycle?",
+                new Label("The validity window extends by one plan cycle from the current "
+                        + "end date. Renewing a cancelled membership is refused (rule 7)."),
                 cancel, renew);
         dialog.setDefaultAction(renew::activate);
         renew.setOnAction(e -> {
             dialog.hide();
-            lblPlanDates.setText("Valid: 2026-01-01 -> 2027-12-31");
-            overlay.showSnackbar("Membership renewed through 2027-12-31.");
+            Data.submit(
+                    () -> {
+                        Membership current = new MembershipDao().findById(membership.getId());
+                        if (current == null) {
+                            throw new com.gym.exception.ValidationException(
+                                    "Membership no longer exists in the database");
+                        }
+                        if (current.getStatus() == MembershipStatus.CANCELLED) {
+                            throw new com.gym.exception.ValidationException(
+                                    "Rule 7: Renewing a CANCELLED membership is refused");
+                        }
+                        LocalDate baseDate = LocalDate.parse(current.getEndDate());
+                        if (baseDate.isBefore(LocalDate.now())) {
+                            baseDate = LocalDate.now();
+                        }
+                        current.setEndDate(baseDate.plusDays(planDays(current.getPlan()))
+                                .toString());
+                        current.setStatus(MembershipStatus.ACTIVE);
+                        new MembershipDao().update(current);
+                        return current;
+                    },
+                    renewed -> {
+                        overlay.showSnackbar("Membership renewed through "
+                                + renewed.getEndDate() + ".");
+                        loadMember(loadedCustomer.getId());
+                    },
+                    error -> overlay.showSnackbar("Could not renew: " + error.getMessage()));
         });
         cancel.setOnAction(e -> dialog.hide());
         overlay.showDialog(dialog);
     }
 
-    /** Picks a coach from the demo roster; the coach card updates in place. */
+    /** Plan window length in days (mirrors the CLI's rule-7 arithmetic). */
+    private static int planDays(PlanType plan) {
+        return switch (plan == null ? PlanType.MONTHLY : plan) {
+            case MONTHLY -> 30;
+            case QUARTERLY -> 90;
+            case YEARLY -> 365;
+        };
+    }
+
+    /**
+     * Rule 15 coach change through {@code CustomerDao.update}: the assigned trainer is the
+     * authoritative link for the coach's roster and medical access. The menu lists the real
+     * coach roster plus the unassign option.
+     */
     public void onChangeTrainer() {
+        if (loadedCustomer == null) {
+            overlay.showSnackbar("No member loaded — open one from the member roster first.");
+            return;
+        }
         M3Menu menu = new M3Menu();
-        menu.item("Coach Sarah — HIIT & Conditioning", () -> changeTrainer("Coach Sarah", "HIIT & Conditioning"));
-        menu.item("Coach Marcus — Strength & Powerlifting", () -> changeTrainer("Coach Marcus", "Strength & Powerlifting"));
-        menu.item("Coach Elena — Mobility & Rehab", () -> changeTrainer("Coach Elena", "Mobility & Rehab"));
-        menu.item("Unassign current coach", () -> changeTrainer("Unassigned", "No specialization"));
+        for (Trainer trainer : trainerRoster) {
+            menu.item(trainer.getFullName() + " — " + orEmpty(trainer.getSpecialization()),
+                    () -> assignTrainer(trainer));
+        }
+        if (loadedCustomer.getTrainerId() != null) {
+            menu.divider();
+            menu.item("Unassign current coach", this::unassignTrainer);
+        }
         showMenuBelow(btnChangeTrainer, menu, "Open this profile in the app window to pick a coach.");
     }
 
-    // ------------------------------------------------------------------
-    // Demo data rendering
-    // ------------------------------------------------------------------
-
-    private void prefillDemoDossier() {
-        txtFullName.setText("Layla Hassan");
-        txtPhone.setText("01005558877");
-        txtEmail.setText("layla.h@mailbox.com");
-        txtAddress.setText("14 El-Nasr St, Nasr City");
-        txtDateOfBirth.setText("1998-04-12");
-        txtEmergencyName.setText("Yara Hassan (sister)");
-        txtEmergencyPhone.setText("01098761234");
-        statWeight.setValue("84.2 kg");
-        statBodyFat.setValue("13.8 %");
-        statTarget.setValue("80.0 kg");
-        statVbt.setValue("142.5 kg");
+    /** Persists the assigned coach and re-queries the dossier. */
+    private void assignTrainer(Trainer trainer) {
+        Customer customer = loadedCustomer;
+        Data.submit(
+                () -> {
+                    customer.setTrainerId(trainer.getId());
+                    new CustomerDao().update(customer);
+                    return trainer;
+                },
+                assigned -> {
+                    overlay.showSnackbar("Assigned coach updated to "
+                            + assigned.getFullName() + ".");
+                    loadMember(customer.getId());
+                },
+                error -> overlay.showSnackbar("Could not assign coach: " + error.getMessage()));
     }
+
+    /** Persists the coach unassignment (trainerId null) and re-queries the dossier. */
+    private void unassignTrainer() {
+        Customer customer = loadedCustomer;
+        Data.submit(
+                () -> {
+                    customer.setTrainerId(null);
+                    new CustomerDao().update(customer);
+                    return customer;
+                },
+                updated -> {
+                    overlay.showSnackbar("Coach unassigned for " + updated.getFullName() + ".");
+                    loadMember(updated.getId());
+                },
+                error -> overlay.showSnackbar("Could not unassign coach: " + error.getMessage()));
+    }
+
+    // ------------------------------------------------------------------
+    // Real data rendering
+    // ------------------------------------------------------------------
 
     private void populateCapacityRadar() {
         radarAthleteCapacity.getAxes().addAll(
@@ -593,66 +1077,65 @@ public class CustomerProfileController implements ScreenController {
 
     /** The holographic pass is the screen's hero: name, ID and status at a glance. */
     private void renderIdentityPass() {
-        Label name = new Label(txtFullName.getText().isBlank() ? "Unnamed athlete" : txtFullName.getText().trim());
-        name.getStyleClass().add("m3-list-headline");
-        Label meta = new Label(currentMemberId + " · Membership ACTIVE · Monthly Standard");
+        String name = txtFullName.getText() == null || txtFullName.getText().isBlank()
+                ? (loadedCustomer == null ? "No member loaded" : loadedCustomer.getFullName())
+                : txtFullName.getText().trim();
+        Label nameLabel = new Label(name);
+        nameLabel.getStyleClass().add("m3-list-headline");
+        String membershipCopy = loadedMembershipRef == null ? "No membership on file"
+                : "Membership " + badgeMembershipStatus.getText() + " · "
+                        + planLabel(loadedMembershipRef.getPlan());
+        Label meta = new Label(currentMemberId + " · " + membershipCopy);
         meta.getStyleClass().add("m3-list-supporting");
         meta.setWrapText(true);
-        holographicPass.setContent(new VBox(6, name, meta));
+        holographicPass.setContent(new VBox(6, nameLabel, meta));
     }
 
-    private void assignProgram(String program) {
-        assignedProgram = program;
-        badgeProgramVersion.setText("v1");
-        lblProgramName.setText(program);
-        lblProgramDetails.setText("Assigned just now — 3 sessions per week, reviewed by the head coach.");
-        overlay.showSnackbar(program + " assigned. View Workout now shows the sessions.");
-    }
-
-    private VBox programContent(String program) {
+    /** The program dialog content: the record's own description and metadata. */
+    private VBox programContent(WorkoutProgram program) {
         VBox box = new VBox(10);
         box.setPrefWidth(380);
-        String[][] sessions = switch (program) {
-            case "Hypertrophy Base" -> new String[][] {
-                    {"Day A — Upper", "Bench 4x8 @ RIR 2 · Row 4x8 · Pull-up 3xAMRAP"},
-                    {"Day B — Lower", "Squat 4x8 @ RIR 2 · RDL 3x10 · Split squat 3x10"},
-                    {"Day C — Full", "Deadlift 3x5 · Press 3x8 · Core circuit 3 rounds"}};
-            case "VBT Strength Peak" -> new String[][] {
-                    {"Day A — Velocity", "Back squat 5x3 @ 0.55 m/s · Auto-regulate by VBT"},
-                    {"Day B — Peak", "Bench 5x2 @ 0.45 m/s · Trap-bar jump 4x3"},
-                    {"Day C — Deload", "Squat 3x3 @ 0.65 m/s · Mobility flow"}};
-            default -> new String[][] {
-                    {"Stage 3 — Knee-dominant", "Leg press 3x12 pain-free · Step-down 3x10"},
-                    {"Stage 3 — Posterior", "Hip hinge 3x12 · Nordic curl 2x6 assisted"},
-                    {"Stage 3 — Capacity", "Bike 15 min Z2 · Stretching circuit"}};
-        };
-        for (String[] session : sessions) {
-            box.getChildren().add(new M3ListItem(session[0], session[1], M3ListItem.TWO_LINES));
-        }
+        box.getChildren().add(listItem("stats", "Version", "v" + program.getVersion()
+                + " · created " + orEmpty(program.getCreatedDate())));
+        box.getChildren().add(listItem("event", "Sessions", orEmpty(program.getExercises())));
+        box.getChildren().add(listItem("person", "Creator coach",
+                "Coach #" + program.getCreatorTrainerId()));
         return box;
     }
 
+    /** The medical dialog content: the real profile, or the on-demand rule-3 answer. */
     private VBox medicalSummary() {
         VBox box = new VBox(10);
         box.setPrefWidth(380);
+        MedicalProfile medical = loadedCustomer == null ? null
+                : loadMedicalQuietly(loadedCustomer.getId());
+        if (medical == null) {
+            box.getChildren().add(listItem("favorite", "No medical profile on file",
+                    "It is created on demand (rule 3) — none is needed for gym-floor access."));
+            return box;
+        }
         box.getChildren().addAll(
-                listItem("favorite", "Contraindications", "None recorded — cleared for full training."),
-                listItem("info", "Allergies", "Penicillin · NSAIDs (mild)"),
-                listItem("person", "Attending physician", "Dr. Elena Vance · 01055443322"),
-                listItem("stats", "Clearance stage", "Stage 3 of 4 — Return to sport conditioning"));
+                listItem("favorite", "Conditions", orEmpty(medical.getConditions())),
+                listItem("info", "Allergies", orEmpty(medical.getAllergies())),
+                listItem("person", "Attending physician",
+                        orEmpty(medical.getDoctorName()) + " · " + orEmpty(medical.getDoctorPhone())),
+                listItem("stats", "Notes", orEmpty(medical.getNotes())));
         return box;
+    }
+
+    /** Loads the member's medical profile without letting a failure break the dialog. */
+    private MedicalProfile loadMedicalQuietly(int customerId) {
+        try {
+            return new MedicalProfileDao().findByCustomerId(customerId);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private M3ListItem listItem(String symbol, String headline, String supporting) {
         M3ListItem item = new M3ListItem(headline, supporting, M3ListItem.TWO_LINES);
         item.setLeading(M3Icon.symbol(symbol));
         return item;
-    }
-
-    private void changeTrainer(String name, String specialization) {
-        lblTrainerName.setText(name);
-        lblTrainerSpecialization.setText(specialization);
-        overlay.showSnackbar("Assigned coach updated to " + name + ".");
     }
 
     /** Shows an anchored menu; without a window (headless preview) it answers via snackbar. */
