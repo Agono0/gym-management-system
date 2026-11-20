@@ -383,3 +383,56 @@ amount, reason, voided date — NO hard delete), then offers a same-item replace
 receipts reconcile. The receipt lookup uses `PaymentDao.findByReceiptNo` and the receipt sheet
 renders the real itemized row (including void fields); the dead "Print Thermal Copy" button is
 replaced by a real "Receipt Preview" dialog action.
+
+## 10. Progress screen on real data (task C9)
+
+- **Customer selection**: a picker button in the app bar opens an M3Menu over the loaded
+  members (CustomerDao.findAll); the default selection is the member whose latest record is
+  the most recent (the app-ui-foundation C9 contract). Re-loads keep the current selection
+  when the member still exists.
+- **Trajectory charts**: weight/body-fat splines render the real records sorted by date with
+  'MM-dd' chart labels; the horizon segments (1M/3M/6M/1Y/ALL) slice by real date ranges
+  (31/92/183/365/unbounded days from today) and keep the latest reading visible when it
+  predates the window.
+- **Target weight (rule 13 reading)**: comes from the records' {@code targetWeightKg} — the
+  latest record's goal backs the CURRENT WEIGHT card ('No target set' when absent; the baked
+  80.0 goal is gone). The log sheet carries the last recorded goal forward when its field is
+  left blank, and the saved entry persists the goal so it evolves with the data.
+- **PR celebration**: saving a reading whose weight is strictly below every earlier record for
+  that member fires the celebration canvas (a real comparison against the member's history;
+  the dead always-on canvas is gone).
+- **Heatmap**: the density calendar renders the selected member's real AttendanceDao check-ins
+  by date ({@code clearActivities()} on member switch — the calendar exposes a clear API).
+- **Composition donut + legend**: lean/fat mass derive from the latest record's weight and
+  body-fat (real math); no water metric is shown (no data source).
+- **VBT honesty**: the load-velocity scatter, regression label and 1RM card stay an honest
+  dash — nothing in the schema records velocity yet (carried from the C0 note).
+- **Log entry**: persists through {@code ProgressRecordDao.insert} via Data.submit (customer
+  from the selection, date from the field defaulting to {@code LocalDate.now()}, weight
+  required, body fat optional-zero, target carried/edited, measurements into the
+  measurements field); the DAO's ValidationException (date format, weight > 0, body fat
+  0-100, target > 0, customer existence) surfaces verbatim.
+
+## 11. Medical console on real data (task C9)
+
+- **Customer selection + rule 3**: the picker defaults to the most recently joined member
+  (highest id); the console renders their record (MedicalProfileDao.findByCustomerId via the
+  findAll map) or the designed rule-3 empty state with the Create action. Saving a member
+  with no record inserts; saving an existing record updates.
+- **Save**: blood type (A/B/AB/O + rh), doctor name and phone are required (client mirrors);
+  everything lands in one {@code MedicalProfileDao.insert}/{@code update} through Data.submit
+  with {@code updatedDate = today}; the DAO's ValidationException — rule 3 duplicates, phone
+  format via PhoneUtil — surfaces verbatim in a snackbar.
+- **Allergy chips**: rendered from the record's comma-separated allergies field (split on
+  ', '), closable, added via the field or the + button; Save persists
+  {@code String.join(', ', tags)}. The value 'None' (the seeder's empty marker) renders no
+  chips.
+- **CRITICAL beacon**: real — CRITICAL when tagged allergies exist, normal when the record
+  has none (or only the 'None' marker); the injury label carries the record's injury notes
+  ('No injury notes on record' when blank/'None').
+- **Delete Record**: confirms, then {@code MedicalProfileDao.delete} through Data.submit, and
+  the snackbar offers a real Undo — the captured record (with its fields) is re-inserted
+  through the DAO (a new id, announced by the state). Confirm copy is honest about the
+  permanence.
+- **Anatomy viewer**: presentational (no joint/muscle fields in the model); it carries the
+  record's injury notes as text. The demo dossier prefill is gone.
