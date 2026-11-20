@@ -16,6 +16,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
 /**
@@ -55,6 +56,8 @@ public class M3TextField extends VBox {
     private final TextField input = new TextField();
     private final Label supportLabel = new Label();
     private final Label counterLabel = new Label();
+    /** The 56dp container: input content with the floating label overlaid inside it. */
+    private final StackPane inputBox = new StackPane();
     private final HBox inputRow = new HBox();
 
     /** Creates a filled text field. */
@@ -81,12 +84,17 @@ public class M3TextField extends VBox {
         // M3 selection colors (secondary-container highlight, on-secondary-container text) come
         // from the .m3-text-field-input rule in m3fx.css; no inline style.
         inputRow.getChildren().add(input);
-        inputRow.getStyleClass().add("m3-text-field-box");
-        // Spec container height: 56dp for both filled and outlined variants.
-        inputRow.setMinHeight(CONTAINER_HEIGHT);
         HBox.setHgrow(input, Priority.ALWAYS);
         input.textProperty().addListener((obs, oldV, newV) -> refreshStates());
         input.focusedProperty().addListener((obs, oldV, newV) -> refreshStates());
+
+        // B11: the label lives INSIDE the 56dp container (centered at rest, floated to the top
+        // via the :floated CSS), overlaying the input - spec resting position for both variants.
+        inputBox.getChildren().addAll(inputRow, floatingLabel);
+        inputBox.getStyleClass().add("m3-text-field-box");
+        StackPane.setAlignment(floatingLabel, Pos.CENTER_LEFT);
+        // Spec container height: 56dp for both filled and outlined variants.
+        inputBox.setMinHeight(CONTAINER_HEIGHT);
 
         // Supporting text left, counter pinned to the end (spec layout).
         Region counterSpacer = new Region();
@@ -100,7 +108,7 @@ public class M3TextField extends VBox {
         setLabelText(labelText);
         setSpacing(0);
         setPadding(Insets.EMPTY);
-        getChildren().addAll(floatingLabel, inputRow, bottomRow);
+        getChildren().addAll(inputBox, bottomRow);
 
         errorProperty().addListener((obs, oldV, isError) -> {
             pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("error"), isError);
@@ -243,6 +251,9 @@ public class M3TextField extends VBox {
         if (icon != null) {
             inputRow.getChildren().add(0, iconHitArea(icon, "m3-text-field-leading"));
         }
+        // The resting/floated label aligns with the input text, which starts after a leading
+        // icon (40px hit target).
+        floatingLabel.setTranslateX(icon == null ? 0 : ICON_HIT_SIZE);
     }
 
     /**
@@ -273,6 +284,10 @@ public class M3TextField extends VBox {
     private void refreshStates() {
         boolean floated = input.isFocused() || (input.getText() != null && !input.getText().isEmpty());
         pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("floated"), floated);
+        // B11: the label moves between the resting center and the container top in code -
+        // Node.translateY is not CSS-styleable and StackPane child constraints conflict
+        // with Label's own -fx-alignment, so the CSS drives color/size only.
+        floatingLabel.setTranslateY(floated ? -13 : 0);
         pseudoClassStateChanged(
                 javafx.css.PseudoClass.getPseudoClass("input-focused"), input.isFocused());
         if (getMaxLength() > 0) {

@@ -270,7 +270,20 @@
 
 /* ============ text fields ============ */
 .m3-text-field { -fx-spacing: 0; }
-.m3-text-field-label { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface-variant; -fx-padding: 0 0 0 16px; }
+/* B11: the label rests INSIDE the container (centered, 16px like the input text) and floats
+ * to the top on :floated (focus or non-empty text) - spec resting position for filled
+ * fields. Floated moves via the StackPane child constraints (alignment + margin). */
+.m3-text-field-label {
+  -fx-font-size: 16px;
+  -fx-text-fill: -md-sys-color-on-surface-variant;
+  -fx-padding: 0 0 0 16px;
+}
+.m3-text-field:floated .m3-text-field-label {
+  -fx-font-size: 12px;
+  -fx-text-fill: -md-sys-color-primary;
+}
+/* When the label floats, the input text settles into the container's lower half. */
+.m3-text-field:floated .m3-text-field-input { -fx-padding: 20px 0 6px 0; }
 .m3-text-field-box {
   -fx-background-radius: 4px 4px 0 0;
   -fx-border-radius: 4px 4px 0 0;
@@ -334,8 +347,6 @@
   -fx-text-fill: -md-sys-color-on-surface-a38;
   -fx-opacity: 1;
 }
-.m3-text-field:floated .m3-text-field-label { -fx-text-fill: -md-sys-color-primary; }
-
 /* ============ selection ============ */
 .m3-checkbox, .m3-radio { -fx-text-fill: -md-sys-color-on-surface; -fx-font-size: 14px; }
 .m3-checkbox:hover .box { -fx-border-color: -md-sys-color-primary; }
