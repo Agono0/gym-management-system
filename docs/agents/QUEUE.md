@@ -438,7 +438,11 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   goal: Keyboard-only pass: tab order, focus rings, Enter/Space/Esc/arrows per screen; 48dp hit
   targets.
   done-when: walkthrough log in STATE.md, gaps fixed.
-  claimed-by: — | status: BLOCKED (C3..C9)
+  claimed-by: B (pooled) | status: DONE (round 13, commits 0c4de37+da68830 → main da68830 —
+  full 19-screen walkthrough table; fixed: the shell's promised-but-unwired Ctrl+K accelerator,
+  mouse-only search trigger, theme toggle keyboard handler; signed-in identity wired into the
+  Staff badge via shell accessors. Observations parked: M3TextField 40px icon hit target
+  (<48dp guide), 3D viewer/map rotation mouse-only)
 - [ ] Q4 | lane:Q | deps:C3,C4,C5,C6,C7,C8,C9 | files: app-wide
   goal: Resize pass at 600/840/1200/1600 widths: no clipped text, no overflow, navigation swaps
   correctly, long strings ellipsize per spec.
