@@ -146,7 +146,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   owner bounds or hides); snackbar hover-pause gets a pause cap so a hovered snackbar cannot live
   forever.
   done-when: manual overlay test at moved/resized window passes, tests added.
-  claimed-by: — | status: READY
+  claimed-by: A (pooled) | status: DONE (round 5, commit 5bf9571 — anchored panels follow
+  window moves via delta (localToScreen lags a pulse), menu defers instead of origin fallback,
+  snackbar 30 s cap; controls tests 208)
 
 - [ ] B6 | lane:B | deps:— | files: m3fx-controls/.../chart/M3*Chart.java (theme repaint), data/M3DataTable.java
   goal: Charts repaint when the theme changes (listen to scene theme property / `M3Stylesheets`
