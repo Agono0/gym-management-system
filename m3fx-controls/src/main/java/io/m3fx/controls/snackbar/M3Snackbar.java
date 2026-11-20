@@ -37,6 +37,12 @@ public class M3Snackbar {
 
     /** Default short-message duration in ms. */
     public static final int DEFAULT_DURATION_MS = 4000;
+
+    /**
+     * Hard cap (30 s) on how long a snackbar stays visible: hovering pauses the auto-dismiss
+     * countdown, but never beyond this deadline. Documented cap, not a spec value.
+     */
+    public static final int MAX_DISPLAY_MS = 30_000;
     /** Duration when an action is present. */
     public static final int ACTION_DURATION_MS = 10000;
 
@@ -48,6 +54,7 @@ public class M3Snackbar {
     private final PauseTransition gap = new PauseTransition(
             Duration.millis(MotionTokens.DURATION_SHORT_2));
     private PauseTransition autoDismiss;
+    private PauseTransition maxDisplay;
     private Node current;
     private boolean showing;
 
@@ -133,6 +140,10 @@ public class M3Snackbar {
                                 ? ACTION_DURATION_MS
                                 : DEFAULT_DURATION_MS));
         autoDismiss.setOnFinished(e -> dismiss());
+        // Hovering pauses autoDismiss below, but never past this deadline: the cap keeps
+        // running so a hovered snackbar cannot stay on screen indefinitely.
+        maxDisplay = new PauseTransition(Duration.millis(MAX_DISPLAY_MS));
+        maxDisplay.setOnFinished(e -> dismiss());
         // Hovering pauses the countdown (the user is reading or reaching for the action);
         // leaving resumes it. Escape dismisses when the bar or one of its buttons has focus.
         bar.setOnMouseEntered(e -> {
@@ -152,6 +163,22 @@ public class M3Snackbar {
             }
         });
         autoDismiss.play();
+        maxDisplay.playFromStart();
+    }
+
+    /** The hard cap timer for the currently shown message (test seam; may be {@code null}). */
+    PauseTransition maxDisplayForTesting() {
+        return maxDisplay;
+    }
+
+    /** The auto-dismiss countdown for the currently shown message (test seam). */
+    javafx.animation.PauseTransition autoDismissForTesting() {
+        return autoDismiss;
+    }
+
+    /** The currently shown message node (test seam; may be {@code null}). */
+    javafx.scene.Node currentNodeForTesting() {
+        return current;
     }
 
     /** Dismisses the current message with a fade-out and shows the next queued one. */
@@ -163,6 +190,10 @@ public class M3Snackbar {
         if (autoDismiss != null) {
             autoDismiss.stop();
             autoDismiss = null;
+        }
+        if (maxDisplay != null) {
+            maxDisplay.stop();
+            maxDisplay = null;
         }
         Node node = current;
         current = null;

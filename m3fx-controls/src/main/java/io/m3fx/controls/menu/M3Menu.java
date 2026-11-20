@@ -19,6 +19,12 @@ public class M3Menu {
 
     private final javafx.scene.control.ContextMenu popup = new javafx.scene.control.ContextMenu();
 
+    // Deferred showBelow state: one pending owner at a time; listeners are removed as soon as
+    // the deferred show runs or the owner leaves its scene.
+    private javafx.scene.Node pendingOwner;
+    private javafx.beans.value.ChangeListener<javafx.geometry.Bounds> pendingLayoutListener;
+    private javafx.beans.value.ChangeListener<javafx.scene.Scene> pendingSceneListener;
+
     /** Creates an empty menu. */
     public M3Menu() {
         popup.getStyleClass().add("m3-menu");
@@ -108,18 +114,68 @@ public class M3Menu {
     }
 
     /**
-     * Shows the menu below its anchor node.
+     * Shows the menu below its anchor node. If the anchor has no screen coordinates yet
+     * (shown before layout, or before its window exists) the show is deferred until they become
+     * valid — the menu is never dropped at the screen origin.
      *
      * @param owner the anchor node
      */
     public void showBelow(javafx.scene.Node owner) {
+        cancelDeferredShow();
         javafx.geometry.Bounds bounds = owner.localToScreen(owner.getBoundsInLocal());
         if (bounds != null) {
-            popup.show(owner, bounds.getMinX(), bounds.getMaxY() + 4);
-        } else {
-            popup.show(owner, 0, 0);
+            showAtAnchorBounds(owner, bounds);
+            return;
         }
+        // Defer: re-check whenever the anchor's layout bounds change or its scene changes.
+        pendingOwner = owner;
+        pendingLayoutListener = (obs, oldV, newV) -> tryDeferredShow();
+        pendingSceneListener = (obs, oldScene, newScene) -> {
+            if (newScene == null) {
+                cancelDeferredShow(); // the anchor never got a window; abort instead of guessing
+            } else {
+                tryDeferredShow();
+            }
+        };
+        owner.layoutBoundsProperty().addListener(pendingLayoutListener);
+        owner.sceneProperty().addListener(pendingSceneListener);
+        tryDeferredShow();
+    }
+
+    /** Runs a deferred showBelow once the anchor has valid screen bounds. */
+    private void tryDeferredShow() {
+        if (pendingOwner == null || popup.isShowing()) {
+            cancelDeferredShow();
+            return;
+        }
+        javafx.geometry.Bounds bounds = pendingOwner.localToScreen(pendingOwner.getBoundsInLocal());
+        if (bounds == null) {
+            return; // still waiting for layout/window
+        }
+        javafx.scene.Node owner = pendingOwner;
+        cancelDeferredShow();
+        showAtAnchorBounds(owner, bounds);
+    }
+
+    /** Shows the popup under the anchor's screen bounds (never at the screen origin). */
+    private void showAtAnchorBounds(javafx.scene.Node owner, javafx.geometry.Bounds bounds) {
+        popup.show(owner, bounds.getMinX(), bounds.getMaxY() + 4);
         animateOpen();
+    }
+
+    /** Detaches the deferral listeners and clears the pending state. */
+    private void cancelDeferredShow() {
+        if (pendingOwner != null) {
+            if (pendingLayoutListener != null) {
+                pendingOwner.layoutBoundsProperty().removeListener(pendingLayoutListener);
+            }
+            if (pendingSceneListener != null) {
+                pendingOwner.sceneProperty().removeListener(pendingSceneListener);
+            }
+        }
+        pendingOwner = null;
+        pendingLayoutListener = null;
+        pendingSceneListener = null;
     }
 
     /**
@@ -134,8 +190,9 @@ public class M3Menu {
         }
     }
 
-    /** Hides the menu. */
+    /** Hides the menu and cancels a deferred {@link #showBelow(javafx.scene.Node)} still waiting. */
     public void hide() {
+        cancelDeferredShow();
         popup.hide();
     }
 
