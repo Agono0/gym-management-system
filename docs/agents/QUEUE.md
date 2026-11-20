@@ -325,7 +325,12 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   reason; simulated telemetry stays simulated (labeled) but all buttons work.
   done-when: book→confirm→complete a real session round-trips; cancel<2h shows rule copy;
   screenshots reviewed.
-  claimed-by: — | status: BLOCKED (C0,C2)
+  claimed-by: C | status: DONE (round 8, commits 80a2537+b250df5 → main d3540b6 — real 7-day
+  WeekSnapshot, rule-1 booking menu, rule-18 lifecycle + rule-10 cancel-with-reason, rule-17
+  capacity, Run Live handoff to the HUD; COMPLETE/ABORT drive real terminal transitions;
+  SIMULATED TELEMETRY badge; sqlite round-trip evidence. Residuals for Q4: day headers
+  truncate at 1280 ("Mo…"), coach-roster list items truncate; inspector panel sparse at some
+  widths)
 
 - [ ] C5 | lane:C | deps:C0,C2 | files: src/main/java/com/gym/controller/{EquipmentController,GymFloorMapController}.java
   goal: Equipment skeleton → real CRUD: stock TableView → M3DataTable bound to EquipmentDao;
@@ -426,3 +431,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 6 | B9 | B13 (5740d81) + B14 (86c8ba9) | — | merged locally 46814e0; controls tests 209 |
 | 6b | — | — | C3 (083c538+7871e19) | merged locally 5b1b606 — dashboard+profile fully real |
 | 7 | B9 (211f1cc) | B10+B11 | C4 | B9 merged locally 18f3955; controls tests 233 |
+| 8 | B15 (1cce386) | — | C5 | B15 merged locally 1cce386; controls tests 241; C4 merged d3540b6 |
