@@ -209,8 +209,10 @@ public class M3IconButton extends PressableControl {
             graphicListener = (obs, oldV, newV) -> syncGraphic();
             control.graphicProperty().addListener(graphicListener);
             Rectangle clip = new Rectangle();
-            clip.setArcWidth(48);
-            clip.setArcHeight(48);
+            // Full-corner container: the clip follows half the actual height (20px at the 40dp
+            // container), agreeing with .m3-icon-button-bg's 20px radius.
+            clip.arcWidthProperty().bind(root.heightProperty().divide(2));
+            clip.arcHeightProperty().bind(root.heightProperty().divide(2));
             clip.widthProperty().bind(root.widthProperty());
             clip.heightProperty().bind(root.heightProperty());
             ripplePane.setClip(clip);

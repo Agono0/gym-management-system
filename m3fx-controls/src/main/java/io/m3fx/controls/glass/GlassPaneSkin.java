@@ -743,14 +743,6 @@ specularLight2.setVisible(false);
 
     /**
      * Pre-order walk of the capture subtree. JavaFX paints parents before children and children
-     * in child order, so every node visited after the pane paints above it. Nodes that are
-     * visible, painted and reach into the padded capture region are hidden for the duration of
-     * the snapshot and restored by the caller (they were visible when collected). The pane's
-     * own subtree is pruned - it is already hidden via the skin root opacity - and the pane's
-     * ancestors come before it in paint order, so they are never touched.
-     */
-    /**
-     * Pre-order walk of the capture subtree. JavaFX paints parents before children and children
      * in child order, so everything visited after the pane paints above it. Capture rules per
      * node (both tests are against the capture-source-space bounds):
      * <ul>

@@ -51,6 +51,12 @@ public class M3Switch extends Control {
     private static final double RADIUS_PRESSED = 14;
     /** State-layer circle size in px (spec state-layer-size 40dp). */
     private static final double STATE_LAYER_SIZE = 40;
+    /** Spec track size in px (md.comp.switch.track: width 52, height 32). */
+    static final double TRACK_WIDTH = 52;
+    static final double TRACK_HEIGHT = 32;
+    /** Spec touch container in px (md.comp.switch.container: width 52, height 48). */
+    static final double CONTAINER_WIDTH = 52;
+    static final double CONTAINER_HEIGHT = 48;
 
     private final BooleanProperty selected = new SimpleBooleanProperty(this, "selected", false);
     private final BooleanProperty showIcon = new SimpleBooleanProperty(this, "showIcon", false);
@@ -76,8 +82,8 @@ public class M3Switch extends Control {
         });
         pseudoClassStateChanged(SELECTED_PC, isSelected());
         setAccessibleText(isSelected() ? "On" : "Off");
-        setMinSize(52, 48);
-        setPrefSize(52, 48);
+        setMinSize(CONTAINER_WIDTH, CONTAINER_HEIGHT);
+        setPrefSize(CONTAINER_WIDTH, CONTAINER_HEIGHT);
         setCursor(Cursor.HAND);
     }
 
@@ -133,7 +139,7 @@ public class M3Switch extends Control {
 
     /** Skin: track rectangle plus sliding thumb with motion-token timing. */
     static final class SwitchSkin extends SkinBase<M3Switch> {
-        private final Rectangle track = new Rectangle(52, 32);
+        private final Rectangle track = new Rectangle(TRACK_WIDTH, TRACK_HEIGHT);
         private final StackPane thumbHolder = new StackPane();
         private final javafx.scene.layout.Region stateLayer = new javafx.scene.layout.Region();
         private final Circle thumb = new Circle(8);
@@ -148,8 +154,8 @@ public class M3Switch extends Control {
         SwitchSkin(M3Switch control) {
             super(control);
             track.getStyleClass().add("m3-switch-track");
-            track.setArcWidth(32);
-            track.setArcHeight(32);
+            track.setArcWidth(TRACK_HEIGHT);
+            track.setArcHeight(TRACK_HEIGHT);
             thumb.getStyleClass().add("m3-switch-thumb");
             iconCheck.getStyleClass().add("m3-switch-thumb-icon");
             iconCheck.setScaleX(0.55);

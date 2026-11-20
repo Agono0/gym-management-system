@@ -27,6 +27,17 @@ public class M3Fab extends Button {
             new SimpleObjectProperty<>(this, "size", FabSize.MEDIUM);
     private final BooleanProperty extended = new SimpleBooleanProperty(this, "extended", false);
 
+    /** Spec container size in px (md.comp.fab.primary.small.container: 40dp). */
+    static final double SMALL_SIZE = 40;
+    /** Spec container size in px (md.comp.fab.primary.container: 56dp) — the default FAB. */
+    static final double MEDIUM_SIZE = 56;
+    /** Spec container size in px (md.comp.fab.primary.large.container: 96dp). */
+    static final double LARGE_SIZE = 96;
+    /** Spec extended-FAB container height in px (md.comp.fab.extended.container: 56dp). */
+    static final double EXTENDED_HEIGHT = 56;
+    /** Spec extended-FAB minimum width in px (md.comp.fab.extended.container: 80dp). */
+    static final double EXTENDED_MIN_WIDTH = 80;
+
     /** Creates a medium FAB. */
     public M3Fab() {
         this(null, FabSize.MEDIUM);
@@ -119,17 +130,17 @@ public class M3Fab extends Button {
             getStyleClass().add("m3-fab-" + newV.name().toLowerCase());
         }
         if (isExtended()) {
-            setMinSize(80, 56);
-            setPrefSize(USE_COMPUTED_SIZE, 56);
+            setMinSize(EXTENDED_MIN_WIDTH, EXTENDED_HEIGHT);
+            setPrefSize(USE_COMPUTED_SIZE, EXTENDED_HEIGHT);
         } else if (newV == FabSize.SMALL) {
-            setMinSize(40, 40);
-            setPrefSize(40, 40);
+            setMinSize(SMALL_SIZE, SMALL_SIZE);
+            setPrefSize(SMALL_SIZE, SMALL_SIZE);
         } else if (newV == FabSize.LARGE) {
-            setMinSize(96, 96);
-            setPrefSize(96, 96);
+            setMinSize(LARGE_SIZE, LARGE_SIZE);
+            setPrefSize(LARGE_SIZE, LARGE_SIZE);
         } else {
-            setMinSize(56, 56);
-            setPrefSize(56, 56);
+            setMinSize(MEDIUM_SIZE, MEDIUM_SIZE);
+            setPrefSize(MEDIUM_SIZE, MEDIUM_SIZE);
         }
     }
 }

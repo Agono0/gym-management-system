@@ -1,5 +1,6 @@
 package io.m3fx.controls.card;
 
+import io.m3fx.core.token.ShapeTokens;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -198,8 +199,10 @@ public class M3Card extends Control {
             root.getChildren().addAll(ripplePane, card.contentHolder);
             getChildren().add(root);
             Rectangle clip = new Rectangle();
-            clip.setArcWidth(24);
-            clip.setArcHeight(24);
+            // Card shape = medium corner (md.sys.shape.corner-medium, 12dp) — the ShapeTokens
+            // lookup agrees with .m3-card's 12px CSS radius.
+            clip.setArcWidth(ShapeTokens.MEDIUM);
+            clip.setArcHeight(ShapeTokens.MEDIUM);
             clip.widthProperty().bind(root.widthProperty());
             clip.heightProperty().bind(root.heightProperty());
             ripplePane.setClip(clip);

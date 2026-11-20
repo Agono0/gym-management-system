@@ -28,6 +28,13 @@ import javafx.scene.layout.VBox;
 @SuppressWarnings("this-escape")
 public class M3TopAppBar extends VBox {
 
+    /** Spec container height in px (md.comp.top-app-bar.small.container.height: 64dp). */
+    static final double HEIGHT_SMALL = 64;
+    /** Spec container height in px (md.comp.top-app-bar.medium.container.height: 112dp). */
+    static final double HEIGHT_MEDIUM = 112;
+    /** Spec container height in px (md.comp.top-app-bar.large.container.height: 152dp). */
+    static final double HEIGHT_LARGE = 152;
+
     private final ObjectProperty<TopAppBarVariant> variant =
             new SimpleObjectProperty<>(this, "variant", TopAppBarVariant.SMALL);
     private final StringProperty title = new SimpleStringProperty(this, "title", "");
@@ -172,16 +179,16 @@ public class M3TopAppBar extends VBox {
         if (newV != null) {
             switch (newV) {
                 case MEDIUM -> {
-                    setMinHeight(112);
-                    setPrefHeight(112);
+                    setMinHeight(HEIGHT_MEDIUM);
+                    setPrefHeight(HEIGHT_MEDIUM);
                 }
                 case LARGE -> {
-                    setMinHeight(152);
-                    setPrefHeight(152);
+                    setMinHeight(HEIGHT_LARGE);
+                    setPrefHeight(HEIGHT_LARGE);
                 }
                 default -> {
-                    setMinHeight(64);
-                    setPrefHeight(64);
+                    setMinHeight(HEIGHT_SMALL);
+                    setPrefHeight(HEIGHT_SMALL);
                 }
             }
         }

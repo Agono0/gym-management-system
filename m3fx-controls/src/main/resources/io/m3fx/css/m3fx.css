@@ -26,6 +26,11 @@
 .title-large { -fx-font-size: 32px; -fx-text-fill: -md-sys-color-on-surface; }
 .title-medium { -fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface; }
 .title-small { -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: -md-sys-color-on-surface; }
+/* headline roles: TypeScale.HEADLINE_LARGE/MEDIUM/SMALL (32/28/24px, weight 400 = the CSS
+ * default, so no -fx-font-weight is needed). */
+.headline-large { -fx-font-size: 32px; -fx-text-fill: -md-sys-color-on-surface; }
+.headline-medium { -fx-font-size: 28px; -fx-text-fill: -md-sys-color-on-surface; }
+.headline-small { -fx-font-size: 24px; -fx-text-fill: -md-sys-color-on-surface; }
 .body-large { -fx-font-size: 16px; -fx-text-fill: -md-sys-color-on-surface; }
 .body-medium { -fx-font-size: 14px; -fx-text-fill: -md-sys-color-on-surface; }
 .body-small { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface; }
@@ -570,7 +575,9 @@
   -fx-pref-height: 48px;
   -fx-padding: 0 16px;
   -fx-font-size: 14px;
-  -fx-font-weight: 500;
+  /* Spec role is label-large (weight 500); JavaFX CSS rejects numeric 500, so render the
+     nearest legal weight (400). */
+  -fx-font-weight: 400;
   -fx-text-fill: -md-sys-color-on-surface-variant;
 }
 .side-nav-rail.collapsed .m3-navigation-item {
