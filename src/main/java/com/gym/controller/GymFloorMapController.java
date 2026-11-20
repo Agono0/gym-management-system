@@ -1,5 +1,6 @@
 package com.gym.controller;
 
+import com.gym.ui.UiKit;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
 import io.m3fx.controls.card.CardVariant;
@@ -13,7 +14,9 @@ import io.m3fx.controls.iconbutton.IconButtonVariant;
 import io.m3fx.controls.iconbutton.M3IconButton;
 import io.m3fx.controls.progress.M3LinearProgress;
 import io.m3fx.controls.scene3d.M3ModelViewer3D;
+import io.m3fx.core.theme.ColorRole;
 import javafx.geometry.Insets;
+import javafx.scene.paint.Color;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
@@ -25,7 +28,6 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.transform.Scale;
@@ -242,9 +244,12 @@ public class GymFloorMapController implements ScreenController {
         legendBox.getStyleClass().add("quick-legend-box");
         legendBox.getChildren().add(styledLabel("Map Legend", "legend-header"));
         legendBox.getChildren().addAll(
-                legendRow(Color.web("#00E676"), "Available / Operational"),
-                legendRow(Color.web("#FF1744"), "Occupied / Live Set"),
-                legendRow(Color.web("#FF9100"), "In Maintenance / Service Req"));
+                // Semantic role mapping, no hardcoded hex: available = success → the tertiary
+                // accent (green family under this seed), occupied/live = the error role,
+                // maintenance/service = the neutral secondary accent.
+                legendRow(UiKit.themeRole(ColorRole.TERTIARY), "Available / Operational"),
+                legendRow(UiKit.themeRole(ColorRole.ERROR), "Occupied / Live Set"),
+                legendRow(UiKit.themeRole(ColorRole.SECONDARY), "In Maintenance / Service Req"));
         telemetryRail.getChildren().add(legendBox);
         layout.setRight(telemetryRail);
 

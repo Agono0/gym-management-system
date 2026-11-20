@@ -1,5 +1,6 @@
 package com.gym.controller;
 
+import com.gym.ui.UiKit;
 import io.m3fx.controls.appbar.M3TopAppBar;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
@@ -16,6 +17,7 @@ import io.m3fx.controls.iconbutton.IconButtonVariant;
 import io.m3fx.controls.iconbutton.M3IconButton;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.textfield.M3TextField;
+import io.m3fx.core.theme.ColorRole;
 import javafx.collections.FXCollections;
 import javafx.application.Platform;
 import javafx.geometry.HPos;
@@ -41,7 +43,6 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.RowConstraints;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -555,7 +556,9 @@ public class ScheduleController implements ScreenController {
         slotDonutChart.getRings().clear();
         slotDonutChart.getRings().addAll(
                 new M3DonutChart.Ring("Booked", 4, 8, null),
-                new M3DonutChart.Ring("Waitlist", 2, 8, Color.web("#00E5FF")));
+                // Waitlist = the pending state → the secondary accent (distinct from the
+                // default-colored booked ring, no success/error semantics).
+                new M3DonutChart.Ring("Waitlist", 2, 8, UiKit.themeRole(ColorRole.SECONDARY)));
         slotDonutChart.setCenterHeadline("4/8");
         sessionTimeline.getItems().clear();
         sessionTimeline.addItem(session[0], "Slot requested", "Booked online by the athlete", M3Timeline.Status.COMPLETED);

@@ -1,5 +1,6 @@
 package com.gym.controller;
 
+import com.gym.ui.UiKit;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
 import io.m3fx.controls.button.M3SplitButton;
@@ -18,7 +19,9 @@ import io.m3fx.controls.data.M3SpeedDial;
 import io.m3fx.controls.data.M3StatCard;
 import io.m3fx.controls.dialog.M3Dialog;
 import io.m3fx.controls.effect.M3PulseBeacon;
+import io.m3fx.core.theme.ColorRole;
 import io.m3fx.controls.icon.M3Icon;
+import io.m3fx.controls.layout.WindowSizeClass;
 import io.m3fx.controls.menu.M3Menu;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.progress.M3LinearProgress;
@@ -27,12 +30,13 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.Label;
+import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -82,6 +86,26 @@ public class DashboardController implements ScreenController {
     private M3SpeedDial quickActionSpeedDial;
     private StackPane dashboardSnackbar;
 
+    // ---- Responsive layout (width-class reflow, shared nodes — see applyDashboardLayout) ----
+    private VBox bentoGrid;
+    private HBox heroRow;
+    private VBox heroColumn;
+    private Region heroSpacer;
+    private VBox greetingBlock;
+    private HBox actionsBar;
+    private M3Card trafficCard;
+    private M3Card agendaCard;
+    private M3Card donutCard;
+    private M3Card barCard;
+    private HBox kpiRow;
+    private GridPane kpiGrid;
+    private HBox vizRow;
+    private VBox vizStack;
+    private HBox diagnosticsRow;
+    private VBox diagnosticsStack;
+    /** Current window width class driving the hero/bento layout swaps. */
+    private WindowSizeClass dashboardWidthClass = WindowSizeClass.EXPANDED;
+
     /** Overlay host for snackbars and dialogs, added to the screen root in code (no fx:id). */
     private final M3Overlay overlay = new M3Overlay();
     /** Running session counters so the check-in answer updates the visible KPI coherently. */
@@ -98,18 +122,19 @@ public class DashboardController implements ScreenController {
      */
     public DashboardController() {
         // Main bento grid container.
-        VBox bentoGrid = new VBox(20);
+        bentoGrid = new VBox(20);
         bentoGrid.setPadding(new Insets(20, 24, 112, 24));
 
-        // TOP: hero header banner.
+        // TOP: hero header banner. Two layouts share the same nodes: the side-by-side row at
+        // desktop widths and a stacked column at compact widths (the compact hero row would cut
+        // the action buttons) — swapped by the width-class listener at the bottom of buildView.
         heroBannerCard = new M3Card(CardVariant.ELEVATED);
-        heroBannerCard.setPrefHeight(84);
         heroBannerCard.getStyleClass().add("hero-banner");
         heroBannerCard.setPadding(new Insets(16, 24, 16, 24));
-        HBox heroContent = new HBox(16);
-        heroContent.setAlignment(Pos.CENTER_LEFT);
+        heroRow = new HBox(16);
+        heroRow.setAlignment(Pos.CENTER_LEFT);
 
-        VBox greetingBlock = new VBox(4);
+        greetingBlock = new VBox(4);
         welcomeGreetingLabel = new Label("Good Morning, Administrator");
         welcomeGreetingLabel.getStyleClass().add("greeting-title");
         HBox statusRow = new HBox(12);
@@ -127,7 +152,7 @@ public class DashboardController implements ScreenController {
         greetingBlock.getChildren().addAll(welcomeGreetingLabel, statusRow);
 
         // Action controls bar.
-        HBox actionsBar = new HBox(12);
+        actionsBar = new HBox(12);
         actionsBar.setAlignment(Pos.CENTER_RIGHT);
         refreshButton = new M3Button("REFRESH TELEMETRY", ButtonVariant.TONAL);
         refreshIcon = M3Icon.symbol("refresh");
@@ -139,13 +164,17 @@ public class DashboardController implements ScreenController {
         logoutButton.setOnAction(e -> onLogout());
         actionsBar.getChildren().addAll(refreshButton, quickActionSplitBtn, logoutButton);
 
-        Region heroSpacer = new Region();
+        heroSpacer = new Region();
         HBox.setHgrow(heroSpacer, Priority.ALWAYS);
-        heroContent.getChildren().addAll(greetingBlock, heroSpacer, actionsBar);
-        heroBannerCard.setContent(heroContent);
+        heroRow.getChildren().addAll(greetingBlock, heroSpacer, actionsBar);
+        heroColumn = new VBox(12);
+        heroColumn.setAlignment(Pos.CENTER_LEFT);
+        heroBannerCard.setContent(heroRow);
+        heroBannerCard.setPrefHeight(84);
 
-        // BENTO ROW 1: 4 key metric stat cards.
-        HBox kpiRow = new HBox(16);
+        // BENTO ROW 1: 4 key metric stat cards. Desktop widths keep the stretching row; compact
+        // widths swap the same cards into a 2x2 grid (below), so nothing is ever clipped.
+        kpiRow = new HBox(16);
         statActiveMembers = new M3StatCard("ACTIVE MEMBERS", "1,428", "+4.2% vs last month");
         statActiveMembers.getStyleClass().add("stat-card-teal");
         statDailyRevenue = new M3StatCard("TODAY'S REVENUE", "$3,840.00", "Target: $4,500.00 (85%)");
@@ -158,12 +187,24 @@ public class DashboardController implements ScreenController {
             HBox.setHgrow(card, Priority.ALWAYS);
         }
         kpiRow.getChildren().addAll(statActiveMembers, statDailyRevenue, statTodaySessions, statEquipmentHealth);
+        kpiGrid = new GridPane();
+        kpiGrid.setHgap(16);
+        kpiGrid.setVgap(16);
+        ColumnConstraints kpiColumn = new ColumnConstraints();
+        kpiColumn.setPercentWidth(50);
+        ColumnConstraints kpiColumnRight = new ColumnConstraints();
+        kpiColumnRight.setPercentWidth(50);
+        kpiGrid.getColumnConstraints().addAll(kpiColumn, kpiColumnRight);
+        GridPane.setConstraints(statActiveMembers, 0, 0);
+        GridPane.setConstraints(statDailyRevenue, 1, 0);
+        GridPane.setConstraints(statTodaySessions, 0, 1);
+        GridPane.setConstraints(statEquipmentHealth, 1, 1);
 
         // BENTO ROW 2: core visualizations (spline chart & agenda table).
-        HBox vizRow = new HBox(16);
+        vizRow = new HBox(16);
         VBox.setVgrow(vizRow, Priority.ALWAYS);
 
-        M3Card trafficCard = new M3Card(CardVariant.ELEVATED);
+        trafficCard = new M3Card(CardVariant.ELEVATED);
         trafficCard.setPrefWidth(640);
         trafficCard.setMinWidth(320);
         trafficCard.getStyleClass().add("chart-bento-card");
@@ -186,7 +227,7 @@ public class DashboardController implements ScreenController {
         trafficContent.getChildren().addAll(trafficHeader, trafficSplineChart);
         trafficCard.setContent(trafficContent);
 
-        M3Card agendaCard = new M3Card(CardVariant.ELEVATED);
+        agendaCard = new M3Card(CardVariant.ELEVATED);
         agendaCard.setPrefWidth(600);
         agendaCard.setMinWidth(320);
         agendaCard.getStyleClass().add("table-bento-card");
@@ -211,9 +252,9 @@ public class DashboardController implements ScreenController {
         vizRow.getChildren().addAll(trafficCard, agendaCard);
 
         // BENTO ROW 3: secondary facility diagnostics.
-        HBox diagnosticsRow = new HBox(16);
+        diagnosticsRow = new HBox(16);
 
-        M3Card donutCard = new M3Card(CardVariant.ELEVATED);
+        donutCard = new M3Card(CardVariant.ELEVATED);
         donutCard.setPrefWidth(400);
         donutCard.setMinWidth(240);
         donutCard.getStyleClass().add("mini-bento-card");
@@ -225,7 +266,7 @@ public class DashboardController implements ScreenController {
         donutContent.getChildren().addAll(sectionTitle("Equipment Health Distribution"), equipmentDonutChart);
         donutCard.setContent(donutContent);
 
-        M3Card barCard = new M3Card(CardVariant.ELEVATED);
+        barCard = new M3Card(CardVariant.ELEVATED);
         barCard.setPrefWidth(400);
         barCard.setMinWidth(240);
         barCard.getStyleClass().add("mini-bento-card");
@@ -259,6 +300,14 @@ public class DashboardController implements ScreenController {
 
         diagnosticsRow.getChildren().addAll(donutCard, barCard, facilityRadarCard);
 
+        // Compact counterparts of the bento rows: the SAME cards stacked full-width (a card
+        // row cannot fit a 600dp window, and a clipped card is worse than a stacked one).
+        // The width-class listener (registered once dashboardRoot exists) swaps layouts.
+        vizStack = new VBox(16);
+        diagnosticsStack = new VBox(16);
+        vizStack.getChildren().addAll(trafficCard, agendaCard);
+        diagnosticsStack.getChildren().addAll(donutCard, barCard, facilityRadarCard);
+
         bentoGrid.getChildren().addAll(heroBannerCard, kpiRow, vizRow, diagnosticsRow);
 
         // Sparkline definitions for KPI telemetry cards (mounted into their cards below).
@@ -282,6 +331,23 @@ public class DashboardController implements ScreenController {
         dashboardRoot = new StackPane();
         dashboardRoot.getStyleClass().add("dashboard-root");
         dashboardRoot.getChildren().addAll(bentoGrid, quickActionSpeedDial, dashboardSnackbar, overlay);
+
+        // Width-class listener (library breakpoints, same pattern as the shell's
+        // applyResponsiveChrome): swaps the hero and bento rows between the desktop and compact
+        // layouts. Deferred with Platform.runLater so the children lists are never mutated
+        // re-entrantly while bentoGrid is mid-layout.
+        dashboardRoot.widthProperty().addListener((obs, oldWidth, width) -> {
+            double w = width.doubleValue();
+            if (w <= 0) {
+                return;
+            }
+            WindowSizeClass next = WindowSizeClass.forWidth(w);
+            if (next == dashboardWidthClass) {
+                return;
+            }
+            dashboardWidthClass = next;
+            javafx.application.Platform.runLater(this::applyDashboardLayout);
+        });
 
         refreshGreetingAndClock();
         attachTelemetrySparklines();
@@ -500,11 +566,51 @@ public class DashboardController implements ScreenController {
                 + " with " + row[2] + ".");
     }
 
+    /**
+     * Applies the current width class to the hero and bento rows by swapping between two
+     * layouts that SHARE the same nodes (the M3AdaptiveScaffold swap pattern): desktop widths
+     * keep the side-by-side hero and stretching card rows, compact widths stack the hero and
+     * the cards full-width, because a card row cannot fit a 600dp window and a clipped card
+     * reads as broken. Idempotent fills, so repeated swaps are safe.
+     */
+    private void applyDashboardLayout() {
+        boolean compact = dashboardWidthClass == WindowSizeClass.COMPACT;
+        if (compact) {
+            heroColumn.getChildren().setAll(greetingBlock, actionsBar);
+            heroBannerCard.setContent(heroColumn);
+            heroBannerCard.setPrefHeight(124);
+        } else {
+            heroRow.getChildren().setAll(greetingBlock, heroSpacer, actionsBar);
+            heroBannerCard.setContent(heroRow);
+            heroBannerCard.setPrefHeight(84);
+        }
+        if (compact) {
+            kpiGrid.getChildren().setAll(statActiveMembers, statDailyRevenue,
+                    statTodaySessions, statEquipmentHealth);
+            vizStack.getChildren().setAll(trafficCard, agendaCard);
+            diagnosticsStack.getChildren().setAll(donutCard, barCard, facilityRadarCard);
+            bentoGrid.getChildren().set(1, kpiGrid);
+            bentoGrid.getChildren().set(2, vizStack);
+            bentoGrid.getChildren().set(3, diagnosticsStack);
+            return;
+        }
+        kpiRow.getChildren().setAll(statActiveMembers, statDailyRevenue,
+                statTodaySessions, statEquipmentHealth);
+        vizRow.getChildren().setAll(trafficCard, agendaCard);
+        diagnosticsRow.getChildren().setAll(donutCard, barCard, facilityRadarCard);
+        bentoGrid.getChildren().set(1, kpiRow);
+        bentoGrid.getChildren().set(2, vizRow);
+        bentoGrid.getChildren().set(3, diagnosticsRow);
+    }
+
     private void populateEquipmentDonut() {
         equipmentDonutChart.setCenterHeadline("94.2%");
         equipmentDonutChart.setCenterSubtitle("Operational");
-        equipmentDonutChart.addRing("Operational", 26, 28, Color.web("#4C8C4A"));
-        equipmentDonutChart.addRing("In Maintenance", 2, 28, Color.web("#C2543B"));
+        // Semantic role mapping, no hardcoded hex: operational = the success state → the
+        // tertiary accent (M3's contrasting accent, which lands in the green family under this
+        // seed), in-maintenance = the problem state → the error role.
+        equipmentDonutChart.addRing("Operational", 26, 28, UiKit.themeRole(ColorRole.TERTIARY));
+        equipmentDonutChart.addRing("In Maintenance", 2, 28, UiKit.themeRole(ColorRole.ERROR));
     }
 
     private void populatePlanBarChart() {

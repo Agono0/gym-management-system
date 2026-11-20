@@ -1,11 +1,14 @@
 package com.gym.ui;
 
+import io.m3fx.controls.M3Stylesheets;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
 import io.m3fx.controls.dialog.M3Dialog;
 import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.progress.M3CircularProgress;
+import io.m3fx.core.theme.ColorRole;
+import io.m3fx.core.theme.M3Theme;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -202,5 +205,21 @@ public final class UiKit {
         } finally {
             sceneRoot.getChildren().remove(probe);
         }
+    }
+
+    /**
+     * Resolves a theme {@link ColorRole} to the concrete color of the active theme — the
+     * pre-scene counterpart of {@link #lookedUpColor}: charts are built in screen constructors
+     * before the scene attaches, where the CSS trick cannot run, so this reads the role straight
+     * from the latest applied theme (GymApp, the shell's dark toggle and the ScreenShooter all
+     * set it before any screen builds). Falls back to the baseline dark theme when no theme has
+     * been applied yet — never a hardcoded hex.
+     */
+    public static Color themeRole(ColorRole role) {
+        M3Theme theme = M3Stylesheets.getLatestTheme();
+        if (theme == null) {
+            theme = M3Theme.baseline(true);
+        }
+        return theme.get(role);
     }
 }

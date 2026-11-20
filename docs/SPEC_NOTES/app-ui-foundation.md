@@ -174,3 +174,41 @@ temp SQLite file (the root `test` task was already wired for JUnit 5, only NO-SO
 `onNavHelp` no longer navigates to GYM_FLOOR_MAP. It shows an `M3Dialog` with real content:
 keyboard shortcuts (Ctrl+K command palette, arrow keys on the rail / bottom bar, Enter, Esc),
 the seeded admin credentials, the app version, and a pointer to docs/UML.md rules 1-19.
+
+## 7. Chart color semantics (task C2)
+
+Charts are built in screen constructors before any scene attaches, so the CSS-based
+`lookedUpColor` trick cannot run there; `UiKit.themeRole(ColorRole)` reads the role straight
+from the latest applied theme (`M3Stylesheets.getLatestTheme()`, set by GymApp, the shell dark
+toggle and the ScreenShooter before any screen builds; baseline-dark fallback — never a
+hardcoded hex). The semantic mapping, applied inline at each call site:
+
+| UI semantic | ColorRole | Why |
+|---|---|---|
+| success (operational, available, lean mass) | `TERTIARY` | M3's contrasting accent; lands in the green family under this TONAL_SPOT seed |
+| error (occupied, live set, in-maintenance slices) | `ERROR` | the standard negative state role |
+| warn / neutral accent (maintenance service, waitlist) | `SECONDARY` | distinct muted accent with no good/bad semantics |
+| primary data series (VBT load points) | `PRIMARY` | the seed-purple family the whole UI uses |
+
+Icon rule after C2: no emoji anywhere in the controllers — HUD/equipment buttons carry
+`M3Icon.symbol` graphics (`stop`, `pause`, `refresh`, `check`, `play_arrow`, `edit`, `delete`,
+`close`), the hand-copied visibility/lock SVG paths in the login surfaces are replaced by the
+catalog's `visibility` / `visibility_off` / `lock`, and icon-only buttons carry tooltips
+(`M3Tooltip`) plus accessible text.
+
+## 8. Dashboard compact reflow (task C2)
+
+The dashboard is a fixed-desktop bento; at 600dp its card rows cannot fit, and clipped
+cards/buttons read as broken. The fix follows the C1 shell pattern (width-class swap of shared
+nodes, `WindowSizeClass.forWidth`, deferred with `Platform.runLater` so `bentoGrid` children
+are never mutated re-entrantly mid-layout):
+
+- COMPACT: the hero stacks (greeting above the action bar, so no button is cut), the KPI strip
+  swaps its HBox for a 2x2 `GridPane`, and the viz/diagnostics rows stack their cards
+  full-width (`vizStack` / `diagnosticsStack`).
+- MEDIUM/EXPANDED: the original rows (byte-identical 1280 layout).
+- Both layouts share the SAME nodes (cards move between containers, constraints persist on the
+  child), so state and handlers are untouched; `applyDashboardLayout` is idempotent.
+- Deliberately rejected: width-bound ScrollPane wrappers — measured evidence showed binding a
+  row's pref width to the scroll pane corrupts the HBox's computed pref height (716px for a
+  ~110px row), collapsing the rows at every width.

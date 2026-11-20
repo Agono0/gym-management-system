@@ -1,5 +1,6 @@
 package com.gym.controller;
 
+import com.gym.ui.UiKit;
 import io.m3fx.controls.appbar.M3TopAppBar;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
@@ -26,6 +27,7 @@ import io.m3fx.controls.sheet.M3BottomSheet;
 import io.m3fx.controls.slider.M3Slider;
 import io.m3fx.controls.textfield.M3TextField;
 import io.m3fx.controls.textfield.TextFieldVariant;
+import io.m3fx.core.theme.ColorRole;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -40,7 +42,6 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -492,13 +493,17 @@ public class ProgressController implements ScreenController {
     private void populateCompositionDonut() {
         donutComposition.setCenterHeadline("84.2 kg");
         donutComposition.setCenterSubtitle("Total mass");
-        donutComposition.addRing("Lean mass", 72.5, 84.2, Color.web("#4C8C4A"));
-        donutComposition.addRing("Fat mass", 11.7, 84.2, Color.web("#C2543B"));
+        // Semantic role mapping, no hardcoded hex: lean mass = the favorable state → the
+        // tertiary accent (green family under this seed), fat mass = the counter-state → the
+        // error role.
+        donutComposition.addRing("Lean mass", 72.5, 84.2, UiKit.themeRole(ColorRole.TERTIARY));
+        donutComposition.addRing("Fat mass", 11.7, 84.2, UiKit.themeRole(ColorRole.ERROR));
     }
 
     /** Load-velocity samples around the regression v = -0.0094L + 1.71. */
     private void populateVbtScatter() {
-        M3ScatterSeries loads = new M3ScatterSeries("Back squat sets", Color.web("#7C4DBE"));
+        // The load series carries the primary accent (the seed-purple family the whole UI uses).
+        M3ScatterSeries loads = new M3ScatterSeries("Back squat sets", UiKit.themeRole(ColorRole.PRIMARY));
         double[] barLoads = {40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170};
         for (int i = 0; i < barLoads.length; i++) {
             double load = barLoads[i];
