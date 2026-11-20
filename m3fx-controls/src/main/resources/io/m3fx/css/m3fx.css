@@ -181,8 +181,9 @@
   -fx-background-color: -md-sys-color-on-primary-container-a10, -md-sys-color-primary-container;
   -fx-background-insets: 0, 0;
 }
-.m3-fab-small { -fx-background-radius: 12px; -fx-border-radius: 12px; }
-.m3-fab-large { -fx-background-radius: 28px; -fx-border-radius: 28px; }
+/* M3 FAB shape is large (16dp) for every size: small/default/extended share the same radius. */
+.m3-fab-small { -fx-background-radius: 16px; -fx-border-radius: 16px; }
+.m3-fab-large { -fx-background-radius: 16px; -fx-border-radius: 16px; }
 .m3-fab-extended { -fx-background-radius: 16px; -fx-padding: 0 20px 0 16px; }
 .m3-fab:disabled {
   -fx-background-color: -md-sys-color-on-surface-a12;
