@@ -4,6 +4,8 @@ import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
+import javafx.collections.ListChangeListener;
+import javafx.scene.AccessibleRole;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
@@ -15,6 +17,9 @@ import javafx.scene.layout.VBox;
  * M3 top app bar: small, center-aligned, medium and large variants.
  *
  * <p>See <a href="https://m3.material.io/components/top-app-bar/overview">M3 top app bar</a>.
+ * Accessibility: a TOOL_BAR-role container that is not a tab stop (the nav icon and actions are
+ * the keyboard targets) announcing "<title> toolbar, <n> navigation item(s), <m> action(s)",
+ * live with title and control changes.
  * Surface color, on-surface title; medium/large show a second headline row (title-large /
  * headline-medium on scroll in the full spec — here both rows render and callers collapse on
  * scroll by switching the variant).
@@ -73,6 +78,36 @@ public class M3TopAppBar extends VBox {
         setVariant(variant);
         variantProperty().addListener((obs, oldV, newV) -> rebuild(oldV, newV));
         rebuild(null, getVariant());
+        // Accessibility: a presentational TOOL_BAR container. The bar itself stays out of the
+        // tab-focus cycle (its nav icon and action buttons are the keyboard targets) and
+        // announces a summary - "<title> toolbar, <n> navigation item(s), <m> action(s)" - so
+        // screen readers introduce it before the first focusable child.
+        setAccessibleRole(AccessibleRole.TOOL_BAR);
+        setFocusTraversable(false);
+        titleProperty().addListener((obs, oldV, newV) -> refreshAccessibleText());
+        leadingBox.getChildren().addListener(
+                (ListChangeListener<Node>) c -> refreshAccessibleText());
+        trailingBox.getChildren().addListener(
+                (ListChangeListener<Node>) c -> refreshAccessibleText());
+        refreshAccessibleText();
+    }
+
+    /** Rebuilds the announcement: "&lt;title&gt; toolbar, &lt;n&gt; navigation item(s), &lt;m&gt; action(s)". */
+    private void refreshAccessibleText() {
+        String title = getTitle().strip();
+        StringBuilder announcement =
+                new StringBuilder(title.isEmpty() ? "Toolbar" : title + " toolbar");
+        int navItems = leadingBox.getChildren().size();
+        if (navItems > 0) {
+            announcement.append(", ").append(navItems).append(" navigation item")
+                    .append(navItems > 1 ? "s" : "");
+        }
+        int actions = trailingBox.getChildren().size();
+        if (actions > 0) {
+            announcement.append(", ").append(actions).append(" action")
+                    .append(actions > 1 ? "s" : "");
+        }
+        setAccessibleText(announcement.toString());
     }
 
     /** Returns the title property. */

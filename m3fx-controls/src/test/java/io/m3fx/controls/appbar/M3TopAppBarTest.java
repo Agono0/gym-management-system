@@ -2,14 +2,17 @@ package io.m3fx.controls.appbar;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
+import org.junit.jupiter.api.BeforeAll;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -17,11 +20,21 @@ import org.junit.jupiter.api.Test;
  * (small/center-aligned 64dp, medium 112dp, large 152dp), the headline row only on medium/large,
  * the center-aligned spacer behavior, title binding into both labels, and the nav/action wiring.
  *
- * <p>B11-style a11y note (pinned current behavior): the bar is a VBox of raw labels — the title
- * is announced only through the child Label's text and the bar itself publishes no accessible
- * role/text. Flagged for a lane-B a11y task, not a B9 fix.
+ * <p>A11y (B15): TOOL_BAR role, a live "title toolbar, n navigation items, m actions"
+ * announcement, and the bar itself excluded from the tab-focus cycle.
  */
 class M3TopAppBarTest {
+
+    @BeforeAll
+    static void initFx() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        try {
+            Platform.startup(latch::countDown);
+        } catch (IllegalStateException e) {
+            latch.countDown(); // Toolkit already started
+        }
+        assertTrue(latch.await(5, TimeUnit.SECONDS), "JavaFX Platform failed to initialize");
+    }
 
     @Test
     void variantHeightsMatchTheSpecTokens() {
@@ -124,12 +137,42 @@ class M3TopAppBarTest {
     }
 
     @Test
-    void barPublishesNoAccessibleTextYet() {
-        // Pinned current behavior (lane-B a11y follow-up): the bar relies on its child labels
-        // for announcement; there is no accessible text on the bar itself and no explicit role.
+    void barAnnouncesAToolbarSummaryAndStaysOutOfTheFocusCycle() {
+        // B15: the B9 a11y gap is closed - TOOL_BAR role, a summary announcement, and the bar
+        // itself out of the tab-focus cycle (nav icon + actions are the keyboard targets).
         M3TopAppBar bar = new M3TopAppBar("Members", TopAppBarVariant.SMALL);
-        assertNull(bar.getAccessibleText(),
-                "no accessible text yet - the child labels do the announcing");
-        assertNotNull(bar.getAccessibleRole(), "the default role is present but generic");
+        bar.setNavigationIcon(new Label());
+        bar.setActions(new Label());
+        assertEquals(javafx.scene.AccessibleRole.TOOL_BAR, bar.getAccessibleRole());
+        assertFalse(bar.isFocusTraversable(), "presentational container is not a tab stop");
+        assertEquals("Members toolbar, 1 navigation item, 1 action", bar.getAccessibleText());
+    }
+
+    @Test
+    void accessibleTextUpdatesLiveWithChanges() {
+        M3TopAppBar bar = new M3TopAppBar("Title", TopAppBarVariant.SMALL);
+        assertEquals("Title toolbar", bar.getAccessibleText(),
+                "no clauses while the bar carries no controls");
+
+        bar.setNavigationIcon(new Label());
+        assertEquals("Title toolbar, 1 navigation item", bar.getAccessibleText());
+
+        bar.setActions(new Label(), new Label());
+        assertEquals("Title toolbar, 1 navigation item, 2 actions", bar.getAccessibleText());
+
+        bar.setActions(new Label());
+        assertEquals("Title toolbar, 1 navigation item, 1 action", bar.getAccessibleText());
+
+        bar.setTitle("Schedule & Timetable");
+        assertEquals("Schedule & Timetable toolbar, 1 navigation item, 1 action",
+                bar.getAccessibleText(), "the summary follows a title change live");
+
+        bar.setNavigationIcon(null);
+        bar.setActions();
+        assertEquals("Schedule & Timetable toolbar", bar.getAccessibleText(),
+                "empty clauses drop out");
+
+        bar.setTitle("   ");
+        assertEquals("Toolbar", bar.getAccessibleText(), "a blank title falls back to Toolbar");
     }
 }
