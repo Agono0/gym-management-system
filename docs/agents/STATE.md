@@ -7,7 +7,8 @@ task list + round log). Audit details: `M3FX_AUDIT.md`, `APP_MAP.md`. Open items
 ## Roles
 
 - **Orchestrator** (main session): owns `docs/agents/*`, claims/review/merge, `./gradlew build`
-  gate, pushes to origin. Does not implement lane tasks.
+  gate. **Push policy (user directive): merges stay LOCAL until all tasks are DONE — one single
+  push to origin at the very end.** Does not implement lane tasks.
 - **Worker A** (worktree `../gym-wt-A`, branch `agent/core`): lane A (m3fx-core), pools elsewhere.
 - **Worker B** (worktree `../gym-wt-B`, branch `agent/controls`): lane B (m3fx-controls).
 - **Worker C** (worktree `../gym-wt-C`, branch `agent/app`): lane C (gym app UI).
