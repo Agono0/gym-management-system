@@ -1,5 +1,8 @@
 package io.m3fx.controls.glass;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import io.m3fx.controls.internal.SpringAnimation;
 import io.m3fx.controls.internal.ThemeColors;
 import io.m3fx.core.theme.ColorRole;
@@ -12,6 +15,7 @@ import javafx.event.EventHandler;
 import javafx.geometry.Bounds;
 import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
+import javafx.scene.Parent;
 import javafx.scene.Node;
 import javafx.scene.SnapshotParameters;
 import javafx.scene.control.SkinBase;
@@ -141,6 +145,11 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
     private javafx.stage.Window currentWindow;
     private long lastStepNanos;
     private long animationStartNanos;
+
+    /** Guard against starving the backdrop capture in ever-dirty scenes. */
+    private static final int MAX_CAPTURE_DEFERALS = 60;
+    private boolean captureScheduled;
+    private int deferredCaptureAttempts;
 
     private final ChangeListener<Object> invalidateListener;
     private final ChangeListener<javafx.stage.Window> windowListener;
@@ -585,7 +594,7 @@ specularLight2.setVisible(false);
         M3GlassPane control = getSkinnable();
         if (control != null) {
             if (backdropDirty) {
-                captureBackdrop();
+                scheduleCapture();
             }
             renderRefractedIfNeeded();
             if (layersDirty) {
@@ -595,9 +604,63 @@ specularLight2.setVisible(false);
         super.layoutChildren(x, y, w, h);
     }
 
+    /**
+     * Backdrop captures run OUTSIDE the layout pass. A synchronous capture inside
+     * {@code layoutChildren} photographs the capture ancestor mid-pass, so siblings laid out
+     * after the pane (or re-styled by a later CSS pass) get baked at stale positions - the
+     * second half of the B12 ghost-text mechanism (the first half, occluding siblings, is
+     * handled by the hide-and-restore inside the capture itself).
+     */
+    private void scheduleCapture() {
+        if (captureScheduled) {
+            return;
+        }
+        captureScheduled = true;
+        javafx.application.Platform.runLater(this::runDeferredCapture);
+    }
+
+    private void runDeferredCapture() {
+        captureScheduled = false;
+        M3GlassPane control = getSkinnable();
+        if (control == null || control.getScene() == null) {
+            return;
+        }
+        Node source = findCaptureSource();
+        if (source == null) {
+            return;
+        }
+        // Wait for settled layout so the snapshot photographs final sibling positions; the
+        // attempt cap keeps pathological ever-dirty scenes from starving the capture.
+        boolean sourceNeedsLayout = source instanceof Parent parent && parent.isNeedsLayout();
+        if (deferredCaptureAttempts < MAX_CAPTURE_DEFERALS
+                && (sourceNeedsLayout || control.isNeedsLayout())) {
+            deferredCaptureAttempts++;
+            scheduleCapture();
+            return;
+        }
+        deferredCaptureAttempts = 0;
+        captureBackdrop();
+    }
+
     void invalidateBackdrop() {
         backdropDirty = true;
         renderDirty = true;
+    }
+
+    /** Best ancestor to snapshot: one with background/wallpaper, else the direct parent. */
+    private Node findCaptureSource() {
+        M3GlassPane control = getSkinnable();
+        if (control == null) {
+            return null;
+        }
+        for (Node curr = control.getParent(); curr != null; curr = curr.getParent()) {
+            if (curr.getStyleClass().contains("glass-stage") || curr.getStyleClass().contains("glass-backdrop")
+                    || (curr instanceof Region r && r.getBackground() != null && !r.getBackground().isEmpty())
+                    || curr instanceof ImageView) {
+                return curr;
+            }
+        }
+        return control.getParent();
     }
 
     private void captureBackdrop() {
@@ -613,19 +676,7 @@ specularLight2.setVisible(false);
             return;
         }
 
-        // Find best ancestor to snapshot (one with background/wallpaper)
-        Node captureSource = null;
-        for (Node curr = control.getParent(); curr != null; curr = curr.getParent()) {
-            if (curr.getStyleClass().contains("glass-stage") || curr.getStyleClass().contains("glass-backdrop")
-                    || (curr instanceof Region r && r.getBackground() != null && !r.getBackground().isEmpty())
-                    || curr instanceof ImageView) {
-                captureSource = curr;
-                break;
-            }
-        }
-        if (captureSource == null) {
-            captureSource = control.getParent();
-        }
+        Node captureSource = findCaptureSource();
         if (captureSource == null) {
             backdropImage = null;
             backdropView.setImage(null);
@@ -638,9 +689,12 @@ specularLight2.setVisible(false);
         double pad = maxPullPx + Math.max(0.0, control.getBlurRadius()) + 4.0;
 
         Bounds b;
-        if (control.getScene() != null && captureSource.getScene() != null) {
-            Bounds bInScene = control.localToScene(control.getBoundsInLocal());
-            b = captureSource.sceneToLocal(bInScene);
+        if (captureSource.getScene() != null) {
+            // The pane's TRUE rectangle: layout bounds mapped through transforms. getBoundsInLocal
+            // would include the pane's effect bleed (its drop shadow), which inflated the pane
+            // rectangle over adjacent UI above it - that UI was then kept as "backdrop" and the
+            // rim displacement pulled it into view as ghost text (B12).
+            b = captureSource.sceneToLocal(control.localToScene(control.getLayoutBounds()));
         } else {
             b = control.getBoundsInParent();
         }
@@ -662,9 +716,21 @@ specularLight2.setVisible(false);
 
         double previousSkinOpacity = root.getOpacity();
         root.setOpacity(0.0);
+        // B12 ghost-text fix: the flat ancestor snapshot bakes every sibling that paints ABOVE
+        // this pane (app-bar titles, overlay labels, scanline overlays...) into the backdrop,
+        // and the refraction pass draws those baked pixels back displaced - text renders twice.
+        // Hide everything painting after the pane that reaches into the padded capture region,
+        // snapshot, then restore. Content genuinely behind the pane stays captured.
+        List<Runnable> occluderRestores = new ArrayList<>();
         try {
+            hideOccluders(captureSource, captureSource, control, b,
+                    new javafx.geometry.BoundingBox(vx, vy, vw, vh), new boolean[1],
+                    occluderRestores);
             captureSource.snapshot(params, image);
         } finally {
+            for (Runnable restore : occluderRestores) {
+                restore.run();
+            }
             root.setOpacity(previousSkinOpacity);
         }
         backdropImage = image;
@@ -673,6 +739,78 @@ specularLight2.setVisible(false);
         renderDirty = true;
         renderRefractedIfNeeded();
         placeBackdropViews();
+    }
+
+    /**
+     * Pre-order walk of the capture subtree. JavaFX paints parents before children and children
+     * in child order, so every node visited after the pane paints above it. Nodes that are
+     * visible, painted and reach into the padded capture region are hidden for the duration of
+     * the snapshot and restored by the caller (they were visible when collected). The pane's
+     * own subtree is pruned - it is already hidden via the skin root opacity - and the pane's
+     * ancestors come before it in paint order, so they are never touched.
+     */
+    /**
+     * Pre-order walk of the capture subtree. JavaFX paints parents before children and children
+     * in child order, so everything visited after the pane paints above it. Capture rules per
+     * node (both tests are against the capture-source-space bounds):
+     * <ul>
+     *   <li>paints after the pane and intersects the padded capture region &rarr; occluding UI,
+     *       hide it (it would otherwise be baked and drawn back refracted - the B12 ghost
+     *       text);</li>
+     *   <li>paints before the pane, intersects the pane's own bounds &rarr; the pane's genuine
+     *       backdrop, keep it (frost and rim must still refract it, also beyond the pane edges
+     *       where it continues into the capture pad);</li>
+     *   <li>paints before the pane, pad-only (adjacent UI such as an app bar next to a strip)
+     *       &rarr; hide it too: the rim displacement pulls pad pixels inward, and adjacent UI
+     *       pulled into the rim reads as duplicated text.</li>
+     * </ul>
+     * Hidden nodes are restored by the caller (they were visible when collected). The pane's
+     * own subtree is pruned - it is already hidden via the skin root opacity.
+     */
+    private void hideOccluders(Node node, Node captureSource, M3GlassPane pane, Bounds paneBounds,
+            Bounds captureRegion, boolean[] paneVisited, List<Runnable> restores) {
+        if (node == pane) {
+            paneVisited[0] = true;
+            return; // prune: nothing inside the pane may be hidden by its own backdrop capture
+        }
+        if (node.isVisible() && node.getOpacity() > 0.0) {
+            Bounds inSource = captureSource.sceneToLocal(
+                    node.localToScene(node.getBoundsInLocal()));
+            if (inSource != null && inSource.intersects(captureRegion)
+                    && (paneVisited[0] || !inSource.intersects(paneBounds))) {
+                Runnable restore = hideForCapture(node);
+                if (restore != null) {
+                    restores.add(restore);
+                }
+            }
+        }
+        if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                hideOccluders(child, captureSource, pane, paneBounds, captureRegion,
+                        paneVisited, restores);
+            }
+        }
+    }
+
+    /**
+     * Hides one occluder for the duration of the snapshot and returns the restore action, or
+     * null when the node cannot be hidden: some controls bind their {@code visible} property
+     * (M3StatCard's delta badge, nav rail items), where {@code setVisible} throws, and opacity
+     * can be bound too - those nodes stay in the capture rather than breaking the layout pulse.
+     */
+    private Runnable hideForCapture(Node node) {
+        try {
+            node.setVisible(false);
+            return () -> node.setVisible(true);
+        } catch (RuntimeException boundVisible) {
+            double previousOpacity = node.getOpacity();
+            try {
+                node.setOpacity(0.0);
+                return () -> node.setOpacity(previousOpacity);
+            } catch (RuntimeException boundOpacity) {
+                return null;
+            }
+        }
     }
 
     private void placeBackdropViews() {
@@ -871,6 +1009,11 @@ specularLight2.setVisible(false);
     /** Whether the physics timer is currently animating (package-private for tests). */
     boolean isPhysicsTimerActive() {
         return physicsTimerActive;
+    }
+
+    /** The raw captured backdrop image (pre-refraction), or null (package-private for tests). */
+    javafx.scene.image.WritableImage backdropImageForTesting() {
+        return backdropImage;
     }
 
     @Override
