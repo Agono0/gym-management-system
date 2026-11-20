@@ -389,7 +389,11 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   administrator CRUD via AdministratorDao with RBAC-aware copy (rule 16).
   done-when: check-in→correct→check-out round-trips; staff add/edit/delete targets selection;
   screenshots.
-  claimed-by: — | status: BLOCKED (C0,C2)
+  claimed-by: B (pooled) | status: DONE (round 13, commits 10e6507+7c1d06b → main 08fe808 —
+  real rule-5 turnstile (same-day update-not-insert proven), rule-19 in-place corrections,
+  real occupancy vs SAFETY_CAP constant, staff selection bug fixed (row-0 die), real CRUD with
+  rule-16 copy, honest empty audit timeline. Finding: StaffController viewer badge still
+  hardcodes "Alex Vance" — wiring the real signed-in identity queued for the Q lane)
 
 - [ ] C8 | lane:C | deps:C0,C2 | files: src/main/java/com/gym/controller/{TrainerListController,TrainerProfileController,AvailabilityController,WorkoutController}.java
   goal: Trainer + program flows: pipe-string rows → typed model from TrainerDao; trainer profile
