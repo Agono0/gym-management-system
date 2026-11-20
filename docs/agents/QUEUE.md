@@ -252,7 +252,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   goal: Version bump to 0.1.1 and CHANGELOG.md entry listing every additive API + fix from
   B1–B7 (migration notes where behavior changed, e.g. icon-button accessible text).
   done-when: changelog accurate, version bumped, orchestrator informed.
-  claimed-by: — | status: BLOCKED (B1..B7)
+  claimed-by: B | status: DONE (round 10, commit 40b7699 — coordinated 0.1.1 release: both
+  modules bumped, two changelogs written with migration notes; artifacts build as 0.1.1 jars.
+  **LANE B COMPLETE — B1-B16 all DONE.**)
 
 - [ ] B9 | lane:B | deps:— | files: m3fx-controls/src/test/... (new: textfield, appbar, overlay facade tests)
   goal: Cover the untested components the app depends on: `M3TextField` (floated/error/counter),
@@ -453,3 +455,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 6b | — | — | C3 (083c538+7871e19) | merged locally 5b1b606 — dashboard+profile fully real |
 | 7 | B9 (211f1cc) | B10+B11 | C4 | B9 merged locally 18f3955; controls tests 233 |
 | 8 | B15 (1cce386) | B10 (088e259→7adc969) + B11 (869bbb6) | C4 (d3540b6), C5 (7f6d12f) | B10+B11 merged; A's text-field test lookups adapted (a37e16c); B16 queued |
+| 9 | B16 | B8 (40b7699) | C6 | **LANE B COMPLETE** (B1-B16); merged locally 40b7699 |
