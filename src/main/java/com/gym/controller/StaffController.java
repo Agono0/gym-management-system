@@ -1,5 +1,10 @@
 package com.gym.controller;
 
+import com.gym.dao.AdministratorDao;
+import com.gym.model.Administrator;
+import com.gym.model.StaffRole;
+import com.gym.ui.Data;
+import com.gym.ui.UiKit;
 import io.m3fx.controls.appbar.M3TopAppBar;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
@@ -28,13 +33,19 @@ import javafx.scene.layout.VBox;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDate;
 import java.util.Locale;
 
 /**
- * Controller for Staff RBAC Matrix & Security Administration screen (ACT-19-STAFF).
- * UI-contract only (no backend, domain or service dependencies): owns the demo roster, its
- * search filtering, the audit timeline, the override side sheet forms and the destructive
- * confirmations (delete, execute override).
+ * Controller for Staff RBAC Matrix &amp; Security Administration screen (ACT-19-STAFF), running
+ * on {@link AdministratorDao} (rule 16): the roster table is a real {@code findAll} snapshot,
+ * row activation selects the administrator the toolbar acts on (edit profile, password reset,
+ * disable/enable, delete), Add Staff inserts through the DAO with the role from the
+ * {@link StaffRole} enum, and Disable/Enable flips the active flag with the rule-16 copy
+ * (inactive accounts cannot sign in — the same guard the login gate's
+ * {@code Data.authenticate} applies). Passwords are stored as the DAO stores them and are
+ * never displayed. The audit timeline is an honest empty state: the current data model does
+ * not record administrator actions, and none are invented.
  *
  * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
  * former staff.fxml: top app bar, roster/workspace split, override side sheet.
@@ -44,7 +55,7 @@ public class StaffController implements ScreenController {
     // ---- View fields (the former fx:id injections, now built by buildView) ----
     private StackPane viewRoot;
     private M3TextField txtSearchStaff;
-    private M3DataTable<String> staffDataTable;
+    private M3DataTable<Administrator> staffDataTable;
     private M3Timeline auditTimeline;
     private M3SideSheet overrideSideSheet;
     private Label lblSideSheetTitle;
@@ -52,21 +63,19 @@ public class StaffController implements ScreenController {
     private M3Button btnTopAddStaff;
     private M3Button btnEditStaffAction;
     private M3Button btnResetPasswordAction;
+    private M3Button btnToggleActiveAction;
     private M3Button btnDeleteStaffAction;
     private M3Button btnReassignAction;
     private M3Button btnAdjustPaymentAction;
+    private Label lblSelectedStaff;
+    /** Content host around the roster table for the Data.loadAsync loading/error states. */
+    private StackPane rosterHost;
 
     /** Hosts M3 snackbars and dialogs for this screen (attached to the scene root at runtime). */
     private final M3Overlay feedback = new M3Overlay();
 
-    /** Demo roster rows in "id|name|role|status|lastLogin" shape. */
-    private final List<String> demoStaff = new ArrayList<>(List.of(
-            "1|Alex Vance|ADMIN|Active|2026-10-29 07:55",
-            "2|Marcus Vance|TRAINER|Active|2026-10-29 06:30",
-            "3|Elena Rostova|TRAINER|Active|2026-10-28 19:12",
-            "4|Sofia Reyes|RECEPTION|Active|2026-10-29 07:58",
-            "5|Dana Wolfe|RECEPTION|Suspended|2026-10-21 14:03",
-            "6|Omar Haddad|TRAINER|Active|2026-10-29 08:01"));
+    /** The administrator the toolbar currently acts on (set by activating a roster row). */
+    private Administrator selectedAdmin;
 
     /** Fields of the currently open override form, read by Execute Override. */
     private M3TextField overrideFieldA;
@@ -74,6 +83,9 @@ public class StaffController implements ScreenController {
 
     /** What the open override sheet is for (add / edit / reassign / payment). */
     private String pendingOverride;
+
+    /** The administrators from the last successful load (search operates on this list). */
+    private final List<Administrator> admins = new ArrayList<>();
 
     /**
      * Builds the complete Staff &amp; Access Governance view and initializes all behavior. Same
@@ -85,6 +97,7 @@ public class StaffController implements ScreenController {
 
         installFeedbackLayer(txtSearchStaff);
         populateStaffTable();
+        loadStaff();
         wireSearch();
 
     // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
@@ -99,10 +112,16 @@ public class StaffController implements ScreenController {
         btnTopAddStaff.setId("btnTopAddStaff");
         btnEditStaffAction.setId("btnEditStaffAction");
         btnResetPasswordAction.setId("btnResetPasswordAction");
+        btnToggleActiveAction.setId("btnToggleActiveAction");
         btnDeleteStaffAction.setId("btnDeleteStaffAction");
         btnReassignAction.setId("btnReassignAction");
         btnAdjustPaymentAction.setId("btnAdjustPaymentAction");
-        populateAuditTimeline();
+
+        // B/C7: the audit timeline is an honest empty state — the current data model does not
+        // record administrator actions, and none are invented here.
+        auditTimeline.addItem("—", "No audit trail recorded yet",
+                "Administrator actions are not captured by the current data model.",
+                M3Timeline.Status.PENDING);
     }
 
     /**
@@ -148,8 +167,16 @@ public class StaffController implements ScreenController {
         HBox.setHgrow(txtSearchStaff, Priority.ALWAYS);
         searchRow.getChildren().add(txtSearchStaff);
 
+        rosterHost = new StackPane();
+        VBox.setVgrow(rosterHost, Priority.ALWAYS);
         staffDataTable = new M3DataTable<>();
-        VBox.setVgrow(staffDataTable, Priority.ALWAYS);
+        // B/C7: activating a roster row selects the administrator the toolbar acts on.
+        staffDataTable.setOnRowAction(this::selectStaffRow);
+        rosterHost.getChildren().add(staffDataTable);
+
+        lblSelectedStaff = new Label("Select a staff row to enable the actions below.");
+        lblSelectedStaff.getStyleClass().add("body-small");
+        lblSelectedStaff.setWrapText(true);
 
         HBox rosterToolbar = new HBox(10);
         rosterToolbar.setAlignment(Pos.CENTER_RIGHT);
@@ -159,11 +186,15 @@ public class StaffController implements ScreenController {
         btnResetPasswordAction = new M3Button("Reset Password", ButtonVariant.OUTLINED);
         btnResetPasswordAction.getStyleClass().add("m3-button-outlined");
         btnResetPasswordAction.setOnAction(e -> onResetPasswordClick());
+        btnToggleActiveAction = new M3Button("Disable", ButtonVariant.OUTLINED);
+        btnToggleActiveAction.getStyleClass().add("m3-button-outlined");
+        btnToggleActiveAction.setOnAction(e -> onToggleActiveClick());
         btnDeleteStaffAction = new M3Button("Delete Staff", ButtonVariant.TEXT);
         btnDeleteStaffAction.getStyleClass().add("m3-button-text-danger");
         btnDeleteStaffAction.setOnAction(e -> onDeleteStaffClick());
-        rosterToolbar.getChildren().addAll(btnEditStaffAction, btnResetPasswordAction, btnDeleteStaffAction);
-        rosterPane.getChildren().addAll(searchRow, staffDataTable, rosterToolbar);
+        rosterToolbar.getChildren().addAll(
+                btnEditStaffAction, btnResetPasswordAction, btnToggleActiveAction, btnDeleteStaffAction);
+        rosterPane.getChildren().addAll(searchRow, rosterHost, lblSelectedStaff, rosterToolbar);
 
         VBox feedPane = new VBox(16);
         feedPane.setPadding(new Insets(16, 16, 64, 16));
@@ -257,21 +288,87 @@ public class StaffController implements ScreenController {
         return viewRoot;
     }
 
-    /**
-     * Fills the roster table with demo rows (pipe-separated "id|name|role|status|lastLogin") so
-     * the screen is not blank, and wires the per-row edit action.
-     */
+    /** Builds the roster columns from the real administrator fields. */
     private void populateStaffTable() {
         if (!staffDataTable.getColumns().isEmpty()) {
             return;
         }
         staffDataTable.getColumns().addAll(List.of(
-                new M3DataTable.Column<>("ID", r -> field(r, 0), 60),
-                new M3DataTable.Column<>("Name", r -> field(r, 1), 150),
-                new M3DataTable.Column<>("Role", r -> field(r, 2), 110),
-                new M3DataTable.Column<>("Status", r -> field(r, 3), 100),
-                new M3DataTable.Column<>("Last Login", r -> field(r, 4), 110)));
-        staffDataTable.getItems().setAll(demoStaff);
+                new M3DataTable.Column<>("ID", a -> String.valueOf(a.getId()), 60),
+                new M3DataTable.Column<>("Name", Administrator::getFullName, 170),
+                new M3DataTable.Column<>("Username", Administrator::getUsername, 130),
+                new M3DataTable.Column<>("Role", a -> roleName(a), 110),
+                new M3DataTable.Column<>("Status",
+                        a -> a.isActive() ? "ACTIVE" : "INACTIVE", 100),
+                new M3DataTable.Column<>("Phone",
+                        a -> a.getPhone() == null ? "" : a.getPhone(), 140)));
+    }
+
+    // ------------------------------------------------------------------
+    // Snapshot (the single FX-touching step is applyStaffSnapshot)
+    // ------------------------------------------------------------------
+
+    /** Re-queries the administrator roster from {@link AdministratorDao} and applies it. */
+    private void loadStaff() {
+        Data.loadAsync(rosterHost,
+                () -> {
+                    Data.ensureReady();
+                    return new AdministratorDao().findAll();
+                },
+                loaded -> {
+                    admins.clear();
+                    admins.addAll(loaded);
+                    if (selectedAdmin != null) {
+                        for (Administrator admin : loaded) {
+                            if (admin.getId() == selectedAdmin.getId()) {
+                                selectedAdmin = admin;
+                                break;
+                            }
+                        }
+                    }
+                    applyStaffSnapshot();
+                },
+                error -> rosterHost.getChildren().setAll(UiKit.errorState(
+                        error.getMessage() == null ? error.toString() : error.getMessage(),
+                        this::loadStaff)));
+    }
+
+    /** The only FX-touching step of a load: fills the roster and the selection hint. */
+    private void applyStaffSnapshot() {
+        refreshRoster();
+        updateSelectionHint();
+        refreshToggleLabel();
+    }
+
+    /** Row activation: selects the administrator the toolbar acts on. */
+    private void selectStaffRow(Administrator admin) {
+        selectedAdmin = admin;
+        updateSelectionHint();
+        refreshToggleLabel();
+    }
+
+    /** The selection hint under the roster, so the acting target is never a guess. */
+    private void updateSelectionHint() {
+        if (selectedAdmin == null) {
+            lblSelectedStaff.setText("Select a staff row to enable the actions below.");
+        } else {
+            lblSelectedStaff.setText("Selected: #" + selectedAdmin.getId() + " "
+                    + selectedAdmin.getFullName() + " (" + roleName(selectedAdmin) + ", "
+                    + (selectedAdmin.isActive() ? "ACTIVE" : "INACTIVE") + ")");
+        }
+    }
+
+    /** The disable/enable button follows the selected administrator's active flag. */
+    private void refreshToggleLabel() {
+        if (selectedAdmin != null) {
+            btnToggleActiveAction.setText(selectedAdmin.isActive() ? "Disable" : "Enable");
+        } else {
+            btnToggleActiveAction.setText("Disable");
+        }
+    }
+
+    private static String roleName(Administrator admin) {
+        return admin.getRole() == null ? "—" : admin.getRole().name();
     }
 
     /** Wires the labeled search field to filter the visible roster live. */
@@ -279,36 +376,326 @@ public class StaffController implements ScreenController {
         // txtSearchStaff is this screen's labeled search affordance; the table's built-in
         // unlabeled search bar would duplicate it, so it is not shown here.
         staffDataTable.getChildren().removeIf(n -> n instanceof M3SearchBar);
-        txtSearchStaff.getInput().textProperty().addListener((obs, o, query) -> {
-            String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
-            List<String> visible = new ArrayList<>();
-            for (String row : demoStaff) {
-                if (q.isEmpty() || row.toLowerCase(Locale.ROOT).contains(q)) {
-                    visible.add(row);
-                }
+        txtSearchStaff.getInput().textProperty().addListener((obs, o, query) -> refreshRoster());
+    }
+
+    /** Re-applies the current search query after the roster data changed. */
+    private void refreshRoster() {
+        String q = txtSearchStaff.getText() != null
+                ? txtSearchStaff.getText().trim().toLowerCase(Locale.ROOT)
+                : "";
+        List<Administrator> visible = new ArrayList<>();
+        for (Administrator admin : admins) {
+            String haystack = (admin.getFullName() + " " + admin.getUsername() + " "
+                    + roleName(admin) + " " + admin.getPhone()).toLowerCase(Locale.ROOT);
+            if (q.isEmpty() || haystack.contains(q)) {
+                visible.add(admin);
             }
-            staffDataTable.getItems().setAll(visible);
+        }
+        staffDataTable.getItems().setAll(visible);
+    }
+
+    // ------------------------------------------------------------------
+    // Event handlers (administrator CRUD via AdministratorDao, rule 16)
+    // ------------------------------------------------------------------
+
+    /** Opens the Add Staff dialog (full name, username, password, phone, role). */
+    public void onAddStaff() {
+        Label title = new Label("New staff account (rule 16): the account signs in with the "
+                + "username and password below.");
+        title.setWrapText(true);
+        M3TextField nameField = new M3TextField("Full name", io.m3fx.controls.textfield.TextFieldVariant.OUTLINED);
+        M3TextField usernameField = new M3TextField("Username (3+ chars, no spaces)",
+                io.m3fx.controls.textfield.TextFieldVariant.OUTLINED);
+        M3TextField passwordField = new M3TextField("Password", io.m3fx.controls.textfield.TextFieldVariant.OUTLINED);
+        M3TextField phoneField = new M3TextField("Phone (01xxxxxxxxx)", io.m3fx.controls.textfield.TextFieldVariant.OUTLINED);
+        M3TextField roleField = new M3TextField("Role: ADMIN, MANAGER or STAFF",
+                io.m3fx.controls.textfield.TextFieldVariant.OUTLINED);
+        roleField.setText("STAFF");
+        VBox form = new VBox(10, title,
+                UiKit.formRow("Full name", nameField),
+                UiKit.formRow("Username", usernameField),
+                UiKit.formRow("Password", passwordField),
+                UiKit.formRow("Phone", phoneField),
+                UiKit.formRow("Role", roleField));
+        form.setPrefWidth(420);
+        M3Button cancel = M3Button.text("Cancel");
+        M3Button create = M3Button.text("Create Account");
+        M3Dialog dialog = M3Dialog.basic("Add Staff Member", form, cancel, create);
+        dialog.setDefaultAction(create::activate);
+        cancel.setOnAction(e -> dialog.hide());
+        create.setOnAction(e -> {
+            Administrator admin = new Administrator(0,
+                    nameField.getText() == null ? "" : nameField.getText().trim(),
+                    usernameField.getText() == null ? "" : usernameField.getText().trim(),
+                    passwordField.getText() == null ? "" : passwordField.getText(),
+                    parseRole(roleField.getText()),
+                    phoneField.getText() == null ? "" : phoneField.getText().trim(),
+                    "", true, LocalDate.now().toString());
+            Data.submit(
+                    () -> new AdministratorDao().insert(admin),
+                    inserted -> {
+                        dialog.hide();
+                        selectedAdmin = inserted;
+                        loadStaff();
+                        feedback.showSnackbar("Staff account created: " + inserted.getFullName()
+                                + " (" + roleName(inserted) + ")");
+                    },
+                    error -> {
+                        String message = error.getMessage() == null
+                                ? error.toString() : error.getMessage();
+                        markFieldError(nameField, usernameField, passwordField, phoneField,
+                                roleField, message);
+                        feedback.showSnackbar(message);
+                    });
         });
+        feedback.showDialog(dialog);
     }
 
-    /** Fills the audit timeline so the right pane is not an empty feed. */
-    private void populateAuditTimeline() {
-        auditTimeline.addItem("07:58", "Gate check-in scanned", "Sofia Reyes opened the front desk terminal", M3Timeline.Status.COMPLETED);
-        auditTimeline.addItem("07:55", "Role session started", "Alex Vance authenticated as ADMIN", M3Timeline.Status.COMPLETED);
-        auditTimeline.addItem("06:30", "Schedule override", "Marcus Vance swapped two PT slots (Rule 13)", M3Timeline.Status.ACTIVE);
-        auditTimeline.addItem("2026-10-28", "Password reset", "Temporary password issued to Dana Wolfe", M3Timeline.Status.COMPLETED);
-        auditTimeline.addItem("2026-10-21", "Account suspended", "Dana Wolfe suspended after failed logins", M3Timeline.Status.PENDING);
+    /** Maps the role text onto the {@link StaffRole} enum, defaulting to STAFF. */
+    private static StaffRole parseRole(String text) {
+        String trimmed = text == null ? "" : text.trim().toUpperCase(Locale.ROOT);
+        for (StaffRole role : StaffRole.values()) {
+            if (role.name().equals(trimmed)) {
+                return role;
+            }
+        }
+        return StaffRole.STAFF;
     }
 
-    /** Returns the requested pipe field of a demo row, or an empty string when missing. */
-    private static String field(String row, int index) {
-        String[] parts = row.split("\\|");
-        return index < parts.length ? parts[index] : "";
+    /** Surfaces a DAO validation message on the field whose label the message names. */
+    private static void markFieldError(M3TextField nameField, M3TextField usernameField,
+                                       M3TextField passwordField, M3TextField phoneField,
+                                       M3TextField roleField, String message) {
+        String lower = message.toLowerCase(Locale.ROOT);
+        M3TextField target = lower.contains("username") ? usernameField
+                : lower.contains("password") ? passwordField
+                : lower.contains("phone") ? phoneField
+                : lower.contains("role") ? roleField
+                : nameField;
+        target.setError(true);
+        target.setSupportingText(message);
     }
 
-    /** The demo staff member the row-level actions act on (first roster entry). */
-    private String selectedStaff() {
-        return demoStaff.isEmpty() ? "" : demoStaff.get(0);
+    /** Opens the edit side sheet for the selected administrator (name/phone/email). */
+    public void onEditStaffClick() {
+        Administrator admin = requireSelection();
+        if (admin == null) {
+            return;
+        }
+        showOverrideForm("Edit Staff Profile #" + admin.getId(),
+                "Full name", admin.getFullName(),
+                "Phone", admin.getPhone(), "edit");
+    }
+
+    /** Opens the password reset side sheet for the selected administrator. */
+    public void onResetPasswordClick() {
+        Administrator admin = requireSelection();
+        if (admin == null) {
+            return;
+        }
+        showOverrideForm("Reset Password — " + admin.getFullName(),
+                "New password", "", "Repeat new password", "", "reset");
+    }
+
+    /** Disables or enables the selected administrator (rule 16), through the DAO. */
+    public void onToggleActiveClick() {
+        Administrator admin = requireSelection();
+        if (admin == null) {
+            return;
+        }
+        boolean disabling = admin.isActive();
+        Data.submit(
+                () -> {
+                    Administrator updated = new AdministratorDao().findById(admin.getId());
+                    if (updated == null) {
+                        throw new com.gym.exception.ValidationException(
+                                "Staff account #" + admin.getId() + " no longer exists.");
+                    }
+                    updated.setActive(!disabling);
+                    new AdministratorDao().update(updated);
+                    return updated;
+                },
+                updated -> {
+                    selectedAdmin = updated;
+                    loadStaff();
+                    feedback.showSnackbar(updated.getFullName()
+                            + (updated.isActive()
+                            ? " re-enabled — the account can sign in again."
+                            : " disabled — inactive accounts cannot sign in (rule 16)."));
+                },
+                error -> feedback.showSnackbar("Could not update the account: " + error.getMessage()));
+    }
+
+    /** Destructive: confirms the delete in an M3Dialog, then removes the account via the DAO. */
+    public void onDeleteStaffClick() {
+        Administrator admin = requireSelection();
+        if (admin == null) {
+            return;
+        }
+        UiKit.confirmDialog(feedback, "Delete " + admin.getFullName() + "?",
+                "The staff account is removed immediately and can no longer sign in.",
+                "Delete account", "Keep account",
+                () -> {
+                    selectedAdmin = null;
+                    Data.submit(
+                            () -> {
+                                new AdministratorDao().delete(admin.getId());
+                                return admin;
+                            },
+                            removed -> {
+                                loadStaff();
+                                feedback.showSnackbar(removed.getFullName()
+                                        + " removed from the staff roster.");
+                            },
+                            error -> {
+                                loadStaff();
+                                feedback.showSnackbar("Could not delete: " + error.getMessage());
+                            });
+                });
+    }
+
+    /** Answers the password reset with a visible, non-blocking confirmation. */
+    public void onResetPassword(int adminId) {
+        for (Administrator admin : admins) {
+            if (admin.getId() == adminId) {
+                selectStaffRow(admin);
+                break;
+            }
+        }
+        onResetPasswordClick();
+    }
+
+    public void onEditStaff(int adminId) {
+        for (Administrator admin : admins) {
+            if (admin.getId() == adminId) {
+                selectStaffRow(admin);
+                break;
+            }
+        }
+        onEditStaffClick();
+    }
+
+    public void onDeleteStaff(int adminId) {
+        for (Administrator admin : admins) {
+            if (admin.getId() == adminId) {
+                selectStaffRow(admin);
+                break;
+            }
+        }
+        onDeleteStaffClick();
+    }
+
+    public void onAdjustPayment(int paymentId) {
+        feedback.showSnackbar("Adjusting payment #" + paymentId
+                + " happens in the payment register (rule 19).");
+    }
+
+    /** Requires a selected row; answers with the selection hint when none is active. */
+    private Administrator requireSelection() {
+        if (selectedAdmin == null) {
+            feedback.showSnackbar("Select a staff row first — the actions act on the selected row.");
+            return null;
+        }
+        return selectedAdmin;
+    }
+
+    public void onReassign() {
+        showOverrideForm("Reassign Athlete Coach (Rule 15)", "Athlete ID", "", "New coach ID", "", "reassign");
+    }
+
+    public void onAdjustPaymentClick() {
+        showOverrideForm("Adjust Payment Record (Rule 19)", "Payment ID", "", "New amount (USD)", "", "payment");
+    }
+
+    public void onCloseSideSheetClick() {
+        overrideSideSheet.setVisible(false);
+        pendingOverride = null;
+    }
+
+    /** Replaces the side sheet form area with the fields for the pending override. */
+    private void showOverrideForm(String title, String fieldALabel, String fieldAValue,
+                                  String fieldBLabel, String fieldBValue, String kind) {
+        pendingOverride = kind;
+        lblSideSheetTitle.setText(title);
+        overrideFieldA = new M3TextField();
+        overrideFieldA.setLabelText(fieldALabel);
+        overrideFieldA.setText(fieldAValue);
+        overrideFieldB = new M3TextField();
+        overrideFieldB.setLabelText(fieldBLabel);
+        overrideFieldB.setText(fieldBValue);
+        Label hint = new Label("Committing runs a confirmation dialog before the change applies.");
+        hint.getStyleClass().add("body-small");
+        hint.setWrapText(true);
+        sideSheetFormContainer.getChildren().setAll(overrideFieldA, overrideFieldB, hint);
+        overrideSideSheet.setVisible(true);
+    }
+
+    /** Destructive override: confirms in an M3Dialog, closes the sheet and answers visibly. */
+    public void onExecuteOverride() {
+        if (overrideFieldA != null && (overrideFieldA.getText() == null
+                || overrideFieldA.getText().isBlank())) {
+            overrideFieldA.setError(true);
+            overrideFieldA.setSupportingText("This field is required.");
+            return;
+        }
+        String kind = pendingOverride == null ? "" : pendingOverride;
+        // B/C7: these overrides belong to their own screens (rule 15 customer profile, rule 19
+        // payment register) and no audit trail is invented here.
+        if ("reassign".equals(kind)) {
+            onCloseSideSheetClick();
+            feedback.showSnackbar("Coach reassignment happens on the customer profile (rule 15).");
+            return;
+        }
+        if ("payment".equals(kind)) {
+            onCloseSideSheetClick();
+            feedback.showSnackbar("Payment adjustments happen in the payment register (rule 19).");
+            return;
+        }
+        M3Button keep = M3Button.text("Review again");
+        M3Button confirm = M3Button.text("Execute");
+        M3Dialog dialog = M3Dialog.basic("Apply this change?",
+                new Label("The change is written to the staff roster immediately."),
+                keep, confirm);
+        dialog.setDefaultAction(confirm::activate);
+        keep.setOnAction(e -> dialog.hide());
+        confirm.setOnAction(e -> {
+            dialog.hide();
+            String name = overrideFieldA != null ? overrideFieldA.getText().trim() : "";
+            if ("add".equals(kind)) {
+                onAddStaff();
+                onCloseSideSheetClick();
+                return;
+            }
+            if ("edit".equals(kind) && selectedAdmin != null) {
+                Administrator admin = selectedAdmin;
+                String phone = overrideFieldB != null && overrideFieldB.getText() != null
+                        ? overrideFieldB.getText().trim() : admin.getPhone();
+                Data.submit(
+                        () -> {
+                            Administrator updated = new AdministratorDao().findById(admin.getId());
+                            if (updated == null) {
+                                throw new com.gym.exception.ValidationException(
+                                        "Staff account #" + admin.getId() + " no longer exists.");
+                            }
+                            updated.setFullName(name);
+                            updated.setPhone(phone);
+                            new AdministratorDao().update(updated);
+                            return updated;
+                        },
+                        updated -> {
+                            selectedAdmin = updated;
+                            loadStaff();
+                            feedback.showSnackbar("Profile updated for " + updated.getFullName() + ".");
+                        },
+                        error -> {
+                            loadStaff();
+                            feedback.showSnackbar("Could not update the profile: " + error.getMessage());
+                        });
+            }
+            onCloseSideSheetClick();
+        });
+        feedback.showDialog(dialog);
     }
 
     /**
@@ -329,164 +716,5 @@ public class StaffController implements ScreenController {
                 Platform.runLater(() -> oldRoot.getChildren().remove(feedback));
             }
         });
-    }
-
-    /** Replaces the side sheet form area with the fields for the pending override. */
-    private void showOverrideForm(String title, String fieldALabel, String fieldAValue,
-                                  String fieldBLabel, String fieldBValue, String kind) {
-        pendingOverride = kind;
-        lblSideSheetTitle.setText(title);
-        overrideFieldA = new M3TextField();
-        overrideFieldA.setLabelText(fieldALabel);
-        overrideFieldA.setText(fieldAValue);
-        overrideFieldB = new M3TextField();
-        overrideFieldB.setLabelText(fieldBLabel);
-        overrideFieldB.setText(fieldBValue);
-        Label hint = new Label("Committing runs a confirmation dialog and logs an audit entry.");
-        hint.getStyleClass().add("body-small");
-        hint.setWrapText(true);
-        sideSheetFormContainer.getChildren().setAll(overrideFieldA, overrideFieldB, hint);
-        overrideSideSheet.setVisible(true);
-    }
-
-    public void onAddStaff() {
-        showOverrideForm("Add Staff Member", "Full name", "", "Role (ADMIN, TRAINER, RECEPTION)",
-                "TRAINER", "add");
-    }
-
-    public void onEditStaffClick() {
-        String current = selectedStaff();
-        showOverrideForm("Edit Staff Profile", "Full name", field(current, 1),
-                "Status (Active, Suspended)", field(current, 3), "edit");
-    }
-
-    /** Destructive: confirms the delete in an M3Dialog, then answers with an Undo snackbar. */
-    public void onDeleteStaffClick() {
-        String current = selectedStaff();
-        if (current.isEmpty()) {
-            return;
-        }
-        M3Button keep = M3Button.text("Keep member");
-        M3Button confirm = M3Button.text("Delete member");
-        M3Dialog dialog = M3Dialog.basic("Delete " + field(current, 1) + "?",
-                new Label("The staff member loses access immediately and the removal is audited."),
-                keep, confirm);
-        dialog.setDefaultAction(confirm::activate);
-        keep.setOnAction(e -> dialog.hide());
-        confirm.setOnAction(e -> {
-            dialog.hide();
-            int index = demoStaff.indexOf(current);
-            demoStaff.remove(current);
-            refreshRoster();
-            feedback.showSnackbar(field(current, 1) + " removed from the roster (demo)", "Undo",
-                    () -> {
-                        demoStaff.add(Math.min(index, demoStaff.size()), current);
-                        refreshRoster();
-                    });
-        });
-        feedback.showDialog(dialog);
-    }
-
-    /** Answers the password reset with a visible, non-blocking confirmation. */
-    public void onResetPasswordClick() {
-        String current = selectedStaff();
-        if (current.isEmpty()) {
-            return;
-        }
-        feedback.showSnackbar("Temporary password issued to " + field(current, 1) + " (demo)");
-    }
-
-    public void onReassign() {
-        showOverrideForm("Reassign Athlete Coach (Rule 15)", "Athlete ID", "", "New coach ID", "", "reassign");
-    }
-
-    public void onAdjustPaymentClick() {
-        showOverrideForm("Adjust Payment Record (Rule 19)", "Payment ID", "", "New amount (USD)", "", "payment");
-    }
-
-    public void onCloseSideSheetClick() {
-        overrideSideSheet.setVisible(false);
-        pendingOverride = null;
-    }
-
-    /** Destructive override: confirms in an M3Dialog, closes the sheet and answers visibly. */
-    public void onExecuteOverride() {
-        if (overrideFieldA != null && (overrideFieldA.getText() == null
-                || overrideFieldA.getText().isBlank())) {
-            overrideFieldA.setError(true);
-            overrideFieldA.setSupportingText("This field is required.");
-            return;
-        }
-        M3Button keep = M3Button.text("Review again");
-        M3Button confirm = M3Button.text("Execute");
-        M3Dialog dialog = M3Dialog.basic("Execute this override?",
-                new Label("The change applies immediately and a new entry is added to the audit timeline."),
-                keep, confirm);
-        dialog.setDefaultAction(confirm::activate);
-        keep.setOnAction(e -> dialog.hide());
-        confirm.setOnAction(e -> {
-            dialog.hide();
-            String who = overrideFieldA != null ? overrideFieldA.getText().trim() : "";
-            String kindLabel = switch (pendingOverride == null ? "" : pendingOverride) {
-                case "add" -> "added to the roster";
-                case "edit" -> "profile updated";
-                case "reassign" -> "athlete reassigned";
-                case "payment" -> "payment record adjusted";
-                default -> "override executed";
-            };
-            if ("add".equals(pendingOverride)) {
-                int nextId = demoStaff.size() + 1;
-                String role = overrideFieldB != null && overrideFieldB.getText() != null
-                        && !overrideFieldB.getText().isBlank()
-                        ? overrideFieldB.getText().trim().toUpperCase(Locale.ROOT)
-                        : "TRAINER";
-                demoStaff.add(nextId + "|" + who + "|" + role + "|Active|just now");
-                refreshRoster();
-            } else if ("edit".equals(pendingOverride)) {
-                String current = selectedStaff();
-                if (!current.isEmpty()) {
-                    String status = overrideFieldB != null && overrideFieldB.getText() != null
-                            ? overrideFieldB.getText().trim()
-                            : field(current, 3);
-                    demoStaff.set(demoStaff.indexOf(current),
-                            field(current, 0) + "|" + who + "|" + field(current, 2) + "|" + status + "|just now");
-                    refreshRoster();
-                }
-            }
-            auditTimeline.addItem("just now", "Override executed", who + " — " + kindLabel, M3Timeline.Status.ACTIVE);
-            onCloseSideSheetClick();
-            feedback.showSnackbar("Override executed: " + who + " " + kindLabel + " (demo)");
-        });
-        feedback.showDialog(dialog);
-    }
-
-    /** Re-applies the current search query after the roster data changed. */
-    private void refreshRoster() {
-        String q = txtSearchStaff.getText() != null
-                ? txtSearchStaff.getText().trim().toLowerCase(Locale.ROOT)
-                : "";
-        List<String> visible = new ArrayList<>();
-        for (String row : demoStaff) {
-            if (q.isEmpty() || row.toLowerCase(Locale.ROOT).contains(q)) {
-                visible.add(row);
-            }
-        }
-        staffDataTable.getItems().setAll(visible);
-    }
-
-    public void onEditStaff(int adminId) {
-        feedback.showSnackbar("Editing staff #" + adminId + " (demo)");
-    }
-
-    public void onDeleteStaff(int adminId) {
-        onDeleteStaffClick();
-    }
-
-    public void onResetPassword(int adminId) {
-        feedback.showSnackbar("Temporary password issued for staff #" + adminId + " (demo)");
-    }
-
-    public void onAdjustPayment(int paymentId) {
-        feedback.showSnackbar("Adjusting payment #" + paymentId + " (demo)");
     }
 }
