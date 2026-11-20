@@ -1,5 +1,6 @@
 package com.gym.controller;
 
+import com.gym.ui.Data;
 import io.m3fx.controls.button.M3Button;
 import io.m3fx.controls.effect.M3ParticleCanvas;
 import io.m3fx.controls.glass.GlassEffectParams;
@@ -76,7 +77,6 @@ public class LaunchGateController {
     private static final double SPLASH_GLASS_PANEL_SIZE = 280;
     private static final double SPLASH_SCRIM_OPACITY = 0.97;
     private static final double SIGNOUT_SCRIM_OPACITY = 0.88;
-    private static final int MIN_PASSWORD_LENGTH = 4;
 
     /**
      * Material Symbols paths for the two glyphs the bundled {@code M3Icons} catalog lacks
@@ -114,7 +114,7 @@ public class LaunchGateController {
     private M3GlassPane loginCard;
     private M3LinearProgress splashProgress;
     private M3LinearProgress signInBeat;
-    private M3TextField emailField;
+    private M3TextField usernameField;
     private M3TextField passwordField;
     private TextField passwordPlain;    // revealed (plain) input inside passwordField
     private PasswordField passwordMasked; // hidden (masked) input swapped in by default
@@ -126,6 +126,8 @@ public class LaunchGateController {
     private boolean passwordHidden = true;
     private boolean syncingPassword;    // re-entrancy guard for the plain↔masked text sync
     private boolean signingIn;
+    /** Bumped on every gate reset so a stale sign-in callback (gate re-opened mid-auth) is a no-op. */
+    private int gateGeneration;
     /** True while any gate overlay is on the scene root — guards against stacking duplicates. */
     private boolean gateShowing;
 
@@ -193,7 +195,7 @@ public class LaunchGateController {
             overlayFade.play();
 
             MotionUtil.splashIn(loginCard);
-            focusEmailAfterLayout();
+            focusUsernameAfterLayout();
         });
     }
 
@@ -312,12 +314,12 @@ public class LaunchGateController {
         Label supporting = new Label("Sign in to the GYM-OS operations center.");
         supporting.setStyle("-fx-font-size: 13px; -fx-text-fill: -md-sys-color-on-surface-variant;");
 
-        emailField = new M3TextField("Email", TextFieldVariant.FILLED);
-        emailField.setMaxWidth(Double.MAX_VALUE);
-        emailField.getInput().setPromptText("you@studio.com");
-        emailField.setLeadingIcon(M3Icon.symbol("person"));
-        emailField.getInput().textProperty().addListener((obs, ov, nv) -> clearError());
-        emailField.getInput().setOnAction(e -> attemptSignIn());
+        usernameField = new M3TextField("Username", TextFieldVariant.FILLED);
+        usernameField.setMaxWidth(Double.MAX_VALUE);
+        usernameField.getInput().setPromptText("admin");
+        usernameField.setLeadingIcon(M3Icon.symbol("person"));
+        usernameField.getInput().textProperty().addListener((obs, ov, nv) -> clearError());
+        usernameField.getInput().setOnAction(e -> attemptSignIn());
 
         passwordField = new M3TextField("Password", TextFieldVariant.FILLED);
         passwordField.setMaxWidth(Double.MAX_VALUE);
@@ -345,7 +347,8 @@ public class LaunchGateController {
         signInBeat.setVisible(false);
         signInBeat.setManaged(false);
 
-        Label demoHint = new Label("Demo build — any email and a 4+ character password signs you in.");
+        Label demoHint = new Label("Seeded accounts — admin / admin123, manager / mgr123,"
+                + " staff / staff123. The inactive oldstaff / old123 account is refused (rule 16).");
         demoHint.setWrapText(true);
         demoHint.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
         demoHint.setStyle("-fx-font-size: 11px; -fx-text-fill: -md-sys-color-on-surface-variant;"
@@ -353,7 +356,7 @@ public class LaunchGateController {
 
         VBox card = new VBox(10,
                 brandSlot, headline, supporting,
-                emailField, passwordField,
+                usernameField, passwordField,
                 capsHint, errorCaption,
                 signInButton, signInBeat, demoHint);
         card.setAlignment(Pos.TOP_CENTER);
@@ -361,7 +364,7 @@ public class LaunchGateController {
         card.setMaxWidth(CARD_WIDTH - 32); // inside the glass content box's 16px padding
 
         VBox.setMargin(headline, new Insets(18, 0, 0, 0));
-        VBox.setMargin(emailField, new Insets(18, 0, 0, 0));
+        VBox.setMargin(usernameField, new Insets(18, 0, 0, 0));
         VBox.setMargin(signInButton, new Insets(14, 0, 0, 0));
         VBox.setMargin(demoHint, new Insets(12, 0, 0, 0));
 
@@ -580,7 +583,7 @@ public class LaunchGateController {
             loginCard.setVisible(true);
             MotionUtil.splashIn(loginCard);
             Platform.runLater(this::settleBrandIntoCard);
-            focusEmailAfterLayout();
+            focusUsernameAfterLayout();
         });
     }
 
@@ -640,10 +643,10 @@ public class LaunchGateController {
         }
     }
 
-    private void focusEmailAfterLayout() {
+    private void focusUsernameAfterLayout() {
         Platform.runLater(() -> {
-            if (emailField != null && emailField.getScene() != null) {
-                emailField.getInput().requestFocus();
+            if (usernameField != null && usernameField.getScene() != null) {
+                usernameField.getInput().requestFocus();
             }
         });
     }
@@ -653,9 +656,10 @@ public class LaunchGateController {
     // =====================================================================================
 
     private void resetGateState() {
-        if (emailField != null) {
-            emailField.getInput().setText("");
-            emailField.setError(false);
+        gateGeneration++;
+        if (usernameField != null) {
+            usernameField.getInput().setText("");
+            usernameField.setError(false);
         }
         syncingPassword = true;
         realPassword.set("");
@@ -690,8 +694,8 @@ public class LaunchGateController {
             errorCaption.setVisible(false);
             errorCaption.setManaged(false);
         }
-        if (emailField != null) {
-            emailField.setError(false);
+        if (usernameField != null) {
+            usernameField.setError(false);
         }
         if (passwordField != null) {
             passwordField.setError(false);
@@ -710,27 +714,35 @@ public class LaunchGateController {
         MotionUtil.shake(loginCard);
     }
 
+    /**
+     * Real sign-in (rule 16): light client-side checks for instant feedback, then the actual
+     * credential check runs off the FX thread via {@link Data#submit} →
+     * {@link Data#authenticate}. Success completes the morph and publishes the signed-in
+     * identity to the shell; every failure shakes the card with short sentence-case copy
+     * (wrong credentials highlight the password field, an inactive account blames nobody).
+     */
     private void attemptSignIn() {
         if (gateOverlay == null || signingIn || loginCard == null || !loginCard.isVisible()) {
             return;
         }
-        String email = emailField.getInput().getText() == null
-                ? "" : emailField.getInput().getText().trim();
+        String username = usernameField.getInput().getText() == null
+                ? "" : usernameField.getInput().getText().trim();
         String password = realPassword.get() == null ? "" : realPassword.get();
         clearError();
 
-        if (email.isEmpty()) {
-            showValidationError("Enter your email to continue.", emailField);
-            emailField.getInput().requestFocus();
+        if (username.isEmpty()) {
+            showValidationError("Enter your username to continue.", usernameField);
+            usernameField.getInput().requestFocus();
             return;
         }
-        if (password.length() < MIN_PASSWORD_LENGTH) {
-            showValidationError("Your password needs at least " + MIN_PASSWORD_LENGTH
-                    + " characters.", passwordField);
+        if (password.isEmpty()) {
+            showValidationError("Enter your password to continue.", passwordField);
             return;
         }
 
-        // ~700ms "Signing in…" beat: button disabled, thin progress line fills, then the morph.
+        // "Signing in…" beat: button disabled, thin progress line as motion feedback while the
+        // real authentication runs on a background task (it may also bootstrap the database on
+        // the very first run, which takes a moment). The outcome comes from the callbacks.
         signingIn = true;
         signInButton.setDisable(true);
         signInButton.setText("Signing in…");
@@ -739,9 +751,42 @@ public class LaunchGateController {
         signInBeat.setProgress(0);
         Timeline beat = new Timeline(
                 new KeyFrame(Duration.millis(700),
-                        e -> completeSignIn(),
                         new KeyValue(signInBeat.progressProperty(), 1.0)));
         beat.play();
+
+        final int generation = gateGeneration;
+        Data.submit(
+                () -> Data.authenticate(username, password),
+                result -> {
+                    if (generation != gateGeneration || gateOverlay == null) {
+                        return; // gate was reset or removed while the check ran
+                    }
+                    if (result.kind() == Data.AuthResult.Status.OK) {
+                        shell.setSignedInUser(result.fullName(), result.role());
+                        completeSignIn();
+                        return;
+                    }
+                    signInFailure(result.error(),
+                            result.kind() == Data.AuthResult.Status.INVALID_CREDENTIALS
+                                    ? passwordField : null);
+                },
+                error -> {
+                    if (generation != gateGeneration || gateOverlay == null) {
+                        return;
+                    }
+                    signInFailure("Sign-in is unavailable right now — try again.", null);
+                });
+    }
+
+    /** Rolls the gate back to its editable state and surfaces the failure copy. */
+    private void signInFailure(String message, M3TextField offendingField) {
+        signingIn = false;
+        signInButton.setDisable(false);
+        signInButton.setText("Sign in");
+        signInBeat.setVisible(false);
+        signInBeat.setManaged(false);
+        signInBeat.setProgress(0);
+        showValidationError(message, offendingField);
     }
 
     // =====================================================================================

@@ -1,7 +1,10 @@
 package com.gym.ui;
 
+import com.gym.dao.AdministratorDao;
 import com.gym.exception.DatabaseException;
 import com.gym.exception.ValidationException;
+import com.gym.model.Administrator;
+import com.gym.model.StaffRole;
 import com.gym.util.DatabaseConnection;
 import javafx.application.Platform;
 import javafx.collections.ObservableList;
@@ -139,6 +142,50 @@ public final class Data {
         Thread thread = new Thread(task, "gym-data-write");
         // Non-daemon for the same reason as loadAsync: writes must never die mid-transaction.
         thread.start();
+    }
+
+    /**
+     * Outcome of one credential check against the seeded administrators (rule 16). {@code kind}
+     * lets the caller give each failure its own copy; {@code fullName}/{@code role} are the real
+     * signed-in identity when {@code kind} is {@link Status#OK}.
+     */
+    public record AuthResult(Status kind, String fullName, StaffRole role, String error) {
+
+        /** Why a sign-in attempt failed (or did not). */
+        public enum Status { OK, INVALID_CREDENTIALS, INACTIVE }
+    }
+
+    /**
+     * Credential check for the login gate (rule 16: inactive accounts cannot log in).
+     * Mirrors the CLI's {@code GymRulesHelper.authenticate} semantics — username lookup via
+     * {@link AdministratorDao#findByUsername}, the stored password compared to the entered one,
+     * then the active-flag guard — but reports the three outcomes distinctly so the UI can give
+     * each failure its own copy. Headless-testable: no JavaFX, synchronous, caller runs it off
+     * the FX thread (the gate uses {@link #submit}).
+     *
+     * @return {@link AuthResult} with {@code OK} (carrying the real identity) or the failure
+     *         kind plus short human-facing copy
+     * @throws DatabaseException when the bootstrap or the lookup itself fails
+     */
+    public static AuthResult authenticate(String username, String password)
+            throws DatabaseException, ValidationException {
+        ensureReady();
+        String trimmed = username == null ? "" : username.trim();
+        if (trimmed.isEmpty() || password == null || password.isEmpty()) {
+            return new AuthResult(AuthResult.Status.INVALID_CREDENTIALS, null, null,
+                    "Enter your username and password to continue.");
+        }
+        Administrator admin = new AdministratorDao().findByUsername(trimmed);
+        if (admin == null || admin.getPasswordHash() == null
+                || !admin.getPasswordHash().equals(password)) {
+            return new AuthResult(AuthResult.Status.INVALID_CREDENTIALS, null, null,
+                    "Wrong username or password.");
+        }
+        if (!admin.isActive()) {
+            return new AuthResult(AuthResult.Status.INACTIVE, null, admin.getRole(),
+                    "This account is inactive, so it cannot sign in (rule 16).");
+        }
+        return new AuthResult(AuthResult.Status.OK, admin.getFullName(), admin.getRole(), null);
     }
 
     /** Issues the next load generation for the host and returns it (FX thread only). */

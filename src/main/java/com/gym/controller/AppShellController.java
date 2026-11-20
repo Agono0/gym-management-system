@@ -1,12 +1,15 @@
 package com.gym.controller;
 
+import com.gym.model.StaffRole;
 import io.m3fx.controls.appbar.M3TopAppBar;
 import io.m3fx.controls.appbar.TopAppBarVariant;
 import io.m3fx.controls.button.ButtonVariant;
+import io.m3fx.controls.button.M3Button;
 import io.m3fx.controls.button.M3SplitButton;
 import io.m3fx.controls.chip.ChipVariant;
 import io.m3fx.controls.chip.M3Chip;
 import io.m3fx.controls.command.M3CommandPalette;
+import io.m3fx.controls.dialog.M3Dialog;
 import io.m3fx.controls.effect.M3PulseBeacon;
 import io.m3fx.controls.glass.GlassEffectParams;
 import io.m3fx.controls.glass.GlassShape;
@@ -16,6 +19,11 @@ import io.m3fx.controls.iconbutton.IconButtonVariant;
 import io.m3fx.controls.iconbutton.M3IconButton;
 import io.m3fx.controls.internal.MotionUtil;
 import io.m3fx.controls.internal.SpringAnimation;
+import io.m3fx.controls.layout.WindowSizeClass;
+import io.m3fx.controls.list.M3ListItem;
+import io.m3fx.controls.menu.M3Menu;
+import io.m3fx.controls.nav.M3NavDestination;
+import io.m3fx.controls.nav.M3NavigationBar;
 import io.m3fx.controls.nav.M3NavigationRail;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.selection.M3Switch;
@@ -98,6 +106,21 @@ public class AppShellController implements ScreenController {
     /** Rail collapsed state. */
     private boolean railCollapsed = false;
 
+    // ---- Responsive shell state (docs/SPEC_NOTES/app-ui-foundation.md §6.1) ----
+    /** Bottom navigation bar shown only in the compact width class. */
+    private M3NavigationBar navBar;
+    /** Index within the compact bar's primary destinations of the current screen. */
+    private int compactPrimaryIndex;
+    /** Current window width class (library breakpoints; "large" is the >= 1200 refinement). */
+    private WindowSizeClass widthClass = WindowSizeClass.EXPANDED;
+    /** True inside EXPANDED once the window is >= 1200 (wider workspace padding). */
+    private boolean largeWindow;
+    /** User override of the rail state; null = follow the current width class default. */
+    private Boolean railOverride;
+    /** The compact bar's primary destinations (rail keys, bar order). */
+    private static final String[] COMPACT_PRIMARY_KEYS = {
+        "navDashboard", "navCustomers", "navTrainers", "navSchedule"};
+
     /**
      * The Apple-style launch gate (splash → login → morph), created lazily and reused for
      * sign-out. Only touched when {@code GymApp.SHOW_LAUNCH_GATES} is enabled; tests never
@@ -124,7 +147,9 @@ public class AppShellController implements ScreenController {
     private BorderPane rootShellPane;
     private M3TopAppBar topAppBar;
     private M3IconButton railToggleBtn;
+    private HBox topRow;
     private HBox searchTriggerBar;
+    private HBox telemetryPill;
     private M3PulseBeacon dbSyncBeacon;
     private M3Switch themeModeSwitch;
     private M3Chip userRoleChip;
@@ -169,7 +194,7 @@ public class AppShellController implements ScreenController {
 
         // Center + Right: search trigger and system controls share ONE row so the search
         // field can never slide underneath the telemetry/user cluster at narrow widths.
-        HBox topRow = new HBox(16);
+        topRow = new HBox(16);
         topRow.setAlignment(Pos.CENTER_LEFT);
         topRow.setPickOnBounds(false);
         topRow.setPadding(new Insets(0, 16, 0, 300));
@@ -194,9 +219,10 @@ public class AppShellController implements ScreenController {
         HBox systemCluster = new HBox(16);
         systemCluster.setAlignment(Pos.CENTER_RIGHT);
 
-        HBox telemetryPill = new HBox(8);
+        telemetryPill = new HBox(8);
         telemetryPill.setAlignment(Pos.CENTER);
         telemetryPill.getStyleClass().add("telemetry-pill");
+        telemetryPill.setId("telemetryPill");
         dbSyncBeacon = new M3PulseBeacon();
         dbSyncBeacon.setStatus(M3PulseBeacon.BeaconStatus.ONLINE);
         telemetryPill.getChildren().addAll(
@@ -351,6 +377,7 @@ public class AppShellController implements ScreenController {
             }
         });
         setupNavigationRail();
+        setupResponsiveChrome();
         javafx.application.Platform.runLater(() -> {
             ScrollPane railScroll = (ScrollPane) navigationRail.lookup(".rail-scroll-pane");
             if (railScroll != null) {
@@ -360,6 +387,137 @@ public class AppShellController implements ScreenController {
         });
         loadScreen(Screen.DASHBOARD);
         initCommandPalette();
+    }
+
+    /**
+     * Wires the adaptive chrome to the window width (breakpoints come from the library's
+     * {@link WindowSizeClass#forWidth}): compact hides the rail and docks a bottom navigation
+     * bar, medium defaults to the collapsed rail, expanded to the expanded rail, and
+     * large (>= 1200) adds a wider workspace padding. Runs on every width change; the chrome
+     * is only re-applied when the class or the large flag actually flips.
+     */
+    private void setupResponsiveChrome() {
+        buildCompactNavBar();
+        rootShellPane.widthProperty().addListener((obs, oldWidth, width) -> {
+            double w = width.doubleValue();
+            if (w <= 0) {
+                return; // pre-layout event, no real width yet
+            }
+            WindowSizeClass next = WindowSizeClass.forWidth(w);
+            boolean nextLarge = next == WindowSizeClass.EXPANDED && w >= 1200;
+            if (next == widthClass && nextLarge == largeWindow) {
+                return;
+            }
+            boolean classChanged = next != widthClass;
+            widthClass = next;
+            largeWindow = nextLarge;
+            if (classChanged) {
+                railOverride = null; // each class starts from its default
+            }
+            applyResponsiveChrome();
+        });
+    }
+
+    /**
+     * Applies the current width class to the shell chrome: rail visibility, bottom bar,
+     * workspace padding, and the top row (whose 300px title clearance plus search and telemetry
+     * cluster would otherwise pin the shell's minimum width above the compact breakpoints).
+     * The command palette (Ctrl + K) stays the search answer where the search trigger is hidden.
+     */
+    private void applyResponsiveChrome() {
+        boolean compact = widthClass == WindowSizeClass.COMPACT;
+        boolean medium = widthClass == WindowSizeClass.MEDIUM;
+        navigationRail.setVisible(!compact);
+        navigationRail.setManaged(!compact);
+        if (compact) {
+            rootShellPane.setBottom(navBar);
+        } else {
+            rootShellPane.setBottom(null);
+            boolean collapsed = railOverride != null ? railOverride : medium;
+            applyRailCollapsed(collapsed);
+        }
+        // The search trigger needs the expanded title clearance (300px) to not overlap the app
+        // bar title; below expanded the command palette (Ctrl + K) stays the search answer.
+        boolean expanded = !compact && !medium;
+        searchTriggerBar.setVisible(expanded);
+        searchTriggerBar.setManaged(expanded);
+        telemetryPill.setVisible(expanded);
+        telemetryPill.setManaged(expanded);
+        topRow.setPadding(expanded ? new Insets(0, 16, 0, 380) : new Insets(0, 16, 0, 16));
+        // The full product title runs under the system cluster at narrow widths; short forms
+        // keep the app bar readable instead of overlapping it.
+        topAppBar.setTitle(compact ? "GYM-OS" : "GYM-OS // ENTERPRISE 2026");
+        contentArea.setPadding(largeWindow && !compact ? new Insets(0, 12, 0, 12) : Insets.EMPTY);
+    }
+
+    /**
+     * Builds the compact bottom navigation bar. The M3 spec allows 3-5 destinations per bar
+     * (each cell is a fixed 64dp wide, so all 10 cannot fit a 600dp window), so the bar carries
+     * the 4 primary destinations plus "More", whose menu holds the remaining 5 — every rail
+     * destination stays reachable at compact width.
+     */
+    private void buildCompactNavBar() {
+        List<M3NavDestination> destinations = new ArrayList<>();
+        destinations.add(M3NavDestination.of("Dashboard", "home"));
+        destinations.add(M3NavDestination.of("Members", "group"));
+        destinations.add(M3NavDestination.of("Trainers", "person"));
+        destinations.add(M3NavDestination.of("Schedule", "calendar"));
+        destinations.add(M3NavDestination.of("More", "more"));
+        navBar = new M3NavigationBar(destinations);
+        navBar.setId("navBar");
+        navBar.selectedIndexProperty().addListener((obs, oldIndex, index) ->
+                onCompactNavSelected(index.intValue()));
+    }
+
+    /** Compact bar selection: the four primaries navigate, "More" opens the overflow menu. */
+    private void onCompactNavSelected(int index) {
+        if (index >= 0 && index < COMPACT_PRIMARY_KEYS.length) {
+            compactPrimaryIndex = index;
+            fireRailButton(COMPACT_PRIMARY_KEYS[index]);
+            return;
+        }
+        openCompactMoreMenu();
+    }
+
+    /**
+     * The compact overflow menu ("More"): the five destinations that do not fit the bar.
+     * Choosing one fires the pinned rail destination (the same pathway as a rail click, so the
+     * hidden rail's state stays consistent); on menu close the bar reverts to the last primary
+     * destination because "More" itself is not a screen.
+     */
+    private void openCompactMoreMenu() {
+        M3Menu menu = new M3Menu();
+        menu.item("Plans", M3Icon.symbol("favorite"), () -> navigateFromCompact("navMemberships"));
+        menu.item("Equipment", M3Icon.symbol("stats"), () -> navigateFromCompact("navEquipment"));
+        menu.item("Attendance", M3Icon.symbol("check"), () -> navigateFromCompact("navAttendance"));
+        menu.item("Finance", M3Icon.symbol("money"), () -> navigateFromCompact("navPayments"));
+        menu.item("Staff & Admin", M3Icon.symbol("settings"), () -> navigateFromCompact("navStaff"));
+        menu.divider();
+        menu.item("Documentation", M3Icon.symbol("info"), this::onNavHelp);
+        menu.popup().setOnHidden(e -> navBar.setSelectedIndex(compactPrimaryIndex));
+        ToggleButton moreButton = compactNavBarButton(COMPACT_PRIMARY_KEYS.length);
+        if (moreButton != null) {
+            menu.showBelow(moreButton);
+        }
+    }
+
+    /** Fires a hidden-rail destination on behalf of the compact chrome (loads the screen). */
+    private void navigateFromCompact(String railButtonKey) {
+        fireRailButton(railButtonKey);
+    }
+
+    /**
+     * The bar's destination button at the given index (the library keeps the buttons as its
+     * direct HBox children, in destination order).
+     */
+    private ToggleButton compactNavBarButton(int index) {
+        List<ToggleButton> buttons = new ArrayList<>();
+        for (Node child : navBar.getChildren()) {
+            if (child instanceof ToggleButton button) {
+                buttons.add(button);
+            }
+        }
+        return index >= 0 && index < buttons.size() ? buttons.get(index) : null;
     }
 
     private void setupNavigationRail() {
@@ -523,6 +681,16 @@ public class AppShellController implements ScreenController {
         ToggleButton button = railButtonByKey(railButtonKey);
         if (button == null || button.isDisabled()) {
             return;
+        }
+        // Keep the compact bottom bar in sync when the fired destination is one of its primaries
+        // (in-screen handoffs navigate through rail keys while the bar is showing).
+        for (int i = 0; i < COMPACT_PRIMARY_KEYS.length; i++) {
+            if (COMPACT_PRIMARY_KEYS[i].equals(railButtonKey)
+                    && navBar.getSelectedIndex() != i) {
+                compactPrimaryIndex = i;
+                navBar.setSelectedIndex(i);
+                break;
+            }
         }
         boolean wasSelected = button.isSelected();
         button.fire();
@@ -828,11 +996,31 @@ public class AppShellController implements ScreenController {
         }
     }
 
+    /**
+     * The manual rail toggle. At medium/expanded widths it flips collapsed/expanded and
+     * records the user override (which wins over the width class default until the class
+     * changes). At compact width there is no rail — the top-bar menu button opens the compact
+     * overflow menu instead.
+     */
     public void onToggleRail() {
-        railCollapsed = !railCollapsed;
-        double targetWidth = railCollapsed ? 80.0 : 220.0;
+        if (widthClass == WindowSizeClass.COMPACT) {
+            openCompactMoreMenu();
+            return;
+        }
+        applyRailCollapsed(!railCollapsed);
+        railOverride = railCollapsed;
+    }
 
-        if (railCollapsed) {
+    /**
+     * Applies the collapsed/expanded visuals to the rail (the existing `.collapsed` CSS class,
+     * icon-only content display, split-button swap, spring-animated width). Reused by both the
+     * manual toggle and the responsive width-class defaults.
+     */
+    private void applyRailCollapsed(boolean collapsed) {
+        railCollapsed = collapsed;
+        double targetWidth = collapsed ? 80.0 : 220.0;
+
+        if (collapsed) {
             if (!navigationRail.getStyleClass().contains("collapsed")) {
                 navigationRail.getStyleClass().add("collapsed");
             }
@@ -883,6 +1071,16 @@ public class AppShellController implements ScreenController {
                 moveNavPill(lastPillTarget, false);
             }
         }
+    }
+
+    /**
+     * Publishes the signed-in identity from the real login gate (rule 16): the user chip shows
+     * the account's full name and role. The default stays the seeded ADMIN account so
+     * gates-disabled runs (tests, previews) keep their established look.
+     */
+    public void setSignedInUser(String fullName, StaffRole role) {
+        String name = fullName == null || fullName.isBlank() ? "Signed in" : fullName;
+        userRoleChip.setText(name + " [" + (role == null ? StaffRole.STAFF : role) + "]");
     }
 
     public void onOpenCommandPalette() {
@@ -957,7 +1155,68 @@ public class AppShellController implements ScreenController {
         loadScreen(Screen.STAFF);
     }
 
+    /**
+     * The Documentation destination: a real about-and-help dialog (keyboard shortcuts, the
+     * seeded admin credentials from the login hint, version, and where the business rules
+     * live) — no navigation to a random screen. The rail destination itself stays selected so
+     * the highlight pill lands on Documentation.
+     */
     public void onNavHelp() {
-        loadScreen(Screen.GYM_FLOOR_MAP);
+        M3Overlay overlay = shellOverlay();
+        if (overlay == null) {
+            showShellSnackbar("Help opens inside the app window.");
+            return;
+        }
+        M3Button close = M3Button.text("Close");
+        M3Dialog dialog = M3Dialog.basic("About & help", helpContent(), close);
+        close.setOnAction(e -> dialog.hide());
+        dialog.setDefaultAction(close::activate);
+        overlay.showDialog(dialog);
+    }
+
+    /** The shell's lazily-created overlay host, or null when there is no scene yet. */
+    private M3Overlay shellOverlay() {
+        if (!(rootShellPane.getScene() != null
+                && rootShellPane.getScene().getRoot() instanceof javafx.scene.layout.Pane sceneRoot)) {
+            return null;
+        }
+        if (shellFeedback == null) {
+            shellFeedback = new M3Overlay();
+        }
+        if (!sceneRoot.getChildren().contains(shellFeedback)) {
+            sceneRoot.getChildren().add(shellFeedback);
+        }
+        return shellFeedback;
+    }
+
+    /** Genuinely useful help content: shortcuts, seeded credentials, version, rules pointer. */
+    private VBox helpContent() {
+        Label shortcuts = new Label("Keyboard");
+        shortcuts.getStyleClass().add("title-medium");
+        Label accounts = new Label("Seeded accounts (rule 16)");
+        accounts.getStyleClass().add("title-medium");
+        Label about = new Label("About");
+        about.getStyleClass().add("title-medium");
+
+        VBox box = new VBox(8,
+                shortcuts,
+                helpRow("keyboard", "Ctrl + K", "Open the command palette: jump to any screen or action."),
+                helpRow("keyboard_arrow_down", "Arrow keys", "Move across rail destinations and the compact bottom bar."),
+                helpRow("check", "Enter / Esc", "Confirm or dismiss dialogs, menus and the palette."),
+                accounts,
+                helpRow("person", "admin / admin123", "ADMIN role, active. manager / mgr123 and staff / staff123 also sign in."),
+                helpRow("info", "oldstaff / old123", "Seeded inactive account - refused at sign-in (rule 16)."),
+                about,
+                helpRow("star", "GYM-OS Enterprise 2026", "Version 1.0.0 - Java-built Material 3 Expressive UI."),
+                helpRow("event", "Business rules 1-19", "Enforced in the DAOs (com.gym.dao); see docs/UML.md."));
+        box.setPrefWidth(420);
+        return box;
+    }
+
+    /** One two-line help row with a leading icon (same pattern as the screen-level lists). */
+    private M3ListItem helpRow(String symbol, String headline, String supporting) {
+        M3ListItem item = new M3ListItem(headline, supporting, M3ListItem.TWO_LINES);
+        item.setLeading(M3Icon.symbol(symbol));
+        return item;
     }
 }

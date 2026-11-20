@@ -49,7 +49,9 @@ public class GymApp extends Application {
 
         stage.setTitle("GYM-OS // Enterprise Gym Management System (2026)");
         stage.setScene(scene);
-        stage.setMinWidth(1024);
+        // 600 = the M3 compact width boundary, so the responsive shell's bottom-bar mode is
+        // actually reachable on a real window (docs/SPEC_NOTES/app-ui-foundation.md §6.1).
+        stage.setMinWidth(600);
         stage.setMinHeight(700);
 
         // Route window close through Platform.exit() so Application.stop() cleanup runs first;

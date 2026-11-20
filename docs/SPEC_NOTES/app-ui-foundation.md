@@ -119,3 +119,58 @@ DECISIONS 78 validation — that is the point of seeding through the rules):
 - Everything else is untouched: search + chips, quick-peek side sheet, export-to-clipboard,
   help dialog, speed dial, `fx:id` parity ids, `ScreenController` contract and the
   `showMember` handoff to `CustomerProfileController`.
+
+## 6. Shell responsiveness + real login (task C1, extends this note)
+
+### 6.1 Width classes — reuse, not reinvention
+
+The breakpoint authority is the library's `io.m3fx.controls.layout.WindowSizeClass.forWidth`
+(compact < 600, medium 600-839, expanded >= 840; "large" is this shell's >= 1200 refinement
+inside EXPANDED). `M3AdaptiveScaffold` does NOT fit this shell: it owns its own plain
+rail/drawer/bar and would discard the hand-built rail (highlight pill springs, split button,
+scroll pane, tooltips, manual collapse animation), so the shell listens to its own width and
+maps each class onto the existing chrome:
+
+- COMPACT (< 600): rail hidden (`visible`/`managed` false), a bottom `M3NavigationBar` shown,
+  and the top-bar menu button opens the overflow menu. `M3NavigationBar` is specced for 3-5
+  destinations (`iconBox` is a fixed 64dp wide, so 10 destinations cannot fit a 600dp window
+  without clipped labels); the bar therefore carries the 5 primary destinations
+  (Dashboard, Members, Trainers, Schedule, Plans) plus a "More" destination that opens an
+  `M3Menu` with the remaining 5 (Equipment, Attendance, Finance, Staff & Admin, Documentation)
+  - all 10 destinations stay reachable, and the component contract is respected.
+- MEDIUM (600-839): rail shown, default collapsed (icon-only 80px, the existing `.collapsed`
+  CSS class and spring animation).
+- EXPANDED (840-1199): rail shown, default expanded (220px).
+- Large (>= 1200): expanded plus a slightly wider workspace padding.
+- Manual override: `onToggleRail` still flips collapsed/expanded and now records the override,
+  which wins over the class default until the width class changes again (each class starts
+  from its default - predictable, no sticky surprise states). At COMPACT there is no rail, so
+  the toggle becomes the overflow menu.
+
+`GymApp` lowers the stage min width 1024 -> 600 so the compact class is actually reachable in
+the real app (the ScreenShooter renders it regardless).
+
+### 6.2 Real login (rule 16)
+
+`Data.authenticate(String username, String password)` is the headless-testable credential
+check: `ensureReady()` first (bootstrap + seeding on the same background thread), then
+`AdministratorDao.findByUsername` with the same semantics as the CLI's
+`GymRulesHelper.authenticate` (Decision 78; stored `passwordHash` compared to the entered
+password - the project keeps plaintext credentials by design). It returns an `AuthResult`
+record with a status enum (OK / INVALID_CREDENTIALS / INACTIVE) plus the account's full name
+and role - DB/bootstrap failures still throw `DatabaseException`/`ValidationException`.
+`LaunchGateController.attemptSignIn` runs it via `Data.submit` (background thread, FX-thread
+callback): success completes the existing morph choreography and hands the real identity to
+`AppShellController.setSignedInUser` (user chip shows the signed-in name and role); wrong
+credentials highlight the password field with short sentence-case copy; an inactive account
+shows the rule 16 copy without blaming a field. The demo hint now states the real seeded
+credentials (admin/admin123, manager/mgr123, staff/staff123, oldstaff/old123 refused) and the
+gate signs in by username, matching the DAO lookup.
+`src/test/java/com/gym/ui/DataAuthenticateTest.java` covers all outcomes headlessly against a
+temp SQLite file (the root `test` task was already wired for JUnit 5, only NO-SOURCE).
+
+### 6.3 Documentation destination
+
+`onNavHelp` no longer navigates to GYM_FLOOR_MAP. It shows an `M3Dialog` with real content:
+keyboard shortcuts (Ctrl+K command palette, arrow keys on the rail / bottom bar, Enter, Esc),
+the seeded admin credentials, the app version, and a pointer to docs/UML.md rules 1-19.
