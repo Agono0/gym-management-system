@@ -1,5 +1,11 @@
 package com.gym.controller;
 
+import com.gym.dao.AttendanceDao;
+import com.gym.dao.EquipmentDao;
+import com.gym.dao.SessionDao;
+import com.gym.model.Equipment;
+import com.gym.model.EquipmentStatus;
+import com.gym.ui.Data;
 import com.gym.ui.UiKit;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
@@ -13,7 +19,9 @@ import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.iconbutton.IconButtonVariant;
 import io.m3fx.controls.iconbutton.M3IconButton;
 import io.m3fx.controls.progress.M3LinearProgress;
+import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.scene3d.M3ModelViewer3D;
+import io.m3fx.controls.common.M3Tooltip;
 import io.m3fx.core.theme.ColorRole;
 import javafx.geometry.Insets;
 import javafx.scene.paint.Color;
@@ -26,20 +34,29 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.transform.Scale;
+import java.time.LocalDate;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
- * Controller skeleton for 2.5D Interactive Blueprint &amp; 3D Spatial Linking screen.
- * Conforms strictly to docs/ui/facility/GYM_FLOOR_MAP_UI.md Section 7 contract.
- * Pure UI stub without backend services or SQL logic.
- *
- * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
- * former gym-floor-map.fxml: layer toggles, blueprint canvas with the floating 3D inspection
- * card, zone telemetry rail, blueprint toolbar.
+ * 2.5D Interactive Blueprint &amp; 3D Spatial Linking screen on real data (C5).
+ * Conforms to docs/ui/facility/GYM_FLOOR_MAP_UI.md Section 7 and the com.gym.ui foundation
+ * contracts (app-ui-foundation.md §9): the header chip counts people currently inside
+ * (AttendanceDao, today's check-ins without a check-out) and today's CONFIRMED sessions; the
+ * zone telemetry cards derive from EquipmentDao per the documented zone→category mapping —
+ * never invented percentages, and a zone without equipment rows shows an honest "no data"
+ * state. Layer toggles: machine pins hide/show the map's equipment list; heatmap/zones/sensors
+ * are disabled with explanatory tooltips because M3GymFloorMap does not expose those layers
+ * (component gap flagged for lane B). "Place Equipment Pin" is disabled for the same reason
+ * the honest way: the Equipment model has no floor-location fields, so there is nothing to
+ * place.
  */
 public class GymFloorMapController implements ScreenController {
 
@@ -53,6 +70,10 @@ public class GymFloorMapController implements ScreenController {
     private StackPane canvasStackPane;
     private M3GymFloorMap gymFloorMap;
     private M3Chip occupancyChip;
+    private VBox zoneCardsBox;
+    private boolean pinsShown = true;
+    private List<M3GymFloorMap.EquipmentNode> savedPins = List.of();
+
     private Label zoomPercentLabel;
     private M3Chip layerPinsChip;
     private M3Chip layerHeatmapChip;
@@ -64,6 +85,8 @@ public class GymFloorMapController implements ScreenController {
     private M3Chip inspectConditionChip;
     private M3ModelViewer3D inspectModelViewer3D;
     private Label inspectLastMaintLabel;
+    /** The pin currently shown in the inspection card (presentational; map-local state). */
+    private M3GymFloorMap.EquipmentNode inspectedNode;
 
     /** Scales the blueprint inside the clipped viewport; 1.0 = 100%. */
     private final Scale mapScale = new Scale(1.0, 1.0);
@@ -104,6 +127,127 @@ public class GymFloorMapController implements ScreenController {
         inspectModelViewer3D.setId("inspectModelViewer3D");
         inspectLastMaintLabel.setId("inspectLastMaintLabel");
         gymFloorMap.setOnInspect3D(this::showInspectionCard);
+        loadOccupancy();
+    }
+
+    // ------------------------------------------------------------------
+    // Real data (C5): zone readiness + building occupancy
+    // ------------------------------------------------------------------
+
+    /**
+     * The documented zone-to-equipment-category mapping (app-ui-foundation.md section 9).
+     * Sessions and attendance carry no zone/equipment link, so zone "occupancy" is derived
+     * from the zone's equipment readiness (operational = not RETIRED and not IN_MAINTENANCE);
+     * a zone without equipment rows shows an honest "no data" state.
+     */
+    static final Map<String, String> ZONE_CATEGORIES = new LinkedHashMap<>(Map.of(
+            "Cardio Deck", "CARDIO",
+            "Free Weights Arena", "FREE WEIGHTS",
+            "Olympic Platforms", "STRENGTH",
+            "Functional Turf", "RECOVERY"));
+
+    /**
+     * Loads the telemetry rail and header chip from the real DAOs on a background task:
+     * equipment readiness per zone (EquipmentDao), people currently inside (AttendanceDao:
+     * today's check-ins without a check-out) and today's CONFIRMED session count (SessionDao).
+     */
+    public void loadOccupancy() {
+        Data.loadAsync(zoneCardsBox,
+                () -> {
+                    Data.ensureReady();
+                    List<Equipment> equipment = new EquipmentDao().findAll();
+                    String today = LocalDate.now().toString();
+                    int insideNow = 0;
+                    for (var attendance : new AttendanceDao().findAll()) {
+                        if (today.equals(attendance.getDate())
+                                && (attendance.getCheckOut() == null
+                                    || attendance.getCheckOut().isBlank())) {
+                            insideNow++;
+                        }
+                    }
+                    int confirmedToday = 0;
+                    int sessionsToday = 0;
+                    for (var session : new SessionDao().findAll()) {
+                        if (today.equals(session.getDate())) {
+                            sessionsToday++;
+                            if (session.getStatus() != null
+                                    && "CONFIRMED".equals(session.getStatus().name())) {
+                                confirmedToday++;
+                            }
+                        }
+                    }
+                    return new OccupancySnapshot(equipment, insideNow, sessionsToday,
+                            confirmedToday);
+                },
+                snapshot -> {
+                    occupancyChip.setText("Inside now: " + snapshot.insideNow()
+                            + " | Sessions today: " + snapshot.sessionsToday()
+                            + " (" + snapshot.confirmedToday() + " confirmed)");
+                    rebuildZoneCards(snapshot.equipment());
+                },
+                error -> {
+                    occupancyChip.setText("Occupancy: unavailable");
+                    zoneCardsBox.getChildren().setAll(
+                            UiKit.errorState(error.getMessage(), this::loadOccupancy));
+                });
+    }
+
+    /** One load's worth of telemetry data. */
+    private record OccupancySnapshot(List<Equipment> equipment, int insideNow,
+                                     int sessionsToday, int confirmedToday) {
+    }
+
+    /** Rebuilds the zone readiness cards from the loaded equipment rows. */
+    private void rebuildZoneCards(List<Equipment> equipment) {
+        zoneCardsBox.getChildren().clear();
+        for (Map.Entry<String, String> zone : ZONE_CATEGORIES.entrySet()) {
+            List<Equipment> inZone = equipment.stream()
+                    .filter(item -> zone.getValue().equalsIgnoreCase(
+                            item.getCategory() == null ? "" : item.getCategory().trim()))
+                    .toList();
+            zoneCardsBox.getChildren().add(zoneCard(zone.getKey(), zone.getValue(), inZone));
+        }
+    }
+
+    /**
+     * One zone readiness card: "n of m operational" with the ratio as the progress value, or
+     * the honest "no equipment data" state when the zone's category has no rows.
+     */
+    private M3Card zoneCard(String zone, String category, List<Equipment> inZone) {
+        M3Card card = new M3Card(CardVariant.ELEVATED);
+        card.getStyleClass().add("zone-stat-card");
+        VBox content = new VBox(8);
+        content.getStyleClass().add("zone-stat-box");
+        content.setPadding(new javafx.geometry.Insets(12, 14, 12, 14));
+        HBox row = new HBox();
+        row.setAlignment(Pos.CENTER_LEFT);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        row.getChildren().addAll(styledLabel(zone, "zone-name"), spacer);
+
+        if (inZone.isEmpty()) {
+            row.getChildren().add(styledLabel("No equipment data", "zone-val-low"));
+            content.getChildren().addAll(row,
+                    styledLabel("No " + category + " rows in the ledger", "zone-name"));
+            card.setContent(content);
+            return card;
+        }
+        long operational = inZone.stream()
+                .filter(item -> item.getStatus() != EquipmentStatus.IN_MAINTENANCE
+                        && item.getStatus() != EquipmentStatus.RETIRED)
+                .count();
+        double ratio = (double) operational / inZone.size();
+        Label valueLabel = styledLabel(
+                operational + " of " + inZone.size() + " operational", "zone-val-normal");
+        if (ratio < 0.6) {
+            valueLabel.getStyleClass().add("zone-val-warn");
+        }
+        row.getChildren().add(valueLabel);
+        M3LinearProgress bar = new M3LinearProgress(ratio);
+        bar.getStyleClass().add(ratio < 0.6 ? "progress-warn" : "progress-normal");
+        content.getChildren().addAll(row, bar);
+        card.setContent(content);
+        return card;
     }
 
     /**
@@ -122,7 +266,7 @@ public class GymFloorMapController implements ScreenController {
         HBox headerRow = new HBox(16);
         headerRow.setAlignment(Pos.CENTER_LEFT);
         headerRow.getStyleClass().add("header-row");
-        occupancyChip = new M3Chip("Occupancy: 64 / 120 (53%)", ChipVariant.ASSIST);
+        occupancyChip = new M3Chip("Occupancy: loading…", ChipVariant.ASSIST);
         occupancyChip.getStyleClass().add("occupancy-badge");
         M3IconButton zoomOutBtn = new M3IconButton(M3Icon.symbol("remove"), IconButtonVariant.STANDARD);
         zoomOutBtn.getStyleClass().add("zoom-btn");
@@ -160,9 +304,17 @@ public class GymFloorMapController implements ScreenController {
         layerSensorsChip = new M3Chip("IoT Sensors", ChipVariant.FILTER);
         layerSensorsChip.setSelected(false);
         layerPinsChip.setOnAction(e -> onTogglePinsLayer());
-        layerHeatmapChip.setOnAction(e -> onToggleHeatmapLayer());
-        layerZonesChip.setOnAction(e -> onToggleZonesLayer());
-        layerSensorsChip.setOnAction(e -> onToggleSensorsLayer());
+        // M3GymFloorMap exposes no heatmap/zone-boundary/sensor layer visibility (component
+        // gap, flagged for lane B) - the honest UI states that instead of fake toggles.
+        M3Tooltip.installIfAbsent(layerHeatmapChip,
+                "Not available yet: the floor-map component has no heatmap layer toggle");
+        M3Tooltip.installIfAbsent(layerZonesChip,
+                "Not available yet: the floor-map component has no zone-boundary toggle");
+        M3Tooltip.installIfAbsent(layerSensorsChip,
+                "Not available yet: the floor-map component has no sensor layer");
+        layerHeatmapChip.setDisable(true);
+        layerZonesChip.setDisable(true);
+        layerSensorsChip.setDisable(true);
         layerStrip.getChildren().addAll(
                 styledLabel("Layers:", "layer-label"),
                 layerPinsChip, layerHeatmapChip, layerZonesChip, layerSensorsChip);
@@ -228,13 +380,11 @@ public class GymFloorMapController implements ScreenController {
         telemetryRail.setPrefWidth(300);
         telemetryRail.getStyleClass().add("spatial-telemetry-rail");
         telemetryRail.setPadding(new Insets(8, 24, 48, 16));
-        telemetryRail.getChildren().add(styledLabel("Zone Congestion Telemetry", "telemetry-section-title"));
-
-        telemetryRail.getChildren().addAll(
-                zoneCard("Cardio Deck", "78% (High)", "zone-val-warn", 0.78, "progress-warn"),
-                zoneCard("Free Weights Arena", "62% (Med)", "zone-val-normal", 0.62, "progress-normal"),
-                zoneCard("Olympic Platforms", "85% (Critical)", "zone-val-high", 0.85, "progress-high"),
-                zoneCard("Functional Turf", "34% (Low)", "zone-val-low", 0.34, "progress-low"));
+        telemetryRail.getChildren().add(styledLabel("Zone Readiness Telemetry", "telemetry-section-title"));
+        zoneCardsBox = new VBox(14);
+        telemetryRail.getChildren().add(zoneCardsBox);
+        // Loading state until the first real load lands (app-ui-foundation contract).
+        zoneCardsBox.getChildren().add(UiKit.loadingState());
 
         Region railSpacer = new Region();
         VBox.setVgrow(railSpacer, Priority.ALWAYS);
@@ -266,7 +416,11 @@ public class GymFloorMapController implements ScreenController {
         exportBtn.setOnAction(e -> onExportBlueprint());
         M3Button placePinBtn = new M3Button("+ Place Equipment Pin", ButtonVariant.FILLED);
         placePinBtn.getStyleClass().add("filled-primary-btn");
-        placePinBtn.setOnAction(e -> onPlacePin());
+        // The Equipment model has no floor-location fields, so there is nothing to place -
+        // the honest answer is a disabled button with the reason (C5 contract).
+        placePinBtn.setDisable(true);
+        M3Tooltip.installIfAbsent(placePinBtn,
+                "Unavailable: equipment records have no floor-location fields yet");
         Region dockSpacer = new Region();
         HBox.setHgrow(dockSpacer, Priority.ALWAYS);
         bottomDock.getChildren().addAll(perspectiveBtn, dockSpacer, exportBtn, placePinBtn);
@@ -327,6 +481,7 @@ public class GymFloorMapController implements ScreenController {
         if (node == null) {
             return;
         }
+        inspectedNode = node;
         inspectEquipmentNameLabel.setText(node.name + " #" + node.id);
         if (node.status != null) {
             inspectStatusChip.setText(node.status.label.toUpperCase());
@@ -361,36 +516,80 @@ public class GymFloorMapController implements ScreenController {
         zoomPercentLabel.setText("100%");
     }
 
+    /**
+     * Pins layer toggle: hides/shows the map's equipment pins. The component redraws on
+     * scene/size/mouse events but not on list changes, so the map node is re-added to its
+     * container (public API) to force the redraw - a proper redraw hook is the flagged
+     * lane-B gap.
+     */
     public void onTogglePinsLayer() {
-        // No-op toggle pins layer handler
+        if (pinsShown) {
+            savedPins = List.copyOf(gymFloorMap.getEquipmentList());
+            gymFloorMap.getEquipmentList().clear();
+        } else if (!savedPins.isEmpty()) {
+            gymFloorMap.getEquipmentList().setAll(savedPins);
+        }
+        pinsShown = !pinsShown;
+        refreshMapCanvas();
+    }
+
+    /** Forces a map redraw through the public API (re-attaching fires the scene listener). */
+    private void refreshMapCanvas() {
+        canvasStackPane.getChildren().setAll(gymFloorMap, inspectionGlassCard);
     }
 
     public void onToggleHeatmapLayer() {
-        // No-op toggle heatmap layer handler
+        // Disabled in buildView: the component exposes no heatmap layer.
     }
 
     public void onToggleZonesLayer() {
-        // No-op toggle zones layer handler
+        // Disabled in buildView: the component exposes no zone-boundary toggle.
     }
 
     public void onToggleSensorsLayer() {
-        // No-op toggle sensors layer handler
+        // Disabled in buildView: the component exposes no sensor layer.
     }
 
     public void onCloseInspection() {
         inspectionGlassCard.setVisible(false);
     }
 
+    /**
+     * Presentational: flips the inspected pin into the map's MAINTENANCE state so the map and
+     * the inspection card agree. The map's pins are the component's demo nodes (the Equipment
+     * model has no floor locations), so there is deliberately no DAO write behind this.
+     */
     public void onScheduleServiceFromMap() {
-        // No-op schedule service handler
+        if (inspectedNode == null) {
+            return;
+        }
+        inspectedNode.status = M3GymFloorMap.EquipmentStatus.MAINTENANCE;
+        inspectStatusChip.setText(M3GymFloorMap.EquipmentStatus.MAINTENANCE.label.toUpperCase());
+        refreshMapCanvas();
     }
 
+    /**
+     * Navigates to the Equipment screen through the shell's rail-key handoff (falls back to a
+     * snackbar in standalone previews/tests without the owning shell).
+     */
     public void onOpenFullAssetDetails() {
-        // No-op open asset details handler
+        AppShellController shell = shellFromScene();
+        if (shell == null) {
+            M3Overlay feedback = new M3Overlay();
+            feedback.showSnackbar("Open the shell to view the full asset page.");
+            return;
+        }
+        shell.openScreenViaRail("navEquipment", Screen.EQUIPMENT, null);
     }
 
-    public void onPlacePin() {
-        // No-op place pin handler
+    /** The owning shell controller, published by AppShellController in the scene properties. */
+    private AppShellController shellFromScene() {
+        if (viewRoot.getScene() == null
+                || !(viewRoot.getScene().getRoot() instanceof javafx.scene.Parent sceneRoot)) {
+            return null;
+        }
+        Object shell = sceneRoot.getProperties().get(AppShellController.SHELL_CONTROLLER_KEY);
+        return shell instanceof AppShellController controller ? controller : null;
     }
 
     public void onTogglePerspective() {

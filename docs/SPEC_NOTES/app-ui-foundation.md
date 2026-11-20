@@ -277,3 +277,72 @@ athlete name and re-seeds the instruments. Rep counter + and - both work. The ve
 cadence telemetry stays SIMULATED and carries a visible "SIMULATED TELEMETRY" badge — no fake
 sensor claims. Rule-18 note: the DAO treats a same-status save as a no-op update, not a
 transition, so a re-save of an unchanged session is legal.
+## 11. Equipment screen on real data (task C5)
+
+- **Ledger**: the stock `TableView<String>` (and its fake "Showing 12 of 84 equipment items"
+  footer) is replaced by `M3DataTable<Equipment>` bound to `EquipmentDao.findAll()` via
+  `Data.loadAsync`. Search, sorting and pagination come from the table itself — the former
+  app-bar `searchField` fx:id is retired with the stock table (the table ships its own
+  search; nothing looks up `#searchField` in CSS/tests). The stock TableView column ids
+  (`colId`…`colLastMaintenance`) are retired for the same reason. The table stays mounted in
+  a dedicated `ledgerStateHost` through every load; empty (`UiKit.emptyState` with an Add
+  action) and error (`UiKit.errorState` with retry) states render in a sibling overlay so the
+  loadAsync restore snapshot never loses the table.
+- **Category filter chips**: "All Assets" + the four real seeded categories (CARDIO,
+  STRENGTH, FREE WEIGHTS, RECOVERY) in a `ToggleGroup` with re-select-on-deselect radio
+  semantics; filtering rewrites the table's data model (`getItems()`), so the table's own
+  search still applies inside the filtered set. A category invented through the Add dialog
+  simply shows under "All Assets" (the chips are static; documented, not dynamic).
+- **Add Equipment**: `M3Dialog.basic` + `UiKit.formRow` (name, category with the seeded
+  values as guidance, optional purchase date) → `EquipmentDao.insert` via `Data.submit`;
+  inline mirrors set the field `error` states, a DAO `ValidationException` surfaces verbatim
+  in a snackbar and the dialog stays open (C3 contract). New equipment starts
+  NEW/AVAILABLE; `lastMaintenance` starts empty.
+- **Condition/status inspector chips**: the stock RadioButtons became `M3Chip` FILTER
+  groups in `ToggleGroup`s (radio semantics: one selected, clicking the selected one
+  re-selects). Each change is one `EquipmentDao.update` through `Data.submit`; failures
+  surface verbatim and the chips re-derive from the in-memory row (which still holds the
+  pre-write state). The former radio fx:ids (`conditionNewRadio`…) live on the chips.
+- **Log Today's Maintenance (rule 13 reading)**: one atomic `EquipmentDao.update` setting
+  status `IN_MAINTENANCE` **and** `lastMaintenance = today` together. Rule 13's principle
+  ("derived state is never two independent hand edits") applied to the pair: the UI action
+  changes both fields as one workflow; there is no separate "set last maintained" control.
+- **Delete**: the Equipment model has no INACTIVE-like status (unlike Customer, rule 4's
+  soft-delete target), and `EquipmentDao.delete(int)` is a real hard delete — so Delete is
+  the DAO's hard delete behind the `UiKit.confirmDialog` contract, with the dialog body
+  pointing at status RETIRED as the non-destructive alternative. A DAO/schema failure
+  (references) surfaces verbatim.
+- **Export**: writes a real CSV (`build/exports/equipment-ledger-<stamp>.csv`, RFC-style
+  escaping) via `Data.submit`; the snackbar announces the absolute path. The button label
+  changed from the fake "(PDF)" to "(CSV)".
+- **3D twin**: presentational; binds the selected row's name and maps the category to a
+  display model (CARDIO→TREADMILL, STRENGTH→SQUAT_RACK, FREE WEIGHTS→DUMBBELL,
+  RECOVERY→KETTLEBELL, anything else → WORKOUT_BENCH).
+
+## 12. Gym floor map on real data (task C5)
+
+- **Header chip**: "Inside now: N | Sessions today: M (K confirmed)" — N = AttendanceDao
+  rows for today with an empty checkOut (people currently inside), M/K = SessionDao rows
+  for today and their CONFIRMED subset. The fake "64 / 120 (53%)" is gone.
+- **Zone→category mapping** (documented choice): Cardio Deck↔CARDIO, Free Weights
+  Arena↔FREE WEIGHTS, Olympic Platforms↔STRENGTH, Functional Turf↔RECOVERY — 1:1 with the
+  seeded categories. **Data-source limitation (honest)**: Session and Attendance carry no
+  zone/equipment link, so people-per-zone cannot be derived; the zone cards instead show
+  **equipment readiness** per zone ("n of m operational", ratio = share not RETIRED and not
+  IN_MAINTENANCE). A zone whose category has no rows shows "No equipment data / No <category>
+  rows in the ledger" — never a random percentage. Wiring sessions/attendance to zones needs
+  a schema change (flagged for a future task, not invented here).
+- **Layer toggles**: "Machine Pins" hides/shows the map's equipment pins by clearing and
+  restoring `M3GymFloorMap.getEquipmentList()`; because the component redraws on
+  scene/size/mouse events but not on list changes, the controller re-attaches the map node to
+  force a redraw (public-API workaround). "Occupancy Heatmap", "Zone Boundaries" and "IoT
+  Sensors" are **disabled with explanatory tooltips**: `M3GymFloorMap` exposes no such layer
+  toggles (component gap → lane-B follow-up).
+- **Place Equipment Pin**: disabled with the explanatory tooltip — the Equipment model has
+  no floor-location fields, so there is nothing to place (no fake pin placement). The map's
+  built-in demo pins remain component-owned demo content.
+- **Inspection card**: "Mark Maintenance" flips the inspected pin into the map's MAINTENANCE
+  state (map-local, presentational — the pins are the component's demo nodes, not DB rows);
+  "Full Asset Page" navigates through the shell's rail-key handoff
+  (`AppShellController.openScreenViaRail("navEquipment", EQUIPMENT)`) with a snackbar
+  fallback for standalone previews.
