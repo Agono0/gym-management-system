@@ -212,6 +212,13 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   pinned; ofSvg/ofGlyph raw-content semantics documented by test; B6 test file rawtypes cleaned;
   controls tests 209)
 
+- [ ] B15 | lane:B | deps:B9 | files: m3fx-controls/.../appbar/M3TopAppBar.java (+ its test)
+  goal: Fix the a11y gap B9 pinned: M3TopAppBar publishes no accessible text and only a generic
+  role. Give it a TOOL_BAR role + accessible text summarizing the title (and nav/actions count);
+  keep it out of the tab-focus cycle (it is presentational) unless a child is focusable.
+  done-when: B9's flagged assertion flips green (updated to spec behavior), suite green.
+  claimed-by: — | status: READY
+
 - [ ] B7 | lane:B | deps:A3 | files: m3fx-controls/.../internal/MotionUtil.java, internal/SpringAnimation.java, internal/StateLayer.java
   goal: Honor `MotionTokens.isReducedMotion()` in the controls internals: `MotionUtil.enter/exit/
   splash/shake/pressScale` degrade to ≤150 ms fades; `SpringAnimation` snaps to target; state
@@ -234,7 +241,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   `M3TopAppBar` (variants/heights), `M3Overlay` facade (showDialog/showSheet/showSnackbar
   partitioning).
   done-when: new test classes green, no product changes needed (report if bugs found → new task).
-  claimed-by: — | status: READY
+  claimed-by: A | status: DONE (round 7, commit 211f1cc — textfield 9 / top-app-bar 7 /
+  overlay-facade 7 tests; red-first evidence pinned for B11 (floating label never announced)
+  and a new B15 (app bar publishes no accessible text/role); controls tests 233)
 
 ## Lane C — gym app UI (pure Java, m3fx only, real data)
 
@@ -414,3 +423,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 5 | B5 (5bf9571, pooled to A) | B6 (6afb2ca) | C3 | B5+B6 merged locally 6afb2ca→943fcf5 |
 | 6 | B9 | B13 (5740d81) + B14 (86c8ba9) | — | merged locally 46814e0; controls tests 209 |
 | 6b | — | — | C3 (083c538+7871e19) | merged locally 5b1b606 — dashboard+profile fully real |
+| 7 | B9 (211f1cc) | B10+B11 | C4 | B9 merged locally 18f3955; controls tests 233 |
