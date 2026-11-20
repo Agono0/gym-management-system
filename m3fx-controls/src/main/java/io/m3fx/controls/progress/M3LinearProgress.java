@@ -1,5 +1,6 @@
 package io.m3fx.controls.progress;
 
+import io.m3fx.core.token.OvershootSpline;
 import javafx.animation.Animation;
 import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
@@ -330,7 +331,8 @@ public class M3LinearProgress extends Control {
             Interpolator sW1 = Interpolator.SPLINE(0.205028, 0.057051, 0.57661, 0.453971);
             // sW2/sW3 overshoot past [0,1] like the web cubic-bezier they were copied from;
             // Interpolator.SPLINE rejects any control point outside [0,1] (which used to make
-            // every buildLoop call throw IllegalArgumentException and kept the loop dead).
+            // every buildLoop call throw IllegalArgumentException and kept the loop dead), so
+            // they use the shared io.m3fx.core.token.OvershootSpline easing.
             Interpolator sW2 = new OvershootSpline(0.152313, 0.196432, 0.648374, 1.00432);
             Interpolator sW3 = new OvershootSpline(0.257759, -0.003163, 0.211762, 1.38179);
 
@@ -368,87 +370,6 @@ public class M3LinearProgress extends Control {
         private static KeyValue kv(
                 DoubleProperty property, double value, Interpolator interpolator) {
             return new KeyValue(property, value, interpolator);
-        }
-
-        /**
-         * Cubic-bezier easing with web {@code cubic-bezier()} semantics: the x control points
-         * must be in [0,1], but the y control points may overshoot — which
-         * {@link Interpolator#SPLINE} rejects. Solves x(t)=progress for t with Newton-Raphson
-         * and a bisection fallback, then evaluates y(t), mirroring the reference UnitBezier.
-         */
-        static final class OvershootSpline extends Interpolator {
-
-            private final double x1;
-            private final double y1;
-            private final double x2;
-            private final double y2;
-
-            OvershootSpline(double x1, double y1, double x2, double y2) {
-                this.x1 = x1;
-                this.y1 = y1;
-                this.x2 = x2;
-                this.y2 = y2;
-            }
-
-            @Override
-            protected double curve(double t) {
-                if (t <= 0) {
-                    return 0;
-                }
-                if (t >= 1) {
-                    return 1;
-                }
-                return sampleY(solveTForX(t));
-            }
-
-            private double solveTForX(double x) {
-                double cx = 3 * x1;
-                double bx = 3 * (x2 - x1) - cx;
-                double ax = 1 - cx - bx;
-                double t = x;
-                for (int i = 0; i < 8; i++) {
-                    double err = sampleX(ax, bx, cx, t) - x;
-                    if (Math.abs(err) < 1e-6) {
-                        return t;
-                    }
-                    double slope = sampleDX(ax, bx, cx, t);
-                    if (Math.abs(slope) < 1e-6) {
-                        break;
-                    }
-                    t -= err / slope;
-                }
-                double lo = 0;
-                double hi = 1;
-                t = x;
-                while (lo < hi) {
-                    double current = sampleX(ax, bx, cx, t);
-                    if (Math.abs(current - x) < 1e-6) {
-                        return t;
-                    }
-                    if (current < x) {
-                        lo = t;
-                    } else {
-                        hi = t;
-                    }
-                    t = (lo + hi) / 2;
-                }
-                return t;
-            }
-
-            private double sampleX(double ax, double bx, double cx, double t) {
-                return ((ax * t + bx) * t + cx) * t;
-            }
-
-            private double sampleDX(double ax, double bx, double cx, double t) {
-                return (3 * ax * t + 2 * bx) * t + cx;
-            }
-
-            private double sampleY(double t) {
-                double cy = 3 * y1;
-                double by = 3 * (y2 - y1) - cy;
-                double ay = 1 - cy - by;
-                return ((ay * t + by) * t + cy) * t;
-            }
         }
 
         @Override

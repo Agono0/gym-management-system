@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.m3fx.core.token.OvershootSpline;
 import javafx.animation.Animation;
 import javafx.animation.Interpolator;
 import javafx.animation.Timeline;
@@ -134,8 +135,8 @@ class M3LinearProgressTest {
 
     @Test
     void overshootSplineMatchesSplineForInRangeControlPoints() {
-        M3LinearProgress.LinearSkin.OvershootSpline mine =
-                new M3LinearProgress.LinearSkin.OvershootSpline(0.06, 0.11, 0.6, 1);
+        OvershootSpline mine =
+                new OvershootSpline(0.06, 0.11, 0.6, 1);
         Interpolator reference = Interpolator.SPLINE(0.06, 0.11, 0.6, 1);
         for (double t = 0; t <= 1.0; t += 0.05) {
             assertEquals(reference.interpolate(0.0, 1.0, t), mine.interpolate(0.0, 1.0, t), 1e-3,
@@ -146,8 +147,8 @@ class M3LinearProgressTest {
     @Test
     void overshootSplineKeepsEndpointsAndOvershootsLikeTheWebBezier() {
         // sW3 from material-web _linear-progress.scss: y1 dips below 0, y2 overshoots above 1.
-        M3LinearProgress.LinearSkin.OvershootSpline sW3 =
-                new M3LinearProgress.LinearSkin.OvershootSpline(0.257759, -0.003163, 0.211762, 1.38179);
+        OvershootSpline sW3 =
+                new OvershootSpline(0.257759, -0.003163, 0.211762, 1.38179);
         assertEquals(0.0, sW3.interpolate(0.0, 1.0, 0.0), 1e-9, "starts at 0");
         assertEquals(1.0, sW3.interpolate(0.0, 1.0, 1.0), 1e-9, "ends at 1");
 
