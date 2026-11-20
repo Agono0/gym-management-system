@@ -3,6 +3,8 @@ package io.m3fx.core.token;
 import javafx.animation.Interpolator;
 import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.ReadOnlyBooleanWrapper;
+import javafx.beans.property.ReadOnlyObjectProperty;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 
 /**
  * M3 motion durations and easing curves.
@@ -20,6 +22,12 @@ import javafx.beans.property.ReadOnlyBooleanWrapper;
  * {@code SPI_GETCLIENTAREAANIMATION}) without a native bridge, which the library forbids, so the
  * flag initializes from the {@code m3fx.reducedMotion} system property and apps wire their own
  * setting UI.
+ *
+ * <p>Motion scheme: {@link #motionSchemeProperty()} selects the spring language —
+ * {@link MotionScheme#EXPRESSIVE} (default, bouncing {@code SPATIAL_EXPRESSIVE_*}) or
+ * {@link MotionScheme#STANDARD} (settling {@code SPATIAL_STANDARD_*}); initialized from
+ * {@code m3fx.motionScheme}. The animation layer maps its presets through the scheme (see
+ * {@code docs/SPEC_NOTES/reduced-motion.md}, B7 section).
  */
 public final class MotionTokens {
 
@@ -334,6 +342,73 @@ public final class MotionTokens {
      */
     static boolean fromSystemProperty() {
         return Boolean.getBoolean("m3fx.reducedMotion");
+    }
+
+    // ------------------------------------------------------------------
+    // Motion scheme.
+    //
+    // Expressive (default) vs standard spring language: which spatial presets
+    // from the SpringToken grid the animation layer picks. Effects presets
+    // (opacity/color) and the Apple-flavored set are scheme-agnostic. Same
+    // pattern as the reduced-motion flag: system property initializes, apps
+    // can switch at runtime via the setter, consumers read the property.
+    // ------------------------------------------------------------------
+
+    /** The observed motion scheme, initialized from {@code m3fx.motionScheme}. */
+    private static final ReadOnlyObjectWrapper<MotionScheme> MOTION_SCHEME =
+            new ReadOnlyObjectWrapper<>(null, "motionScheme", motionSchemeFromSystemProperty());
+
+    /**
+     * Returns the observed motion scheme. Expressive (default) plays the bouncing
+     * {@code SPATIAL_EXPRESSIVE_*} presets; standard plays the settle-without-bounce
+     * {@code SPATIAL_STANDARD_*} presets. Effects and Apple-flavored presets are unaffected.
+     *
+     * @return the active motion scheme, never {@code null}
+     */
+    public static MotionScheme getMotionScheme() {
+        return MOTION_SCHEME.get();
+    }
+
+    /**
+     * The observed motion scheme. Consumers can attach listeners to react to scheme switches.
+     *
+     * @return the read-only motion-scheme property
+     */
+    public static ReadOnlyObjectProperty<MotionScheme> motionSchemeProperty() {
+        return MOTION_SCHEME.getReadOnlyProperty();
+    }
+
+    /**
+     * Sets the motion scheme. Call on the JavaFX Application Thread — property listeners fire
+     * synchronously on the calling thread. {@code null} is ignored so the scheme never reads
+     * {@code null}.
+     *
+     * @param scheme the scheme to activate
+     */
+    public static void setMotionScheme(MotionScheme scheme) {
+        if (scheme != null) {
+            MOTION_SCHEME.set(scheme);
+        }
+    }
+
+    /**
+     * Reads the initial scheme from the {@code m3fx.motionScheme} property: {@code expressive}
+     * (default) or {@code standard}, case-insensitive; the property being absent or any other
+     * value keeps the expressive default.
+     *
+     * @return the initial motion scheme from the {@code m3fx.motionScheme} property
+     */
+    static MotionScheme motionSchemeFromSystemProperty() {
+        String value = System.getProperty("m3fx.motionScheme");
+        return "standard".equalsIgnoreCase(value) ? MotionScheme.STANDARD : MotionScheme.EXPRESSIVE;
+    }
+
+    /** The motion language the animation layer plays. */
+    public enum MotionScheme {
+        /** M3 Expressive: under-damped spatial springs with natural overshoot (default). */
+        EXPRESSIVE,
+        /** M3 standard: settle without bounce — spatial springs use the standard grid. */
+        STANDARD
     }
 }
 

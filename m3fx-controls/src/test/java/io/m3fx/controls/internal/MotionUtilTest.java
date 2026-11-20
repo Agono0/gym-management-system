@@ -3,15 +3,23 @@ package io.m3fx.controls.internal;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.m3fx.core.token.MotionTokens;
+import io.m3fx.core.token.MotionTokens.MotionScheme;
+import io.m3fx.core.token.SpringInterpolator;
+import javafx.animation.Interpolator;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.geometry.BoundingBox;
 import javafx.geometry.Bounds;
 import javafx.scene.Group;
 import javafx.scene.Scene;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.shape.Rectangle;
+import javafx.util.Duration;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -280,5 +288,143 @@ class MotionUtilTest {
                 "the surviving timeline must still settle to identity + opacity 1");
         runOnFx(() -> assertFalse(rect.getProperties().containsKey(TRACKED_TIMELINE_KEY),
                 "tracked timeline must be cleared after the final splashIn"));
+    }
+
+
+    private static MouseEvent mousePressed() {
+        return new MouseEvent(MouseEvent.MOUSE_PRESSED, 10, 10, 10, 10, MouseButton.PRIMARY, 1,
+                false, false, false, false, false, true, false, false, false, false, null);
+    }
+
+    private static MouseEvent mouseReleased() {
+        return new MouseEvent(MouseEvent.MOUSE_RELEASED, 10, 10, 10, 10, MouseButton.PRIMARY, 1,
+                false, false, false, false, false, true, false, false, false, false, null);
+    }
+
+    @Test
+    void reducedMotionEnterIsAFadeOnlyWithinTheCap() throws Throwable {
+        AtomicReference<Rectangle> holder = new AtomicReference<>();
+        runOnFx(() -> {
+            MotionTokens.setReducedMotion(true);
+            Rectangle rect = nodeInScene();
+            MotionUtil.enter(rect, MotionUtil.MotionDirection.UP);
+            Timeline tracked = (Timeline) rect.getProperties().get(TRACKED_TIMELINE_KEY);
+            assertEquals(Duration.millis(MotionTokens.DURATION_REDUCED_FADE),
+                    tracked.getCycleDuration(), "reduced enter must fade within the 150ms cap");
+            assertEquals(0.0, rect.getOpacity(), 1e-9, "the fade starts transparent");
+            assertEquals(0, rect.getTranslateX(), 1e-9, "no translation under reduced motion");
+            assertEquals(0, rect.getTranslateY(), 1e-9, "no translation under reduced motion");
+            assertEquals(1.0, rect.getScaleX(), 1e-9, "no scale under reduced motion");
+            holder.set(rect);
+        });
+        Rectangle rect = holder.get();
+        assertTrue(awaitFxCondition(() -> isIdentity(rect) && rect.getOpacity() == 1.0, 1000),
+                "the reduced fade must settle to identity");
+        runOnFx(() -> {
+            assertFalse(rect.getProperties().containsKey(TRACKED_TIMELINE_KEY),
+                    "tracked timeline must be cleared after the reduced fade");
+            MotionTokens.setReducedMotion(false);
+        });
+    }
+
+    @Test
+    void reducedMotionExitCompletesWithoutMovement() throws Throwable {
+        AtomicReference<Rectangle> holder = new AtomicReference<>();
+        AtomicInteger calls = new AtomicInteger();
+        CountDownLatch done = new CountDownLatch(1);
+        runOnFx(() -> {
+            MotionTokens.setReducedMotion(true);
+            Rectangle rect = nodeInScene();
+            MotionUtil.exit(rect, () -> {
+                calls.incrementAndGet();
+                done.countDown();
+            });
+            Timeline tracked = (Timeline) rect.getProperties().get(TRACKED_TIMELINE_KEY);
+            assertEquals(Duration.millis(MotionTokens.DURATION_REDUCED_FADE),
+                    tracked.getCycleDuration(), "reduced exit must fade within the 150ms cap");
+            assertEquals(0, rect.getTranslateY(), 1e-9, "no exit lift under reduced motion");
+            holder.set(rect);
+        });
+        assertTrue(done.await(2, TimeUnit.SECONDS), "reduced exit onDone must fire within 2s");
+        runOnFx(() -> {
+            Rectangle rect = holder.get();
+            assertTrue(isIdentity(rect), "reduced exit must reset to identity");
+            assertEquals(1, calls.get(), "onDone must run exactly once");
+            MotionTokens.setReducedMotion(false);
+        });
+    }
+
+    @Test
+    void reducedMotionShakeKeepsTheNodeStill() throws Throwable {
+        AtomicReference<Rectangle> holder = new AtomicReference<>();
+        runOnFx(() -> {
+            MotionTokens.setReducedMotion(true);
+            Rectangle rect = nodeInScene();
+            MotionUtil.shake(rect);
+            assertEquals(0.0, rect.getTranslateX(), 1e-9,
+                    "reduced shake must not displace the node");
+            Timeline tracked = (Timeline) rect.getProperties().get(TRACKED_TIMELINE_KEY);
+            assertEquals(Duration.millis(MotionTokens.DURATION_REDUCED_FADE),
+                    tracked.getCycleDuration(), "the opacity pulse must stay within the cap");
+            holder.set(rect);
+        });
+        Rectangle rect = holder.get();
+        assertTrue(awaitFxCondition(() -> isIdentity(rect), 1000),
+                "the reduced shake pulse must settle to identity");
+        runOnFx(() -> {
+            assertEquals(0.0, rect.getTranslateX(), 1e-9, "still no displacement after settle");
+            MotionTokens.setReducedMotion(false);
+        });
+    }
+
+    @Test
+    void reducedMotionPressScaleIsDisabled() throws Throwable {
+        runOnFx(() -> {
+            MotionTokens.setReducedMotion(true);
+            Rectangle rect = nodeInScene();
+            MotionUtil.addPressScale(rect, 0.9);
+            rect.fireEvent(mousePressed());
+            assertEquals(1.0, rect.getScaleX(), 1e-9, "press must not scale under reduced motion");
+            assertEquals(1.0, rect.getScaleY(), 1e-9);
+            rect.fireEvent(mouseReleased());
+            assertEquals(1.0, rect.getScaleX(), 1e-9, "release must leave the resting scale");
+            MotionUtil.removePressScale(rect);
+            MotionTokens.setReducedMotion(false);
+        });
+    }
+
+    @Test
+    void pressScaleSpringsOnReleaseWhenMotionIsAllowed() throws Throwable {
+        runOnFx(() -> {
+            Rectangle rect = nodeInScene();
+            MotionUtil.addPressScale(rect, 0.9);
+            rect.fireEvent(mousePressed());
+            assertTrue(SpringAnimation.isAnimating(rect.scaleXProperty()),
+                    "press must start the scale spring toward the pressed scale");
+            rect.fireEvent(mouseReleased());
+            assertTrue(SpringAnimation.isAnimating(rect.scaleXProperty()),
+                    "release must spring back toward 1.0");
+            SpringAnimation.stopTransforms(rect);
+            rect.setScaleX(1.0);
+            rect.setScaleY(1.0);
+        });
+    }
+
+    @Test
+    void springInterpolatorFollowsTheMotionScheme() {
+        try {
+            Interpolator expressive = MotionUtil.spring();
+            assertEquals(Math.sqrt(380), ((SpringInterpolator) expressive).getNaturalFrequency(),
+                    1e-9, "expressive default uses the SPATIAL_EXPRESSIVE_DEFAULT bridge");
+            MotionTokens.setMotionScheme(MotionScheme.STANDARD);
+            Interpolator standard = MotionUtil.spring();
+            assertNotSame(expressive, standard, "the scheme switch must change the preset");
+            assertEquals(Math.sqrt(350), ((SpringInterpolator) standard).getNaturalFrequency(),
+                    1e-9, "standard uses the SPATIAL_STANDARD_DEFAULT bridge");
+            assertEquals(0.65, ((SpringInterpolator) expressive).getDampingRatio(), 1e-9);
+            assertEquals(0.90, ((SpringInterpolator) standard).getDampingRatio(), 1e-9);
+        } finally {
+            MotionTokens.setMotionScheme(MotionScheme.EXPRESSIVE);
+        }
     }
 }

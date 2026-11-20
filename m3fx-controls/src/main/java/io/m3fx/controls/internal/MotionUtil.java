@@ -1,6 +1,7 @@
 package io.m3fx.controls.internal;
 
 import io.m3fx.core.token.MotionTokens;
+import io.m3fx.core.token.MotionTokens.MotionScheme;
 import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
@@ -25,6 +26,12 @@ import javafx.util.Duration;
  * <p>All helpers run on the FX thread, animate transform-only properties only (opacity,
  * translate, scale — never layout-affecting ones), keep at most one tracked timeline per node,
  * and stop/reset automatically when the node leaves the scene.
+ *
+ * <p>Reduced motion: when {@link MotionTokens#isReducedMotion()} is on, the helpers degrade to
+ * opacity fades of at most {@link MotionTokens#DURATION_REDUCED_FADE} (150 ms) — no transforms,
+ * no springs; press-scale disables; shake becomes a short opacity pulse. The flag is read at
+ * invocation time, so calls made after the flip honor it immediately; a fade already in flight
+ * ends at a rest state, so it is safe to let finish.
  */
 public final class MotionUtil {
 
@@ -51,11 +58,15 @@ public final class MotionUtil {
     private static final double SPLASH_IN_SCALE_FROM = 1.06;
     private static final double SPLASH_OUT_SCALE_TO = 1.04;
     private static final double SHAKE_OFFSET_PX = 12.0;
+    /** Opacity the reduced-motion shake pulse dips to (no displacement under reduced motion). */
+    private static final double SHAKE_PULSE_OPACITY = 0.55;
 
     private MotionUtil() {}
 
     /**
      * Adds a tactile spring press-scale (0.97 on press, spring bounce on release) to a node.
+     * Disabled under reduced motion: the handlers read the flag at event time, so the flag can
+     * flip at runtime without re-registering.
      *
      * @param node the interactive node
      */
@@ -65,16 +76,28 @@ public final class MotionUtil {
 
     /**
      * Adds a tactile spring press-scale with a custom pressed scale (spring bounce on release).
+     * Disabled under reduced motion (see {@link #addPressScale(Node)}).
      *
      * @param node the interactive node
      * @param pressedScale the scale while pressed (e.g. 0.96 for subtle, 0.94 for pronounced)
      */
     public static void addPressScale(Node node, double pressedScale) {
         removePressScale(node);
-        javafx.event.EventHandler<MouseEvent> pressed =
-                e -> SpringAnimation.animateScale(node, pressedScale, SpringAnimation.FAST);
-        javafx.event.EventHandler<MouseEvent> released =
-                e -> SpringAnimation.animateScale(node, 1.0, SpringAnimation.BOUNCY);
+        javafx.event.EventHandler<MouseEvent> pressed = e -> {
+            if (!MotionTokens.isReducedMotion()) {
+                SpringAnimation.animateScale(node, pressedScale, SpringAnimation.FAST);
+            }
+        };
+        javafx.event.EventHandler<MouseEvent> released = e -> {
+            if (MotionTokens.isReducedMotion()) {
+                // No spring while reduced; still guarantee a clean resting scale (e.g. when the
+                // flag flipped on while the node was pressed at a scaled-down state).
+                node.setScaleX(1.0);
+                node.setScaleY(1.0);
+            } else {
+                SpringAnimation.animateScale(node, 1.0, SpringAnimation.BOUNCY);
+            }
+        };
         node.addEventHandler(MouseEvent.MOUSE_PRESSED, pressed);
         node.addEventHandler(MouseEvent.MOUSE_RELEASED, released);
         node.getProperties().put(PRESS_SCALE_HANDLERS, new javafx.event.EventHandler<?>[] {pressed, released});
@@ -107,6 +130,9 @@ public final class MotionUtil {
      * motion on the node is cancelled first, and the animation is stopped and the transform reset
      * if the node leaves the scene mid-flight.
      *
+     * <p>Under reduced motion: pure fade of at most {@code min(millis, 150)} ms, no translation
+     * (the node appears in place).
+     *
      * @param node the entering node
      * @param fromY starting vertical offset in px
      * @param millis duration in ms
@@ -117,6 +143,21 @@ public final class MotionUtil {
         SpringAnimation.stopTransforms(node);
         installSceneExitCleanup(node);
 
+        if (MotionTokens.isReducedMotion()) {
+            // Appears in place: no translation, opacity fade capped at the reduced-motion limit;
+            // translateX and scale stay untouched, matching the full-motion contract.
+            node.setTranslateY(0);
+            Timeline fade = new Timeline(new KeyFrame(
+                    Duration.millis(Math.min(millis, MotionTokens.DURATION_REDUCED_FADE)),
+                    new KeyValue(node.opacityProperty(), 1.0, Interpolator.LINEAR)));
+            fade.setOnFinished(e -> {
+                node.setOpacity(1.0);
+                clearTracked(node);
+            });
+            track(node, fade);
+            fade.play();
+            return;
+        }
         node.setOpacity(0);
         node.setTranslateY(fromY);
 
@@ -135,13 +176,18 @@ public final class MotionUtil {
     }
 
     /**
-     * M3 Expressive spring interpolator (slight overshoot, matches the spec's spring feel for
-     * transitions where a full physics spring timer is overkill).
+     * Spring interpolator for the active motion scheme: the Expressive default spatial preset, or
+     * the settle-without-bounce standard one under {@link MotionScheme#STANDARD} — built through
+     * the {@code SpringToken.toInterpolator()} bridge, so the scheme switch changes the feel, not
+     * the shape (Expressive's bridge settles noticeably faster than the pre-token hand-tuned
+     * spring this helper returned before; the gallery demo makes the difference visible).
      *
-     * @return a spring-like interpolator
+     * @return a spring-like interpolator for the active scheme
      */
     public static Interpolator spring() {
-        return MotionTokens.spring();
+        return MotionTokens.getMotionScheme() == MotionScheme.STANDARD
+                ? MotionTokens.SPATIAL_STANDARD_DEFAULT.toInterpolator()
+                : MotionTokens.SPATIAL_EXPRESSIVE_DEFAULT.toInterpolator();
     }
 
     /**
@@ -175,6 +221,9 @@ public final class MotionUtil {
     /**
      * Apple-style page entrance with a configurable starting scale (1.0 disables scaling).
      *
+     * <p>Under reduced motion: pure opacity fade of {@link MotionTokens#DURATION_REDUCED_FADE}
+     * (150 ms) — the node appears in place at identity transforms, no translation or scale.
+     *
      * @param node the entering node
      * @param direction the direction the node travels from
      * @param fromScale the scale the node starts at (1.0 = no scale animation)
@@ -184,6 +233,15 @@ public final class MotionUtil {
         stopTracked(node);
         SpringAnimation.stopTransforms(node);
         installSceneExitCleanup(node);
+
+        if (MotionTokens.isReducedMotion()) {
+            resetTransforms(node);
+            Timeline fade = reducedFade(node, 1.0);
+            fade.setOnFinished(e -> clearTracked(node));
+            track(node, fade);
+            fade.play();
+            return;
+        }
 
         node.setOpacity(0);
         node.setTranslateX(offsetX(direction));
@@ -210,6 +268,9 @@ public final class MotionUtil {
      * If the node leaves the scene mid-exit the animation is cancelled and transforms are
      * reset instead; {@code onDone} is not invoked in that case (the node is already gone).
      *
+     * <p>Under reduced motion: pure opacity fade of {@link MotionTokens#DURATION_REDUCED_FADE}
+     * (150 ms), no lift or scale.
+     *
      * @param node the exiting node
      * @param onDone optional callback run after the exit completes, may be {@code null}
      */
@@ -231,6 +292,14 @@ public final class MotionUtil {
                 onDone.run();
             }
         };
+
+        if (MotionTokens.isReducedMotion()) {
+            Timeline timeline = reducedFade(node, 0.0);
+            timeline.setOnFinished(e -> finish.run());
+            track(node, timeline);
+            timeline.play();
+            return;
+        }
 
         Interpolator ease = MotionTokens.appleFadeEase();
         Timeline timeline = new Timeline(new KeyFrame(
@@ -263,6 +332,13 @@ public final class MotionUtil {
         installSceneExitCleanup(node);
 
         resetTransforms(node);
+        if (MotionTokens.isReducedMotion()) {
+            Timeline fade = reducedFade(node, 1.0);
+            fade.setOnFinished(e -> clearTracked(node));
+            track(node, fade);
+            fade.play();
+            return;
+        }
         node.setOpacity(0.0);
         node.setScaleX(SPLASH_IN_SCALE_FROM);
         node.setScaleY(SPLASH_IN_SCALE_FROM);
@@ -311,6 +387,14 @@ public final class MotionUtil {
             }
         };
 
+        if (MotionTokens.isReducedMotion()) {
+            Timeline timeline = reducedFade(node, 0.0);
+            timeline.setOnFinished(e -> finish.run());
+            track(node, timeline);
+            timeline.play();
+            return;
+        }
+
         Interpolator ease = MotionTokens.appleFadeEase();
         Timeline timeline = new Timeline(new KeyFrame(
                 Duration.millis(MotionTokens.DURATION_MEDIUM_2),
@@ -338,6 +422,23 @@ public final class MotionUtil {
         stopTracked(node);
         SpringAnimation.stopTransforms(node);
         installSceneExitCleanup(node);
+
+        if (MotionTokens.isReducedMotion()) {
+            // No movement: a short opacity pulse keeps the attention cue without displacement.
+            Timeline timeline = new Timeline(
+                    new KeyFrame(Duration.millis(MotionTokens.DURATION_REDUCED_FADE / 2),
+                            new KeyValue(node.opacityProperty(), SHAKE_PULSE_OPACITY,
+                                    Interpolator.LINEAR)),
+                    new KeyFrame(Duration.millis(MotionTokens.DURATION_REDUCED_FADE),
+                            new KeyValue(node.opacityProperty(), 1.0, Interpolator.LINEAR)));
+            timeline.setOnFinished(e -> {
+                node.setOpacity(1.0);
+                clearTracked(node);
+            });
+            track(node, timeline);
+            timeline.play();
+            return;
+        }
 
         node.setTranslateX(-SHAKE_OFFSET_PX);
         SpringAnimation.animate(node.translateXProperty(), 0, SpringAnimation.BOUNCY, null);
@@ -379,7 +480,10 @@ public final class MotionUtil {
      */
     public static void morphFromBounds(Node node, Bounds startBoundsInScene, boolean animate, Runnable onDone) {
         requireFxThread("morphFromBounds");
-        if (!animate || node.getScene() == null || !isUsableBounds(startBoundsInScene)) {
+        if (!animate
+                || MotionTokens.isReducedMotion()
+                || node.getScene() == null
+                || !isUsableBounds(startBoundsInScene)) {
             if (onDone != null) {
                 onDone.run();
             }
@@ -513,6 +617,19 @@ public final class MotionUtil {
         node.setTranslateY(0);
         node.setScaleX(1.0);
         node.setScaleY(1.0);
+    }
+
+    /**
+     * Builds the reduced-motion replacement animation: a pure opacity fade to {@code toOpacity}
+     * over {@link MotionTokens#DURATION_REDUCED_FADE} (150 ms) with the node held at identity
+     * transforms. The caller tracks, plays and attaches its own finished handler.
+     */
+    private static Timeline reducedFade(Node node, double toOpacity) {
+        resetTransforms(node);
+        node.setOpacity(1.0 - toOpacity);
+        return new Timeline(new KeyFrame(
+                Duration.millis(MotionTokens.DURATION_REDUCED_FADE),
+                new KeyValue(node.opacityProperty(), toOpacity, Interpolator.LINEAR)));
     }
 
     private static void track(Node node, Timeline timeline) {

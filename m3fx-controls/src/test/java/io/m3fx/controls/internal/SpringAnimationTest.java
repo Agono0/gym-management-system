@@ -1,9 +1,13 @@
 package io.m3fx.controls.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.m3fx.controls.common.SpringParams;
+import io.m3fx.core.token.MotionTokens;
+import io.m3fx.core.token.MotionTokens.MotionScheme;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleDoubleProperty;
 import org.junit.jupiter.api.BeforeAll;
@@ -11,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -111,5 +116,81 @@ class SpringAnimationTest {
         double[] state = SpringAnimation.step(0, 0, 100, 380, 0.65, 1.0);
         assertTrue(Double.isFinite(state[0]));
         assertTrue(Double.isFinite(state[1]));
+    }
+
+    @Test
+    void reducedMotionSnapsWithoutStartingATimer() throws Exception {
+        onFx(() -> {
+            MotionTokens.setReducedMotion(true);
+            try {
+                SimpleDoubleProperty property = new SimpleDoubleProperty(5);
+                SpringAnimation.animate(property, 42, SpringAnimation.SLOW, null);
+                assertEquals(42, property.get(), 1e-9, "reduced motion must snap synchronously");
+                assertFalse(SpringAnimation.isAnimating(property), "no timer may start");
+            } finally {
+                MotionTokens.setReducedMotion(false);
+            }
+        });
+    }
+
+    @Test
+    void flagFlipSnapsRunningSpringsLive() throws Exception {
+        onFx(() -> {
+            SimpleDoubleProperty property = new SimpleDoubleProperty(0);
+            AtomicInteger finished = new AtomicInteger();
+            SpringAnimation.animate(property, 5000, SpringAnimation.SLOW, finished::incrementAndGet);
+            assertTrue(SpringAnimation.isAnimating(property), "spring must be running");
+
+            MotionTokens.setReducedMotion(true);
+            try {
+                assertEquals(5000, property.get(), 1e-9, "running spring must snap on the flip");
+                assertFalse(SpringAnimation.isAnimating(property), "timer must be stopped");
+                assertEquals(1, finished.get(), "completion callback must fire on the snap");
+            } finally {
+                MotionTokens.setReducedMotion(false);
+            }
+        });
+    }
+
+    @Test
+    void schemeSwitchResolvesTheSpatialPresets() {
+        try {
+            MotionTokens.setMotionScheme(MotionScheme.STANDARD);
+            assertEquals(SpringAnimation.STANDARD_DEFAULT,
+                    SpringAnimation.resolveForScheme(SpringAnimation.DEFAULT));
+            assertEquals(SpringAnimation.STANDARD_DEFAULT,
+                    SpringAnimation.resolveForScheme(SpringAnimation.BOUNCY),
+                    "standard language has no bounce: bouncy collapses to the default");
+            assertEquals(SpringAnimation.STANDARD_FAST,
+                    SpringAnimation.resolveForScheme(SpringAnimation.FAST));
+            assertEquals(SpringAnimation.STANDARD_SLOW,
+                    SpringAnimation.resolveForScheme(SpringAnimation.SLOW));
+            assertEquals(SpringAnimation.GENTLE,
+                    SpringAnimation.resolveForScheme(SpringAnimation.GENTLE),
+                    "effects presets are scheme-agnostic");
+            SpringParams custom = new SpringParams(123, 0.7);
+            assertSame(custom, SpringAnimation.resolveForScheme(custom),
+                    "custom tunings pass through unchanged");
+        } finally {
+            MotionTokens.setMotionScheme(MotionScheme.EXPRESSIVE);
+        }
+    }
+
+    @Test
+    void expressiveSchemeKeepsTheGridDefaults() {
+        assertSame(SpringAnimation.DEFAULT, SpringAnimation.resolveForScheme(SpringAnimation.DEFAULT));
+        assertSame(SpringAnimation.BOUNCY, SpringAnimation.resolveForScheme(SpringAnimation.BOUNCY));
+        assertSame(SpringAnimation.FAST, SpringAnimation.resolveForScheme(SpringAnimation.FAST));
+        assertSame(SpringAnimation.SLOW, SpringAnimation.resolveForScheme(SpringAnimation.SLOW));
+    }
+
+    @Test
+    void standardSchemePresetsSettleWithoutVisibleBounce() {
+        double maxDefault = settle(SpringAnimation.STANDARD_DEFAULT.stiffness(),
+                SpringAnimation.STANDARD_DEFAULT.dampingRatio());
+        assertTrue(maxDefault <= 100.5, "standard default must settle without bounce, max " + maxDefault);
+        double maxFast = settle(SpringAnimation.STANDARD_FAST.stiffness(),
+                SpringAnimation.STANDARD_FAST.dampingRatio());
+        assertTrue(maxFast <= 100.5, "standard fast must settle without bounce, max " + maxFast);
     }
 }

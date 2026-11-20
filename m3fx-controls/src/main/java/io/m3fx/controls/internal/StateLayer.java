@@ -19,6 +19,9 @@ import javafx.util.Duration;
  * <p>Components place one full-size overlay {@link Region} above their content and call
  * {@link #bind(Node, Region)}; the overlay tints itself on hover/focus/press. Components opt in
  * instead of reimplementing overlays.
+ *
+ * <p>Feedback is instant by design: under reduced motion the overlay opacity settles directly
+ * (no fade), so state changes stay visible without animation.
  */
 public final class StateLayer {
 
@@ -112,6 +115,11 @@ public final class StateLayer {
         FadeTransition running = ACTIVE.get(overlay);
         if (running != null) {
             running.stop();
+        }
+        if (MotionTokens.isReducedMotion()) {
+            // Reduced motion: settle directly — state feedback stays instant, no fade runs.
+            overlay.setOpacity(to);
+            return;
         }
         FadeTransition fade =
                 new FadeTransition(Duration.millis(MotionTokens.DURATION_SHORT_2), overlay);

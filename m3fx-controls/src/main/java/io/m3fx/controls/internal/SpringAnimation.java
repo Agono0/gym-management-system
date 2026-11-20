@@ -2,11 +2,13 @@ package io.m3fx.controls.internal;
 
 import io.m3fx.controls.common.SpringParams;
 import io.m3fx.core.token.MotionTokens;
+import io.m3fx.core.token.MotionTokens.MotionScheme;
 import io.m3fx.core.token.MotionTokens.SpringToken;
 import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
 import javafx.beans.property.DoubleProperty;
 import javafx.scene.Node;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
@@ -17,6 +19,13 @@ import java.util.WeakHashMap;
  * <p>Unlike duration-and-bezier tweens, this integrates {@code a = -k(x - target) - c·v} every frame.
  * Durations naturally emerge from physical stiffness and damping ratio. Preserves velocity when
  * interrupted so rapid taps or gesture retargets maintain continuous physical momentum.
+ *
+ * <p>Scheme-aware: the named spatial presets ({@link #DEFAULT}, {@link #BOUNCY}, {@link #FAST},
+ * {@link #SLOW}) are the Expressive grid; under {@link MotionScheme#STANDARD} they resolve to the
+ * settle-without-bounce {@code SPATIAL_STANDARD_*} presets inside {@link #animate} (custom
+ * tunings, effects presets and the Apple-flavored set pass through unchanged). Reduced motion
+ * snaps every animation to its target immediately — and a running animation snaps live when the
+ * {@code MotionTokens.reducedMotionProperty()} flag flips on.
  */
 public final class SpringAnimation {
 
@@ -45,14 +54,46 @@ public final class SpringAnimation {
             new SpringParams(MotionTokens.SPATIAL_EXPRESSIVE_SLOW.stiffness(),
                     MotionTokens.SPATIAL_EXPRESSIVE_SLOW.dampingRatio());
 
+    /** Standard-scheme spatial presets (the {@code SPATIAL_STANDARD_*} grid row). */
+    static final SpringParams STANDARD_DEFAULT =
+            SpringParams.fromToken(MotionTokens.SPATIAL_STANDARD_DEFAULT);
+    static final SpringParams STANDARD_FAST =
+            SpringParams.fromToken(MotionTokens.SPATIAL_STANDARD_FAST);
+    static final SpringParams STANDARD_SLOW =
+            SpringParams.fromToken(MotionTokens.SPATIAL_STANDARD_SLOW);
+
     /** Apple-style soft settle: damping 0.88 — arrives gently with no visible overshoot. */
     public static final SpringParams APPLE_SETTLE = SpringParams.fromToken(MotionTokens.APPLE_SETTLE);
 
     /** Apple-style playful: damping 0.65 — slight overshoot, tab-bar highlight morph energy. */
     public static final SpringParams APPLE_PLAYFUL = SpringParams.fromToken(MotionTokens.APPLE_PLAYFUL);
 
-    private static final Map<DoubleProperty, AnimationTimer> ACTIVE = new WeakHashMap<>();
+    /** One running spring animation: its timer, target and completion callback. */
+    private record ActiveSpring(AnimationTimer timer, double target, Runnable onFinished) {}
+
+    private static final Map<DoubleProperty, ActiveSpring> ACTIVE = new WeakHashMap<>();
     private static final Map<DoubleProperty, Double> VELOCITIES = new WeakHashMap<>();
+
+    static {
+        // Reduced motion is a live accessibility switch: flipping it on snaps every running
+        // spring to its target (and fires the completion callbacks so chained skin state stays
+        // consistent). Listeners fire on the thread that flips the flag — the FX thread.
+        MotionTokens.reducedMotionProperty().addListener((obs, was, reduced) -> {
+            if (reduced) {
+                for (Map.Entry<DoubleProperty, ActiveSpring> entry :
+                        List.copyOf(ACTIVE.entrySet())) {
+                    ActiveSpring active = entry.getValue();
+                    ACTIVE.remove(entry.getKey());
+                    VELOCITIES.remove(entry.getKey());
+                    active.timer().stop();
+                    entry.getKey().set(active.target());
+                    if (active.onFinished() != null) {
+                        active.onFinished().run();
+                    }
+                }
+            }
+        });
+    }
 
     private SpringAnimation() {}
 
@@ -78,7 +119,9 @@ public final class SpringAnimation {
 
     /**
      * Animates a property toward a target with spring physics, preserving current velocity
-     * if interrupted mid-flight.
+     * if interrupted mid-flight. The preset resolves through the active
+     * {@link MotionScheme#STANDARD motion scheme}; with reduced motion on, the property snaps to
+     * the target synchronously (no timer starts).
      *
      * @param property the property to drive (must be written on the FX thread)
      * @param toValue rest value
@@ -88,10 +131,10 @@ public final class SpringAnimation {
     public static void animate(
             DoubleProperty property, double toValue, SpringParams params, Runnable onFinished) {
         requireFxThread("animate");
-        SpringParams p = params == null ? DEFAULT : params;
-        // Degenerate springs (zero/negative stiffness or non-finite inputs) would never settle:
-        // snap to the target instead of running an infinite AnimationTimer.
-        if (p.stiffness() <= 0
+        SpringParams p = resolveForScheme(params == null ? DEFAULT : params);
+        // Reduced motion snaps like the degenerate-spring guard below: no timer ever starts.
+        if (MotionTokens.isReducedMotion()
+                || p.stiffness() <= 0
                 || !Double.isFinite(p.stiffness())
                 || !Double.isFinite(p.dampingRatio())
                 || !Double.isFinite(toValue)
@@ -105,9 +148,9 @@ public final class SpringAnimation {
             }
             return;
         }
-        AnimationTimer previous = ACTIVE.remove(property);
+        ActiveSpring previous = ACTIVE.remove(property);
         if (previous != null) {
-            previous.stop();
+            previous.timer().stop();
         }
 
         // Preserve velocity from interrupted animation if available
@@ -146,8 +189,38 @@ public final class SpringAnimation {
                         property.set(x);
                     }
                 };
-        ACTIVE.put(property, timer);
+        ACTIVE.put(property, new ActiveSpring(timer, toValue, onFinished));
         timer.start();
+    }
+
+    /**
+     * Resolves a caller-chosen preset through the active motion scheme: the expressive spatial
+     * presets map to their {@code SPATIAL_STANDARD_*} counterparts under
+     * {@link MotionScheme#STANDARD} (BOUNCY/DEFAULT to the standard default, FAST to the standard
+     * fast, SLOW to the standard slow); effects and Apple presets and custom tunings pass
+     * through. Identity-based — pass the named constants.
+     *
+     * @param params the requested tuning (never null)
+     * @return the tuning to animate with
+     */
+    static SpringParams resolveForScheme(SpringParams params) {
+        if (MotionTokens.getMotionScheme() == MotionScheme.STANDARD) {
+            if (params == DEFAULT || params == BOUNCY) {
+                return STANDARD_DEFAULT;
+            }
+            if (params == FAST) {
+                return STANDARD_FAST;
+            }
+            if (params == SLOW) {
+                return STANDARD_SLOW;
+            }
+        }
+        return params;
+    }
+
+    /** Returns whether a spring animation is currently running on the property. */
+    static boolean isAnimating(DoubleProperty property) {
+        return ACTIVE.containsKey(property);
     }
 
     /**
@@ -213,15 +286,15 @@ public final class SpringAnimation {
     }
 
     /**
-     * Stops any running spring animation on the property.
+     * Stops any running spring animation on the property (without snapping to its target).
      *
      * @param property the property to halt
      */
     public static void stop(DoubleProperty property) {
         requireFxThread("stop");
-        AnimationTimer timer = ACTIVE.remove(property);
-        if (timer != null) {
-            timer.stop();
+        ActiveSpring active = ACTIVE.remove(property);
+        if (active != null) {
+            active.timer().stop();
         }
         VELOCITIES.remove(property);
     }

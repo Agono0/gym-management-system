@@ -3,6 +3,7 @@ package io.m3fx.core.token;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.m3fx.core.token.MotionTokens.MotionScheme;
 import javafx.animation.Interpolator;
 import org.junit.jupiter.api.Test;
 
@@ -41,6 +42,29 @@ class MotionTokensTest {
     void appleSplashDurationTokenValue() {
         // Apple-flavored (non-M3) launch reveal duration consumed by MotionUtil.splashIn.
         assertEquals(600, MotionTokens.APPLE_SPLASH_DURATION);
+    }
+
+    @Test
+    void motionSchemeSystemPropertyAndDefaults() {
+        try {
+            // Absent property -> expressive default.
+            System.clearProperty("m3fx.motionScheme");
+            assertEquals(MotionScheme.EXPRESSIVE, MotionTokens.motionSchemeFromSystemProperty());
+            System.setProperty("m3fx.motionScheme", "standard");
+            assertEquals(MotionScheme.STANDARD, MotionTokens.motionSchemeFromSystemProperty());
+            System.setProperty("m3fx.motionScheme", "STANDARD");
+            assertEquals(MotionScheme.STANDARD, MotionTokens.motionSchemeFromSystemProperty(),
+                    "case-insensitive");
+            System.setProperty("m3fx.motionScheme", "garbage");
+            assertEquals(MotionScheme.EXPRESSIVE, MotionTokens.motionSchemeFromSystemProperty(),
+                    "invalid values keep the expressive default");
+            // The setter ignores null so the scheme never reads null.
+            MotionTokens.setMotionScheme(null);
+            assertEquals(MotionScheme.EXPRESSIVE, MotionTokens.getMotionScheme());
+        } finally {
+            System.clearProperty("m3fx.motionScheme");
+            MotionTokens.setMotionScheme(MotionScheme.EXPRESSIVE);
+        }
     }
 
     @Test
