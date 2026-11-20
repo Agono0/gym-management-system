@@ -167,7 +167,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   sensible minimum or wrap — pick the spec-conformant behavior, verify in the gallery page and
   the dashboard/customer-list KPI strips at 1024 and 1280.
   done-when: screenshots at both widths show readable labels/badges, test added, suite green.
-  claimed-by: — | status: READY
+  claimed-by: B | status: DONE (round 9, commit 7adc969 — header space policy: title ≥72px
+  grows, badge hides whole instead of cutting mid-word, tooltips carry full text; stale
+  pre-CSS binding dependency fixed; full titles verified at 1024/1280)
 
 - [ ] B11 | lane:B | deps:— | files: m3fx-controls/.../textfield/M3TextField.java + test (m3fx.css if needed)
   goal: Resting-state label bug (found in the round-1 full-matrix screenshots, reproducible on
@@ -178,7 +180,11 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   inputs page + equipment screen.
   done-when: empty+unfocused field shows the label inside per spec; focused/non-empty floats;
   test added; suite green; screenshots clean.
-  claimed-by: — | status: READY
+  claimed-by: B | status: DONE (round 9, commit 14cd60b → main 869bbb6 — root cause was CSS
+  having no positional styles at all, not the state logic; label now overlays inside the 56dp
+  box with translateY float; leading-icon 40px alignment. Merge note: A's and B's
+  M3TextFieldTest both existed → B's split to M3TextFieldRestingLabelTest, A's lookups
+  adapted (a37e16c))
 
 - [ ] B12 | lane:B | deps:— | files: m3fx-controls/.../glass/** (GlassPaneSkin + related), + test
   goal: **HIGH — systemic ghost text** (reproduced on login, availability, attendance screens
@@ -446,4 +452,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 6 | B9 | B13 (5740d81) + B14 (86c8ba9) | — | merged locally 46814e0; controls tests 209 |
 | 6b | — | — | C3 (083c538+7871e19) | merged locally 5b1b606 — dashboard+profile fully real |
 | 7 | B9 (211f1cc) | B10+B11 | C4 | B9 merged locally 18f3955; controls tests 233 |
-| 8 | B15 (1cce386) | B10+B11 (in flight) | C4 (d3540b6), C5 (7f6d12f) | C4+C5 merged; spec-note conflict resolved; B16 queued |
+| 8 | B15 (1cce386) | B10 (088e259→7adc969) + B11 (869bbb6) | C4 (d3540b6), C5 (7f6d12f) | B10+B11 merged; A's text-field test lookups adapted (a37e16c); B16 queued |
