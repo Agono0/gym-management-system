@@ -297,7 +297,14 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   AttendanceDao (rule 5). One primary action per region; tooltips on icon buttons.
   done-when: create→edit→freeze→renew a real customer round-trips through SQLite; empty DB
   shows designed empty state; screenshots reviewed.
-  claimed-by: — | status: BLOCKED (C0,C2)
+  claimed-by: C | status: DONE (round 6, commits 083c538+7871e19 → main 5b1b606 — real
+  DashboardSnapshot (8 DAO queries, rule-5 check-in proven by sqlite round-trip: same-day
+  re-check-in updates not inserts), real profile dossier (freeze/unfreeze/renew/coach/biometrics/
+  program via DAOs, rule-7 arithmetic mirrored from GymRulesHelper), honest empty states; fake
+  numbers + Random jitter deleted. **Lane-wide lesson for C4-C8 adopters: shared-node layout
+  swaps must build compact containers EMPTY and fill them only in the width-class apply —
+  draining desktop containers at construction leaves them blank unless a class change fires;
+  and never trust pre-CSS prefHeight measurements**)
 
 - [ ] C4 | lane:C | deps:C0,C2 | files: src/main/java/com/gym/controller/{LiveWorkoutController,ScheduleController}.java
   goal: Real sessions: Schedule books/confirms/cancels/completes through SessionDao +
@@ -406,3 +413,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 4 | B2 (9b17a06, pooled to A) | B4 (f945adb) | C2 (ea92798+d4db029) | all merged locally b16dc17; runSamples fixed (M3Samples tracked, 273fbe6); controls 197, core 66 tests |
 | 5 | B5 (5bf9571, pooled to A) | B6 (6afb2ca) | C3 | B5+B6 merged locally 6afb2ca→943fcf5 |
 | 6 | B9 | B13 (5740d81) + B14 (86c8ba9) | — | merged locally 46814e0; controls tests 209 |
+| 6b | — | — | C3 (083c538+7871e19) | merged locally 5b1b606 — dashboard+profile fully real |
