@@ -218,6 +218,22 @@ public final class OverlayLayer extends StackPane implements OverlayHost {
         return transientLayer.getChildren().size();
     }
 
+    /** Number of nodes currently in the modal layer (test seam). */
+    public int modalCountForTesting() {
+        return modalLayer.getChildren().size();
+    }
+
+    /** Number of nodes currently in the sheet layer (test seam). */
+    public int sheetCountForTesting() {
+        return sheetLayer.getChildren().size();
+    }
+
+    /** The node currently shown by {@link #showTransient(Node)}, or {@code null} (test seam). */
+    public Node transientNodeForTesting() {
+        return transientLayer.getChildren().isEmpty()
+                ? null : transientLayer.getChildren().get(0);
+    }
+
     /**
      * Recomputes the anchored panel translation from its anchor's current screen bounds and
      * rebases the window-move delta on the freshly computed position.
