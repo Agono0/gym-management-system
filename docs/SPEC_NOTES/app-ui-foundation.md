@@ -245,3 +245,35 @@ extended by the plan window from today, CANCELLED refused (rule 7); coach change
 weight carried over. Program assign/view uses `WorkoutProgramDao` (version continues the
 customer's sequence; the record names its creator coach, so assigning requires a coach first).
 The VBT 1RM card stays an honest dash — no data source records it yet.
+
+## 10. Schedule + live workout on real sessions (task C4)
+
+### 10.1 Schedule
+
+One `Data.loadAsync` week snapshot per view (`SessionDao` + `TrainerAvailabilityDao` +
+customers + coaches, filtered to the rendered Monday-Sunday) rendered into the full 7-column
+agenda matrix; week navigation re-queries with real date math. The snapshot records carry the
+resolved display strings plus per-slot rule-17 data (CONFIRMED-only occupancy vs the slot cap);
+ad-hoc sessions (no slot) show "-" capacity. Every lifecycle action goes through
+`Data.submit` -> `SessionDao.update` with the DAO owning rule 18 (transitions) and the rule-17
+full-slot refusal mirrored from the CLI's `GymRulesHelper.confirmSession`. Cancel mirrors the
+CLI's rule-10 logic: reason required, >= 2h notice is a free cancellation, later cancels are
+still CANCELLED with the reason recorded. Booking follows rule 1 via the Book Slot menu:
+inside a published OPEN slot -> CONFIRMED with the slot attached (cap-checked), outside the
+slots -> REQUESTED, plus an admin-override path (CONFIRMED, ignores slot rules; RBAC wiring of
+*who* is admin stays with C1's login/C7's staff screen). Default duration 60 minutes. The
+filter chips operate on the card status tags. "Run Live" hands the selected CONFIRMED session
+to the HUD via the shell's `openScreenViaRail` pathway.
+
+### 10.2 Live workout HUD
+
+`startSession(sessionId)` is the handoff entry (schedule or the automatic pick of the first
+CONFIRMED session from today onward); the HUD reads the session row and the athlete name from
+the database. COMPLETE SESSION = rule 18 CONFIRMED -> COMPLETED via `SessionDao.update`;
+ABORT SESSION = CONFIRMED -> CANCELLED with the reason recorded (rule 18 + the rule-10 notice
+copy); both drive a terminal HUD state (clocks paused, lifecycle buttons disabled). Skip Rest
+restarts the interval countdown from the top; RE-CALIBRATE re-reads the session row and
+athlete name and re-seeds the instruments. Rep counter + and - both work. The velocity/BPM/
+cadence telemetry stays SIMULATED and carries a visible "SIMULATED TELEMETRY" badge — no fake
+sensor claims. Rule-18 note: the DAO treats a same-status save as a no-op update, not a
+transition, so a re-save of an unchanged session is legal.

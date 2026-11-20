@@ -1,11 +1,18 @@
 package com.gym.controller;
 
+import com.gym.dao.CustomerDao;
+import com.gym.dao.SessionDao;
+import com.gym.model.Customer;
+import com.gym.model.Session;
+import com.gym.model.SessionStatus;
+import com.gym.ui.Data;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
 import io.m3fx.controls.chart.M3SplineChart;
 import io.m3fx.controls.effect.M3GlassPane;
 import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.iconbutton.M3IconButton;
+import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.workout.M3HeartRateZones;
 import io.m3fx.controls.workout.M3IntervalTimer;
 import io.m3fx.controls.workout.M3RepCounter;
@@ -19,10 +26,14 @@ import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.layout.RowConstraints;
+import javafx.application.Platform;
+import javafx.scene.layout.Pane;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
+import javafx.scene.control.TextField;
+import javafx.scene.control.TextFormatter;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -31,19 +42,32 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.util.Duration;
+import io.m3fx.controls.dialog.M3Dialog;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
+
+import java.time.LocalDate;
+import java.time.LocalTime;
 
 /**
- * Pure UI skeleton controller for Live Workout HUD &amp; Kinetic Cockpit screen.
+ * Controller for Live Workout HUD &amp; Kinetic Cockpit screen.
  * Strictly conforms to Section 7 of docs/ui/workouts/LIVE_WORKOUT_HUD_UI.md and docs/UML.md.
  * All animation runs on the FX application thread via javafx.animation.Timeline.
+ *
+ * <p>Data contract (DECISIONS.md 77/78, task C4): the HUD runs a real CONFIRMED session —
+ * handed off from the schedule ({@link #startSession}) or picked automatically (the first
+ * CONFIRMED session from today onward). COMPLETE SESSION transitions the session to COMPLETED
+ * through {@code SessionDao.update} (rule 18); ABORT cancels it with a recorded reason (rule
+ * 18 transition, rule-10 notice copy mirrored from the CLI). The performance telemetry
+ * (velocities, BPM, cadence) stays simulated and is LABELED as simulated — no fake sensor
+ * claims — while everything that touches the session record is real.
  *
  * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
  * former live-workout-hud.fxml: cardiac zone bar, telemetry cockpit grid, action dock.
  */
 public class LiveWorkoutController implements ScreenController {
-
-    /** Session clock baseline matching the "00:34:12" shown in the markup. */
-    private static final long INITIAL_ELAPSED_SECONDS = 34L * 60 + 12;
 
     // ---- View fields (the former fx:id injections, now built by buildView) ----
     private StackPane viewRoot;
@@ -64,10 +88,19 @@ public class LiveWorkoutController implements ScreenController {
     private M3IntervalTimer intervalCountdownTimer;
     private Label timerStateLabel;
     private M3Button completeSetButton;
+    private M3Button abortButton;
+    private Label sessionStatusLabel;
 
     /** FX-thread ticker driving the elapsed session clock; never touches the scene graph off-thread. */
     private Timeline sessionClock;
-    private long elapsedSeconds = INITIAL_ELAPSED_SECONDS;
+    private long elapsedSeconds;
+
+    /** Hosts M3 snackbars and dialogs (attached to the scene root at runtime). */
+    private final M3Overlay feedback = new M3Overlay();
+    /** The CONFIRMED session this HUD is running, or null in the idle/empty state. */
+    private Session activeSession;
+    /** True once the session reaches a terminal status (COMPLETED/CANCELLED) in the database. */
+    private boolean sessionFinished;
 
     /**
      * Builds the complete Live Workout HUD and initializes all behavior. Same ordering
@@ -103,6 +136,30 @@ public class LiveWorkoutController implements ScreenController {
         timerStateLabel.setId("timerStateLabel");
         completeSetButton.setId("completeSetButton");
         startSessionClock();
+        installFeedbackLayer(viewRoot);
+        loadDefaultSession();
+    }
+
+    /** Shows a snackbar through the HUD's feedback overlay (attached once a scene exists). */
+    private void notice(String message) {
+        feedback.showSnackbar(message);
+    }
+
+    /**
+     * Hosts the shared feedback overlay on the scene root while this screen is visible.
+     * Attach/detach are deferred with Platform.runLater so the scene root children list is
+     * never mutated re-entrantly during a screen swap (same pattern as the schedule screen).
+     */
+    private void installFeedbackLayer(Node anchor) {
+        anchor.sceneProperty().addListener((obs, oldScene, scene) -> {
+            if (scene != null && scene.getRoot() instanceof Pane root
+                    && !root.getChildren().contains(feedback)) {
+                root.getChildren().add(feedback);
+            }
+            if (oldScene != null && oldScene.getRoot() instanceof Pane oldRoot) {
+                Platform.runLater(() -> oldRoot.getChildren().remove(feedback));
+            }
+        });
     }
 
     /**
@@ -123,18 +180,25 @@ public class LiveWorkoutController implements ScreenController {
         metaHeader.setAlignment(Pos.CENTER_LEFT);
         metaHeader.getStyleClass().add("hud-meta-header");
         metaHeader.setPadding(new Insets(8, 20, 8, 20));
-        athleteNameLabel = new Label("Marcus Vance (#104)");
+        athleteNameLabel = new Label("No session loaded");
         athleteNameLabel.getStyleClass().add("hud-meta-value");
-        exerciseTitleLabel = new Label("Barbell Back Squat");
+        exerciseTitleLabel = new Label("—");
         exerciseTitleLabel.getStyleClass().add("hud-meta-value-accent");
-        setTrackerLabel = new Label("3 of 4");
+        setTrackerLabel = new Label("—");
         setTrackerLabel.getStyleClass().add("hud-meta-value");
-        targetLoadLabel = new Label("140.0 kg");
+        targetLoadLabel = new Label("—");
         targetLoadLabel.getStyleClass().add("hud-meta-value-bold");
-        elapsedSessionTimerLabel = new Label("00:34:12");
+        elapsedSessionTimerLabel = new Label("00:00:00");
         elapsedSessionTimerLabel.getStyleClass().add("hud-clock-label");
         Region metaSpacer = new Region();
         HBox.setHgrow(metaSpacer, Priority.ALWAYS);
+        // Honest telemetry: the velocities/BPM/cadence below are simulated instruments — the
+        // badge says so, and everything that touches the session record is real.
+        Label simulatedBadge = new Label("SIMULATED TELEMETRY");
+        simulatedBadge.getStyleClass().add("hud-meta-label");
+        simulatedBadge.setStyle("-fx-text-fill: -md-sys-color-tertiary;"
+                + " -fx-border-color: -md-sys-color-tertiary; -fx-border-radius: 6;"
+                + " -fx-padding: 2 6 2 6;");
         metaHeader.getChildren().addAll(
                 styledLabel("ATHLETE:", "hud-meta-label"),
                 athleteNameLabel,
@@ -147,6 +211,7 @@ public class LiveWorkoutController implements ScreenController {
                 new Separator(Orientation.VERTICAL),
                 styledLabel("LOAD:", "hud-meta-label"),
                 targetLoadLabel,
+                simulatedBadge,
                 metaSpacer,
                 elapsedSessionTimerLabel);
         topContainer.getChildren().addAll(heartRateZonesBar, metaHeader);
@@ -293,15 +358,19 @@ public class LiveWorkoutController implements ScreenController {
         bentoGrid.add(rightColumnBox, 2, 0);
         layout.setCenter(bentoGrid);
 
-        // Bottom: high-visibility contextual cockpit controls.
+        // Bottom: high-visibility contextual cockpit controls. The leading status label carries
+        // the real session state; the telemetry buttons stay simulated per the badge above.
         HBox actionDock = new HBox(20);
         actionDock.setAlignment(Pos.CENTER_RIGHT);
         actionDock.getStyleClass().add("hud-bottom-action-dock");
         actionDock.setPadding(new Insets(14, 20, 14, 20));
-        M3Button abortBtn = new M3Button("ABORT SET / REST", ButtonVariant.FILLED);
+        sessionStatusLabel = new Label("No CONFIRMED session running");
+        sessionStatusLabel.getStyleClass().add("hud-metric-subtext");
+        M3Button abortBtn = new M3Button("ABORT SESSION", ButtonVariant.FILLED);
+        abortButton = abortBtn;
         abortBtn.setGraphic(M3Icon.symbol("stop"));
         abortBtn.getStyleClass().add("hud-danger-btn");
-        abortBtn.setOnAction(e -> onAbortSet());
+        abortBtn.setOnAction(e -> onAbortSession());
         M3Button pauseBtn = new M3Button("PAUSE", ButtonVariant.FILLED);
         pauseBtn.setGraphic(M3Icon.symbol("pause"));
         pauseBtn.getStyleClass().add("hud-neutral-btn");
@@ -310,13 +379,14 @@ public class LiveWorkoutController implements ScreenController {
         recalibrateBtn.setGraphic(M3Icon.symbol("refresh"));
         recalibrateBtn.getStyleClass().add("hud-neutral-btn");
         recalibrateBtn.setOnAction(e -> onRecalibrateSensor());
-        completeSetButton = new M3Button("COMPLETE SET (140kg)", ButtonVariant.FILLED);
+        completeSetButton = new M3Button("COMPLETE SESSION", ButtonVariant.FILLED);
         completeSetButton.setGraphic(M3Icon.symbol("check"));
         completeSetButton.getStyleClass().add("hud-complete-set-btn");
-        completeSetButton.setOnAction(e -> onCompleteSet());
+        completeSetButton.setOnAction(e -> onCompleteSession());
         Region dockSpacer = new Region();
         HBox.setHgrow(dockSpacer, Priority.ALWAYS);
-        actionDock.getChildren().addAll(abortBtn, dockSpacer, pauseBtn, recalibrateBtn, completeSetButton);
+        actionDock.getChildren().addAll(
+                sessionStatusLabel, dockSpacer, abortBtn, pauseBtn, recalibrateBtn, completeSetButton);
         layout.setBottom(actionDock);
 
         viewRoot = new StackPane();
@@ -395,8 +465,11 @@ public class LiveWorkoutController implements ScreenController {
     }
 
     public void onSkipRest() {
-        // No skip-to-next-round API exists on M3IntervalTimer yet; restarting would lose the
-        // round progress, so the control's own start/pause/reset bar remains the interface.
+        // Skip = restart the rest window from the top (the timer exposes start/pause/reset,
+        // not a skip-to-end): the remaining rest is forfeit and the next countdown begins now.
+        intervalCountdownTimer.reset();
+        intervalCountdownTimer.start();
+        timerStateLabel.setText("Rest window restarted — next round begins at 180s.");
     }
 
     /** Moves the active highlight to the tapped RPE button. */
@@ -417,12 +490,63 @@ public class LiveWorkoutController implements ScreenController {
     }
 
     public void onAbortSet() {
-        // Aborting stops both clocks and resets the current set
-        if (sessionClock != null && sessionClock.getStatus() == Animation.Status.PAUSED) {
-            sessionClock.play();
+        onAbortSession();
+    }
+
+    /**
+     * ABORT SESSION: rule 18 transition CONFIRMED -> CANCELLED through {@code SessionDao}
+     * with the reason recorded (rule 10 notice copy mirrored from the CLI). Destructive, so
+     * it confirms with a reason field first. The in-HUD clocks keep running as instruments.
+     */
+    public void onAbortSession() {
+        if (activeSession == null || sessionFinished) {
+            notice("No CONFIRMED session is running — nothing to abort.");
+            return;
         }
-        repCounterDisplay.reset();
-        intervalCountdownTimer.reset();
+        TextField reasonField = new TextField();
+        reasonField.setPromptText("Required (rule 10) — recorded on the session");
+        reasonField.setTextFormatter(new TextFormatter<>(change ->
+                change.getControlNewText().length() <= 120 ? change : null));
+        M3Button keep = M3Button.text("Keep running");
+        M3Button abort = M3Button.text("Abort session");
+        M3Dialog dialog = M3Dialog.basic("Abort this session?",
+                new VBox(10,
+                        new Label("Session #" + activeSession.getId() + " will be marked"
+                                + " CANCELLED and the athlete is notified."),
+                        reasonField),
+                keep, abort);
+        dialog.setDefaultAction(abort::activate);
+        keep.setOnAction(e -> dialog.hide());
+        abort.setOnAction(e -> {
+            String reason = reasonField.getText() == null ? "" : reasonField.getText().trim();
+            if (reason.isEmpty()) {
+                reasonField.setStyle("-fx-border-color: -md-sys-color-error;");
+                return;
+            }
+            dialog.hide();
+            int sessionId = activeSession.getId();
+            Data.submit(
+                    () -> {
+                        Session current = new SessionDao().findById(sessionId);
+                        if (current == null) {
+                            throw new com.gym.exception.ValidationException(
+                                    "Session no longer exists in the database");
+                        }
+                        long minutesUntilStart = java.time.Duration.between(
+                                java.time.LocalDateTime.now(),
+                                java.time.LocalDateTime.of(LocalDate.parse(current.getDate()),
+                                        LocalTime.parse(current.getStartTime()))).toMinutes();
+                        current.setStatus(SessionStatus.CANCELLED);
+                        current.setCancelReason(reason);
+                        new SessionDao().update(current);
+                        return minutesUntilStart >= 120
+                                ? "Rule 10: Free cancellation (>= 2h notice)."
+                                : "Rule 10: Late cancellation (< 2h before start). Reason recorded.";
+                    },
+                    verdict -> endSessionLocally("Session aborted. " + verdict),
+                    error -> notice("Could not abort session: " + error.getMessage()));
+        });
+        feedback.showDialog(dialog);
     }
 
     public void onTogglePause(ActionEvent event) {
@@ -447,15 +571,184 @@ public class LiveWorkoutController implements ScreenController {
         }
     }
 
+    /**
+     * RE-CALIBRATE: a real re-read of the session state — the session row is re-queried from
+     * {@code SessionDao} and the HUD labels re-apply from it, while the simulated instruments
+     * (velocity, BPM, cadence) re-seed to their baseline values.
+     */
     public void onRecalibrateSensor() {
-        // No-op recalibrate handler
+        if (activeSession == null) {
+            notice("No session loaded — nothing to calibrate.");
+            return;
+        }
+        int sessionId = activeSession.getId();
+        Data.submit(
+                () -> {
+                    Session current = new SessionDao().findById(sessionId);
+                    String athlete = null;
+                    if (current != null) {
+                        Customer customer = new CustomerDao().findById(current.getCustomerId());
+                        athlete = customer == null ? null : customer.getFullName();
+                    }
+                    return new Object[] {current, athlete};
+                },
+                read -> {
+                    Session current = (Session) read[0];
+                    String athlete = (String) read[1];
+                    if (current == null) {
+                        notice("The session record no longer exists — the HUD keeps its last state.");
+                        return;
+                    }
+                    activeSession = current;
+                    applySessionLabels(current, athlete);
+                    timerStateLabel.setText("Calibrated against the session record — rest restarted.");
+                    notice("Telemetry re-read from the session record (#" + sessionId + ").");
+                },
+                error -> notice("Could not re-read the session: " + error.getMessage()));
     }
 
-    public void onCompleteSet() {
-        // A completed set advances the rep counter to the next set and restarts the rest window
-        repCounterDisplay.nextSet();
+    /** The schedule handoff: runs this HUD against the given CONFIRMED session. */
+    public void startSession(int sessionId) {
+        Data.submit(
+                () -> {
+                    Session session = new SessionDao().findById(sessionId);
+                    String athlete = null;
+                    if (session != null) {
+                        Customer customer = new CustomerDao().findById(session.getCustomerId());
+                        athlete = customer == null ? null : customer.getFullName();
+                    }
+                    return new Object[] {session, athlete};
+                },
+                read -> {
+                    Session session = (Session) read[0];
+                    String athlete = (String) read[1];
+                    if (session == null) {
+                        notice("Session #" + sessionId + " no longer exists.");
+                        return;
+                    }
+                    if (session.getStatus() != SessionStatus.CONFIRMED) {
+                        notice("Only CONFIRMED sessions run in the HUD — session #"
+                                + sessionId + " is " + statusLabel(session.getStatus()) + ".");
+                        return;
+                    }
+                    activeSession = session;
+                    applySessionLabels(session, athlete);
+                    notice("Running session #" + sessionId + " — telemetry is simulated.");
+                },
+                error -> notice("Could not load session #" + sessionId + ": " + error.getMessage()));
+    }
+
+    /**
+     * Standalone entry (no schedule handoff): runs the first CONFIRMED session from today
+     * onward, or drops to the honest empty state when none is booked.
+     */
+    private void loadDefaultSession() {
+        Data.submit(
+                () -> {
+                    List<Session> sessions = new SessionDao().findAll();
+                    Session first = null;
+                    for (Session session : sessions) {
+                        if (session.getStatus() != SessionStatus.CONFIRMED
+                                || session.getDate() == null) {
+                            continue;
+                        }
+                        if (first == null
+                                || session.getDate().compareTo(first.getDate()) < 0) {
+                            first = session;
+                        }
+                    }
+                    String athlete = null;
+                    if (first != null) {
+                        Customer customer = new CustomerDao().findById(first.getCustomerId());
+                        athlete = customer == null ? null : customer.getFullName();
+                    }
+                    return new Object[] {first, athlete};
+                },
+                read -> {
+                    Session first = (Session) read[0];
+                    String athlete = (String) read[1];
+                    if (first == null) {
+                        sessionStatusLabel.setText("No CONFIRMED session booked — book one from"
+                                + " the schedule screen to run it here.");
+                        notice("No CONFIRMED session found — book one from the schedule screen.");
+                        return;
+                    }
+                    activeSession = first;
+                    applySessionLabels(first, athlete);
+                },
+                error -> sessionStatusLabel.setText(
+                        "Could not load sessions: " + error.getMessage()));
+    }
+
+    /** Applies a loaded session to the HUD labels and resets the in-cockpit instruments. */
+    private void applySessionLabels(Session session, String athleteName) {
+        athleteNameLabel.setText(athleteName == null || athleteName.isBlank()
+                ? "Member #" + session.getCustomerId() : athleteName);
+        exerciseTitleLabel.setText(session.getSessionNotes() == null
+                || session.getSessionNotes().isBlank()
+                ? "Session #" + session.getId() : session.getSessionNotes());
+        targetLoadLabel.setText(session.getPrice() == null
+                ? "—" : "$" + session.getPrice().toPlainString());
+        setTrackerLabel.setText("Set 1 · " + session.getDurationMin() + " min block");
+        sessionStatusLabel.setText("Session #" + session.getId() + " · "
+                + session.getDate() + " at " + session.getStartTime() + " · "
+                + statusLabel(session.getStatus()));
+        sessionFinished = false;
+        completeSetButton.setDisable(false);
+        abortButton.setDisable(false);
+        elapsedSeconds = 0;
+        repCounterDisplay.reset();
         intervalCountdownTimer.reset();
         intervalCountdownTimer.start();
+    }
+
+    /** Terminal state: pauses the clocks and disables the lifecycle buttons. */
+    private void endSessionLocally(String message) {
+        sessionFinished = true;
+        sessionClock.pause();
+        intervalCountdownTimer.pause();
+        completeSetButton.setDisable(true);
+        abortButton.setDisable(true);
+        sessionStatusLabel.setText(message);
+        notice(message);
+    }
+
+    /** Session-status copy shared by the labels and snackbars (sentence case). */
+    private static String statusLabel(SessionStatus status) {
+        return switch (status) {
+            case REQUESTED -> "Requested";
+            case CONFIRMED -> "Confirmed";
+            case COMPLETED -> "Completed";
+            case NO_SHOW -> "No-show";
+            case CANCELLED -> "Cancelled";
+        };
+    }
+
+    /**
+     * COMPLETE SESSION: rule 18 transition CONFIRMED -> COMPLETED through {@code SessionDao}
+     * (the DAO owns the transition check); the HUD enters its terminal state and the schedule
+     * data is the source of truth on the next visit.
+     */
+    public void onCompleteSession() {
+        if (activeSession == null || sessionFinished) {
+            notice("No CONFIRMED session is running — nothing to complete.");
+            return;
+        }
+        int sessionId = activeSession.getId();
+        Data.submit(
+                () -> {
+                    Session current = new SessionDao().findById(sessionId);
+                    if (current == null) {
+                        throw new com.gym.exception.ValidationException(
+                                "Session no longer exists in the database");
+                    }
+                    current.setStatus(SessionStatus.COMPLETED);
+                    new SessionDao().update(current);
+                    return current;
+                },
+                completed -> endSessionLocally("Session #" + completed.getId()
+                        + " completed — saved as COMPLETED in the database."),
+                error -> notice("Could not complete session: " + error.getMessage()));
     }
 
     public M3HeartRateZones getHeartRateZonesBar() { return heartRateZonesBar; }
