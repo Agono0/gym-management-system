@@ -112,7 +112,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   `[m3fx] M3Icon: unknown icon name` warnings.
   done-when: `grep -rn "M3Icon.symbol(\|M3Icon.ofGlyph(" src/main/java` names ⊆ `M3Icons.names()`
   (enforced by a new test that reflects over the catalog), M3IconsTest covers the new paths.
-  claimed-by: — | status: READY
+  claimed-by: B | status: DONE (round 2, commit 949e301 — 37→57 glyphs, all verbatim from
+  google/material-design-icons 24px.svg; 138 call sites audited; full 120-capture matrix with
+  ZERO unknown-icon warnings; controls tests 172)
 
 - [ ] B4 | lane:B | deps:— | files: m3fx-controls/.../button/M3Button.java, card/M3Card.java, iconbutton/M3IconButton.java, fab/M3Fab.java, appbar/M3TopAppBar.java, selection/M3Switch.java, resources/io/m3fx/css/m3fx.css, module-info.java (orchestrator applies)
   goal: Token hygiene: ripple/card/switch clip radii and hardcoded control dimensions move to
@@ -341,4 +343,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | Round | A | B | C | Merged at |
 |---|---|---|---|---|
 | 1 | A1 (1b82828) | B1 (6164e24) | C0 (a7f23de) | a7f23de, pushed — build green, core tests 23, controls 168, customer-list real-data render verified |
-| 2 | A2 (356c3c2), A3 (0a794ff) | B3 | C1 | A2+A3 merged 45c6f47; B3/C1 in progress |
+| 2 | A2 (356c3c2), A3 (0a794ff) | B3 (949e301) | C1 | A2+A3+B3 merged 044b09e; C1 in progress |
