@@ -1,5 +1,16 @@
 package com.gym.controller;
 
+import com.gym.dao.CustomerDao;
+import com.gym.model.Customer;
+import com.gym.dao.SessionDao;
+import com.gym.dao.TrainerAvailabilityDao;
+import com.gym.dao.TrainerDao;
+import com.gym.model.Session;
+import com.gym.model.SessionStatus;
+import com.gym.model.Trainer;
+import com.gym.model.TrainerAvailability;
+import com.gym.ui.Data;
+import com.gym.ui.UiKit;
 import io.m3fx.controls.appbar.M3TopAppBar;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
@@ -39,17 +50,30 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Controller for the Trainer List screen.
- * UI-contract only (no backend/service dependencies): owns the demo roster, the domain-chip
- * and search filtering, the sort menu, the onboarding dialog and the on-duty carousel.
+ *
+ * <p>Data contract (DECISIONS.md 77/78, task C8): the roster, carousel, stat cards and the
+ * sports-science footer run on real {@code TrainerDao} rows through one {@link Data#loadAsync}
+ * snapshot, with the derived figures computed from the rule-15 assignments (CustomerDao
+ * trainerId), the rule-8 slot caps (TrainerAvailabilityDao) and rule-17 CONFIRMED sessions
+ * (SessionDao). Live search and the domain chips filter the visible rows without re-querying;
+ * the sort menu reorders a display copy, never the source list. Onboarding inserts a real
+ * coach through {@code TrainerDao.insert} (the DAO owns the phone/email/rate validation) and
+ * removal confirms first, then calls {@code TrainerDao.delete}, surfacing any
+ * {@code ValidationException} (e.g. references still exist) verbatim.
  *
  * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
  * former trainer-list.fxml: large app bar, stat bento, on-duty carousel, glass filter strip,
@@ -93,24 +117,25 @@ public class TrainerListController implements ScreenController {
     /** Hosts M3 snackbars and dialogs for this screen (attached to the scene root at runtime). */
     private final M3Overlay feedback = new M3Overlay();
 
-    /** Demo roster rows in "id|name|specialization|exp|rate|athletes|saturation|email" shape. */
-    private final List<String> demoTrainers = new ArrayList<>(List.of(
-            "101|Elena Rostova|Strength|8|74.50|23|92%|e.rostova@cybercoregym.io",
-            "102|Marcus Vance|Hypertrophy|11|82.00|19|79%|m.vance@cybercoregym.io",
-            "103|Kim Park|Post-Rehab|6|68.00|14|56%|k.park@cybercoregym.io",
-            "104|Ana Silva|Cardio & VO2|4|58.00|21|84%|a.silva@cybercoregym.io",
-            "105|Leo Martins|Strength|9|76.00|17|68%|l.martins@cybercoregym.io",
-            "106|Zoe Chen|Hypertrophy|5|62.50|16|64%|z.chen@cybercoregym.io",
-            "107|Omar Haddad|Cardio & VO2|7|66.00|22|88%|o.haddad@cybercoregym.io",
-            "108|Sofia Reyes|Post-Rehab|3|54.00|9|36%|s.reyes@cybercoregym.io",
-            "109|Dana Wolfe|Strength|12|90.00|24|96%|d.wolfe@cybercoregym.io",
-            "110|Nils Berg|Hypertrophy|2|52.00|11|44%|n.berg@cybercoregym.io",
-            "111|Maya Lin|Post-Rehab|10|78.00|15|60%|m.lin@cybercoregym.io",
-            "112|Tomas Rivera|Cardio & VO2|6|64.00|18|72%|t.rivera@cybercoregym.io",
-            "113|Ava Kowalski|Strength|1|50.00|8|32%|a.kowalski@cybercoregym.io",
-            "114|Jonas Weber|Hypertrophy|8|72.00|20|80%|j.weber@cybercoregym.io",
-            "115|Priya Nair|Post-Rehab|5|60.00|12|48%|p.nair@cybercoregym.io",
-            "116|Igor Petrov|Cardio & VO2|9|70.00|13|52%|i.petrov@cybercoregym.io"));
+    /**
+     * Content host around the workspace: {@link Data#loadAsync} swaps it for loading/error
+     * states while the coach snapshot builds.
+     */
+    private StackPane contentHost;
+    /** The workspace node, restored after loading/error states. */
+    private Node workspaceView;
+
+    /** Immutable result of one background coach snapshot. */
+    private record TrainerSnapshot(long trainerId, String name, String specialization,
+                                   int years, double rate, int assignedAthletes,
+                                   int weeklySlotCap, int confirmedThisWeek,
+                                   int slotsToday, int slotsTodayCap, String email) {
+    }
+
+    /** Rows of the current snapshot in table order (id|name|spec|exp|rate|athletes|sat|email). */
+    private final List<String> rosterRows = new ArrayList<>();
+    /** Trainer id of the currently rendered snapshot (used by the domain chips' copy). */
+    private final Map<String, Long> rowTrainerIds = new HashMap<>();
 
     /**
      * Builds the complete Coaching &amp; Athletic Staff Management view and initializes all
@@ -136,6 +161,7 @@ public class TrainerListController implements ScreenController {
         keepDomainChipsExclusive();
         wireSearchAndChips();
         wireSortMenu();
+        loadTrainers();
 
     // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
     // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
@@ -170,8 +196,6 @@ public class TrainerListController implements ScreenController {
         chartSpecialization.setId("chartSpecialization");
         cardFacilityDensity.setId("cardFacilityDensity");
         heatmapBookingDensity.setId("heatmapBookingDensity");
-        populateCarousel();
-        populateCharts();
         applyFilters();
     }
 
@@ -207,10 +231,10 @@ public class TrainerListController implements ScreenController {
         // Stat card bento grid (reflows to 2x2 at ~804px content width instead of clipping).
         FlowPane statGrid = new FlowPane(16, 16);
         statGrid.setAlignment(Pos.CENTER_LEFT);
-        statTotalCoaches = new M3StatCard("TOTAL ACTIVE COACHES", "16", "+2 this month");
-        statCapacitySaturation = new M3StatCard("STAFF CAPACITY UTILIZATION", "84.2%", "182 / 216 Clients");
-        statTodaySlots = new M3StatCard("SLOTS BOOKED TODAY", "68 / 82", "82.9% Fill Rate");
-        statAverageRate = new M3StatCard("AVERAGE HOURLY RATE", "$74.50", "Min $50.00 / Max $120.00");
+        statTotalCoaches = new M3StatCard("TOTAL ACTIVE COACHES", "-", "From the coach roster");
+        statCapacitySaturation = new M3StatCard("STAFF CAPACITY UTILIZATION", "-", "Rule-15 athletes vs rule-8 caps");
+        statTodaySlots = new M3StatCard("SLOTS BOOKED TODAY", "-", "Rule-17 CONFIRMED sessions");
+        statAverageRate = new M3StatCard("AVERAGE HOURLY RATE", "-", "Across the roster");
         statGrid.getChildren().addAll(statTotalCoaches, statCapacitySaturation, statTodaySlots, statAverageRate);
 
         // Featured on-duty carousel header.
@@ -246,8 +270,8 @@ public class TrainerListController implements ScreenController {
         txtSearch.setSupportingText("Filters the roster below by name, specialization, or email");
         txtSearch.setPrefWidth(380);
         HBox.setHgrow(txtSearch, Priority.ALWAYS);
-        btnSortOptions = new M3SplitButton("Sort: Saturation", ButtonVariant.FILLED, null);
-        btnAddTrainer = new M3Button("+ Onboard Coach", ButtonVariant.FILLED);
+        btnSortOptions = new M3SplitButton("Sort: Name", ButtonVariant.FILLED, null);
+        btnAddTrainer = new M3Button("Onboard Coach", ButtonVariant.FILLED);
         btnAddTrainer.setOnAction(e -> onAdd());
         commandRow.getChildren().addAll(
                 txtSearch,
@@ -256,8 +280,9 @@ public class TrainerListController implements ScreenController {
                 btnAddTrainer);
         FlowPane domainChips = new FlowPane(8, 8);
         domainChips.setAlignment(Pos.CENTER_LEFT);
-        chipFilterAll = new M3Chip("All (16)", ChipVariant.ASSIST);
+        chipFilterAll = new M3Chip("All", ChipVariant.ASSIST);
         chipFilterAll.setSelected(true);
+        // The four domain chips are relabeled from the real roster in applySnapshot.
         chipFilterStrength = new M3Chip("Strength", ChipVariant.ASSIST);
         chipFilterHypertrophy = new M3Chip("Hypertrophy", ChipVariant.ASSIST);
         chipFilterRehab = new M3Chip("Post-Rehab", ChipVariant.ASSIST);
@@ -297,12 +322,15 @@ public class TrainerListController implements ScreenController {
         chartFooter.getChildren().addAll(cardSpecializationRadar, cardFacilityDensity);
 
         workspace.getChildren().addAll(statGrid, carouselSection, filterGlassPane, rosterSection, chartFooter);
-        workspaceScroll.setContent(workspace);
+        // Content host so the real-data load can swap the workspace for loading/error states.
+        workspaceView = workspace;
+        contentHost = new StackPane(workspace);
+        workspaceScroll.setContent(contentHost);
         root.getChildren().addAll(topAppBar, workspaceScroll);
         return root;
     }
 
-    /** The domain-coverage radar chart with its demo series. */
+    /** The domain-coverage radar chart, populated from the snapshot in populateCharts. */
     private M3RadarChart radarChart() {
         chartSpecialization = new M3RadarChart();
         chartSpecialization.setPrefHeight(240);
@@ -341,7 +369,7 @@ public class TrainerListController implements ScreenController {
         columns.add(new M3DataTable.Column<String>(colActions.getText(), r -> "", colActions.getPrefWidth())
                 .withCellFactory((row, s) -> {
                     M3Button open = M3Button.text("Open");
-                    open.setOnAction(e -> onOpenProfile(Integer.parseInt(field(row, 0))));
+                    open.setOnAction(e -> onOpenProfile(rowTrainerIds.get(row) == null ? -1 : rowTrainerIds.get(row)));
                     return open;
                 }));
         // The labeled txtSearch field above the table is this screen's search affordance; the
@@ -370,115 +398,356 @@ public class TrainerListController implements ScreenController {
     /** Attaches the sort menu to the split button: choosing an entry reorders the visible roster. */
     private void wireSortMenu() {
         M3Menu sortMenu = new M3Menu()
-                .item("Sort: Saturation", () -> sortByField(6, true))
+                .item("Sort: Name", () -> sortByField(1, true))
                 .item("Sort: Experience", () -> sortByField(3, false))
                 .item("Sort: Hourly Rate", () -> sortByField(4, false))
-                .item("Sort: Name", () -> sortByField(1, true));
+                .item("Sort: Active Athletes", () -> sortByField(5, false));
         btnSortOptions.setMenu(sortMenu);
     }
 
-    /** Sorts the demo roster by the chosen pipe field and refreshes the visible rows. */
+    /**
+     * Sorts a display COPY of the roster by the chosen pipe field and refreshes the visible
+     * rows — the source list order (the database's) is never permanently mutated.
+     */
     private void sortByField(int fieldIndex, boolean ascending) {
-        Comparator<String> byField = Comparator.comparing(r -> field(r, fieldIndex).toLowerCase(Locale.ROOT));
-        if (fieldIndex == 3 || fieldIndex == 4 || fieldIndex == 6) {
+        Comparator<String> byField = Comparator.comparing(
+                r -> field(r, fieldIndex).toLowerCase(Locale.ROOT));
+        if (fieldIndex == 3 || fieldIndex == 4 || fieldIndex == 5) {
             byField = Comparator.comparingDouble(r -> parseNumber(field(r, fieldIndex)));
         }
-        demoTrainers.sort(ascending ? byField : byField.reversed());
-        applyFilters();
+        List<String> ordered = new ArrayList<>(rosterRows);
+        ordered.sort(ascending ? byField : byField.reversed());
+        tableTrainers.getItems().setAll(ordered);
+        applyAgendaFilter(ordered);
     }
 
     /** Applies the active domain chip plus the search query to the visible roster. */
     private void applyFilters() {
+        applyAgendaFilter(rosterRows);
+    }
+
+    /** Filters the given source rows by the domain chip and the search query. */
+    private void applyAgendaFilter(List<String> sourceRows) {
         String query = txtSearch.getText() != null
                 ? txtSearch.getText().trim().toLowerCase(Locale.ROOT)
                 : "";
         String domain = null;
         if (chipFilterStrength.isSelected()) {
-            domain = "strength";
+            domain = chipFilterStrength.getText().toLowerCase(Locale.ROOT);
         } else if (chipFilterHypertrophy.isSelected()) {
-            domain = "hypertrophy";
+            domain = chipFilterHypertrophy.getText().toLowerCase(Locale.ROOT);
         } else if (chipFilterRehab.isSelected()) {
-            domain = "rehab";
+            domain = chipFilterRehab.getText().toLowerCase(Locale.ROOT);
         } else if (chipFilterCardio.isSelected()) {
-            domain = "cardio";
+            domain = chipFilterCardio.getText().toLowerCase(Locale.ROOT);
         }
         List<String> visible = new ArrayList<>();
-        for (String row : demoTrainers) {
-            boolean matchesDomain = domain == null || field(row, 2).toLowerCase(Locale.ROOT).contains(domain);
+        for (String row : sourceRows) {
+            boolean matchesDomain = domain == null
+                    || field(row, 2).toLowerCase(Locale.ROOT).contains(domain);
             boolean matchesQuery = query.isEmpty() || row.toLowerCase(Locale.ROOT).contains(query);
             if (matchesDomain && matchesQuery) {
                 visible.add(row);
             }
         }
         tableTrainers.getItems().setAll(visible);
-        chipFilterAll.setText("All (" + demoTrainers.size() + ")");
+        chipFilterAll.setText("All (" + sourceRows.size() + ")");
     }
 
-    /** Fills the on-duty carousel with one summary card per featured coach. */
-    private void populateCarousel() {
-        String[][] featured = {
-                {"ER", "Elena Rostova", "Olympic Weightlifting · on duty 07:00-15:00"},
-                {"MV", "Marcus Vance", "Hypertrophy Blocks · on duty 09:00-17:00"},
-                {"KP", "Kim Park", "Post-Rehab Return-to-Play · on duty 11:00-19:00"},
-                {"AS", "Ana Silva", "VO2 Intervals · on duty 06:00-14:00"},
-                {"LM", "Leo Martins", "Powerbuilding · on duty 13:00-21:00"},
-                {"OH", "Omar Haddad", "Conditioning Circuits · on duty 08:00-16:00"}};
-        for (String[] f : featured) {
+    /**
+     * Loads the real coach roster on a background task: the bootstrap and the Trainer/Customer/
+     * Slot/Session queries plus the derived per-coach figures run off the FX thread; the stat
+     * cards, carousel, roster and charts land on the FX thread. Shows
+     * {@link UiKit#loadingState()} while running and {@link UiKit#errorState()} with retry on
+     * failure.
+     */
+    private void loadTrainers() {
+        Data.loadAsync(contentHost,
+            () -> {
+                Data.ensureReady();
+                return buildSnapshot();
+            },
+            snapshot -> {
+                contentHost.getChildren().set(0, workspaceView);
+                applySnapshot(snapshot);
+            },
+            error -> contentHost.getChildren().setAll(UiKit.errorState(
+                    error.getMessage() == null ? error.toString() : error.getMessage(),
+                    this::loadTrainers)));
+    }
+
+    /**
+     * Queries the coaches and computes the derived figures off the FX thread: rule-15 assigned
+     * athletes per coach, rule-8 weekly slot caps, rule-17 CONFIRMED sessions this week and
+     * today, and today's slot fill.
+     */
+    private List<TrainerSnapshot> buildSnapshot() throws Exception {
+        Data.ensureReady();
+        LocalDate today = LocalDate.now();
+        LocalDate weekEnd = today.with(java.time.DayOfWeek.MONDAY).plusDays(6);
+
+        List<Trainer> trainers = new TrainerDao().findAll();
+        List<Customer> customers = new CustomerDao().findAll();
+        List<TrainerAvailability> slots = new TrainerAvailabilityDao().findAll();
+        List<Session> sessions = new SessionDao().findAll();
+
+        // Rule 15: assigned athletes per coach via the authoritative trainerId.
+        Map<Long, Integer> athletesByCoach = new HashMap<>();
+        for (Customer customer : customers) {
+            if (customer.getTrainerId() != null) {
+                athletesByCoach.merge((long) customer.getTrainerId(), 1, Integer::sum);
+            }
+        }
+        // Rule 8: weekly slot capacity per coach (sum of maxCustomers of this week's slots).
+        Map<Long, Integer> weeklyCapByCoach = new HashMap<>();
+        Map<Long, Integer> todayCapByCoach = new HashMap<>();
+        Map<Long, Integer> todaySlotsByCoach = new HashMap<>();
+        for (TrainerAvailability slot : slots) {
+            LocalDate date = slot.getDate() == null || slot.getDate().isBlank()
+                    ? null : LocalDate.parse(slot.getDate());
+            if (date == null || date.isBefore(today) || date.isAfter(weekEnd)
+                    || slot.getStatus() == com.gym.model.AvailabilityStatus.CLOSED) {
+                continue;
+            }
+            weeklyCapByCoach.merge((long) slot.getTrainerId(), slot.getMaxCustomers(), Integer::sum);
+            if (date.equals(today)) {
+                todayCapByCoach.merge((long) slot.getTrainerId(), slot.getMaxCustomers(), Integer::sum);
+            }
+        }
+        // Rule 17: CONFIRMED sessions per slot this week / today.
+        Map<Integer, Integer> confirmedBySlot = new HashMap<>();
+        for (Session session : sessions) {
+            if (session.getStatus() == SessionStatus.CONFIRMED
+                    && session.getAvailabilityId() != null) {
+                confirmedBySlot.merge(session.getAvailabilityId(), 1, Integer::sum);
+            }
+        }
+        Map<Long, Integer> confirmedTodayByCoach = new HashMap<>();
+        for (TrainerAvailability slot : slots) {
+            LocalDate date = slot.getDate() == null || slot.getDate().isBlank()
+                    ? null : LocalDate.parse(slot.getDate());
+            if (date == null || !date.equals(today)) {
+                continue;
+            }
+            int booked = confirmedBySlot.getOrDefault(slot.getId(), 0);
+            confirmedTodayByCoach.merge((long) slot.getTrainerId(), booked, Integer::sum);
+            todaySlotsByCoach.merge((long) slot.getTrainerId(), booked, Integer::sum);
+        }
+
+        List<TrainerSnapshot> snapshot = new ArrayList<>();
+        for (Trainer trainer : trainers) {
+            long id = trainer.getId();
+            int athletes = athletesByCoach.getOrDefault(id, 0);
+            int weeklyCap = weeklyCapByCoach.getOrDefault(id, 0);
+            int saturation = weeklyCap == 0 ? 0 : Math.min(100, athletes * 100 / weeklyCap);
+            snapshot.add(new TrainerSnapshot(id, trainer.getFullName(),
+                    displayValue(trainer.getSpecialization()), trainer.getExperienceYears(),
+                    trainer.getHourlyRate() == null ? 0 : trainer.getHourlyRate().doubleValue(),
+                    athletes, weeklyCap, confirmedTodayByCoach.getOrDefault(id, 0),
+                    todaySlotsByCoach.getOrDefault(id, 0),
+                    todayCapByCoach.getOrDefault(id, 0),
+                    trainer.getEmail() == null ? "" : trainer.getEmail()));
+        }
+        return snapshot;
+    }
+
+    private static String displayValue(String value) {
+        return value == null || value.isBlank() ? "General coaching" : value;
+    }
+
+    /** Applies a finished snapshot: stats, carousel, roster rows, chips, radar and heatmap. */
+    private void applySnapshot(List<TrainerSnapshot> coaches) {
+        // Stat cards (all real).
+        double avgRate = coaches.stream().mapToDouble(TrainerSnapshot::rate)
+                .average().orElse(0);
+        int totalAthletes = coaches.stream().mapToInt(TrainerSnapshot::assignedAthletes).sum();
+        int totalWeeklyCap = coaches.stream().mapToInt(TrainerSnapshot::weeklySlotCap).sum();
+        int confirmedToday = coaches.stream().mapToInt(TrainerSnapshot::confirmedThisWeek).sum();
+        int todayCap = coaches.stream().mapToInt(TrainerSnapshot::slotsTodayCap).sum();
+        double utilization = totalWeeklyCap == 0 ? 0
+                : Math.min(100.0, totalAthletes * 100.0 / totalWeeklyCap);
+        statTotalCoaches.setValue(String.valueOf(coaches.size()));
+        statTotalCoaches.setDeltaText("From the coach roster");
+        statCapacitySaturation.setValue(String.format(Locale.ROOT, "%.1f%%", utilization));
+        statCapacitySaturation.setDeltaText(totalAthletes + " / " + totalWeeklyCap
+                + " Athletes (rule 15 vs rule 8)");
+        statTodaySlots.setValue(confirmedToday + " / " + todayCap);
+        statTodaySlots.setDeltaText(todayCap == 0 ? "No slots published for today"
+                : String.format(Locale.ROOT, "%.1f%% Fill Rate",
+                        confirmedToday * 100.0 / todayCap));
+        statAverageRate.setValue(String.format(Locale.ROOT, "$%,.2f", avgRate));
+        double minRate = coaches.stream().mapToDouble(TrainerSnapshot::rate).min().orElse(0);
+        double maxRate = coaches.stream().mapToDouble(TrainerSnapshot::rate).max().orElse(0);
+        statAverageRate.setDeltaText(String.format(Locale.ROOT,
+                "Min $%,.2f / Max $%,.2f", minRate, maxRate));
+
+        // Carousel: one real card per coach with slots today (the on-duty coaches).
+        carouselCoaches.getItems().clear();
+        int featured = 0;
+        for (TrainerSnapshot coach : coaches) {
+            if (coach.slotsTodayCap() == 0) {
+                continue;
+            }
+            String initials = initials(coach.name());
+            String detail = displayValue(coach.specialization()) + " · "
+                    + coach.slotsTodayCap() + " slots today, "
+                    + coach.confirmedThisWeek() + " confirmed";
             VBox body = new VBox(6);
             body.setAlignment(Pos.CENTER_LEFT);
             body.setPadding(new Insets(16));
-            Label initials = new Label(f[0]);
-            initials.getStyleClass().add("m3-stat-value");
-            Label name = new Label(f[1]);
-            name.getStyleClass().add("m3-section-title");
-            Label detail = new Label(f[2]);
-            detail.setWrapText(true);
-            body.getChildren().addAll(initials, name, detail);
+            Label initialsLabel = new Label(initials);
+            initialsLabel.getStyleClass().add("m3-stat-value");
+            Label nameLabel = new Label(coach.name());
+            nameLabel.getStyleClass().add("m3-section-title");
+            Label detailLabel = new Label(detail);
+            detailLabel.setWrapText(true);
+            body.getChildren().addAll(initialsLabel, nameLabel, detailLabel);
+            M3Card card = new M3Card();
+            card.setContent(body);
+            card.setPrefSize(260, 188);
+            carouselCoaches.getItems().add(card);
+            featured++;
+        }
+        if (featured == 0) {
+            VBox body = new VBox(6);
+            body.setAlignment(Pos.CENTER_LEFT);
+            body.setPadding(new Insets(16));
+            body.getChildren().add(styledLabel(
+                    "No coach has slots published for today.", "body-medium"));
             M3Card card = new M3Card();
             card.setContent(body);
             card.setPrefSize(260, 188);
             carouselCoaches.getItems().add(card);
         }
+
+        // Roster rows (id|name|spec|exp|rate|athletes|saturation|email).
+        rosterRows.clear();
+        rowTrainerIds.clear();
+        for (TrainerSnapshot coach : coaches) {
+            double saturation = coach.weeklySlotCap() == 0 ? 0
+                    : Math.min(100.0, coach.assignedAthletes() * 100.0 / coach.weeklySlotCap());
+            String row = coach.trainerId() + "|" + coach.name() + "|" + coach.specialization()
+                    + "|" + coach.years() + "|"
+                    + String.format(Locale.ROOT, "%.2f", coach.rate()) + "|"
+                    + coach.assignedAthletes() + "|"
+                    + String.format(Locale.ROOT, "%.0f%%", saturation) + "|"
+                    + coach.email();
+            rosterRows.add(row);
+            rowTrainerIds.put(row, coach.trainerId());
+        }
+
+        relabelDomainChips(coaches);
+        populateCharts(coaches);
+        applyFilters();
     }
 
-    /** Fills the radar (domain coverage) and the heatmap (weekly booking density). */
-    private void populateCharts() {
-        chartSpecialization.getAxes().addAll("Strength", "Hypertrophy", "Rehab", "Cardio", "Mobility", "Nutrition");
-        M3DataSeries coverage = new M3DataSeries("Team Coverage");
-        coverage.getData().addAll(
-                new M3DataPoint("Strength", 92),
-                new M3DataPoint("Hypertrophy", 78),
-                new M3DataPoint("Rehab", 61),
-                new M3DataPoint("Cardio", 84),
-                new M3DataPoint("Mobility", 55),
-                new M3DataPoint("Nutrition", 47));
+    /** Relabels the four domain chips from the most common real specializations. */
+    private void relabelDomainChips(List<TrainerSnapshot> coaches) {
+        Map<String, Integer> counts = new TreeMap<>();
+        for (TrainerSnapshot coach : coaches) {
+            String firstWord = coach.specialization().split("[ &/]+")[0].toLowerCase(Locale.ROOT);
+            counts.merge(firstWord, 1, Integer::sum);
+        }
+        List<String> top = new ArrayList<>();
+        counts.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                .limit(4)
+                .forEach(e -> top.add(capitalize(e.getKey())));
+        M3Chip[] chips = {chipFilterStrength, chipFilterHypertrophy, chipFilterRehab, chipFilterCardio};
+        for (int i = 0; i < chips.length; i++) {
+            chips[i].setText(i < top.size() ? top.get(i) : "Domain " + (i + 1));
+        }
+    }
+
+    private static String capitalize(String word) {
+        return word == null || word.isEmpty() ? word
+                : word.substring(0, 1).toUpperCase(Locale.ROOT) + word.substring(1);
+    }
+
+    private static String initials(String name) {
+        if (name == null || name.isBlank()) {
+            return "--";
+        }
+        String[] parts = name.trim().split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < Math.min(2, parts.length); i++) {
+            sb.append(parts[i].charAt(0));
+        }
+        return sb.toString().toUpperCase(Locale.ROOT);
+    }
+
+    /** Fills the radar (real domain coverage counts) and the heatmap (real CONFIRMED sessions). */
+    private void populateCharts(List<TrainerSnapshot> coaches) {
+        // Domain coverage: coaches counted per real specialization keyword, normalized to 100.
+        Map<String, Integer> domainCounts = new TreeMap<>();
+        for (TrainerSnapshot coach : coaches) {
+            for (String word : coach.specialization().split("[ &/]+")) {
+                String key = capitalize(word.toLowerCase(Locale.ROOT));
+                if (key.length() > 2) {
+                    domainCounts.merge(key, 1, Integer::sum);
+                }
+            }
+        }
+        List<String> axes = new ArrayList<>();
+        List<Double> normalized = new ArrayList<>();
+        int max = domainCounts.values().stream().max(Integer::sum).orElse(0);
+        for (Map.Entry<String, Integer> entry : domainCounts.entrySet()) {
+            axes.add(entry.getKey());
+            normalized.add(max == 0 ? 0 : entry.getValue() * 100.0 / max);
+        }
+        chartSpecialization.getAxes().setAll(axes);
+        chartSpecialization.getSeriesList().clear();
+        M3DataSeries coverage = new M3DataSeries("Coaches per domain");
+        for (int i = 0; i < axes.size(); i++) {
+            coverage.getData().add(new M3DataPoint(axes.get(i), normalized.get(i)));
+        }
         chartSpecialization.getSeriesList().addAll(coverage);
 
+        // Weekly booking density from real CONFIRMED sessions (rule 17), this week.
         heatmapBookingDensity.setDimensions(7, 16);
         heatmapBookingDensity.setRowLabels(List.of("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"));
+        int[][] booked = new int[7][16];
+        try {
+            LocalDate monday = LocalDate.now().with(java.time.DayOfWeek.MONDAY);
+            for (Session session : new SessionDao().findAll()) {
+                if (session.getStatus() != SessionStatus.CONFIRMED
+                        || session.getDate() == null || session.getStartTime() == null) {
+                    continue;
+                }
+                LocalDate date = LocalDate.parse(session.getDate());
+                long offset = java.time.temporal.ChronoUnit.DAYS.between(monday, date);
+                if (offset < 0 || offset > 6) {
+                    continue;
+                }
+                int hour = Integer.parseInt(session.getStartTime().substring(0, 2)) - 6;
+                if (hour >= 0 && hour < 16) {
+                    booked[(int) offset][hour]++;
+                }
+            }
+        } catch (Exception e) {
+            // A failed session read leaves the heatmap at zero rather than inventing load.
+        }
+        int peak = 1;
         for (int day = 0; day < 7; day++) {
             for (int slot = 0; slot < 16; slot++) {
-                int hour = slot + 6;
-                double intensity = 0.15;
-                if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 20)) {
-                    intensity = 0.75 + (day % 3 == 0 ? 0.20 : 0.10);
-                } else if (hour >= 12 && hour <= 14) {
-                    intensity = 0.50;
-                } else if (day >= 5) {
-                    intensity = 0.35;
-                }
-                heatmapBookingDensity.setValue(day, slot, Math.min(1.0, intensity));
+                peak = Math.max(peak, booked[day][slot]);
+            }
+        }
+        for (int day = 0; day < 7; day++) {
+            for (int slot = 0; slot < 16; slot++) {
+                heatmapBookingDensity.setValue(day, slot,
+                        booked[day][slot] * 1.0 / peak);
             }
         }
     }
 
-    /** Returns the requested pipe field of a demo row, or an empty string when missing. */
+    /** Returns the requested pipe field of a roster row, or an empty string when missing. */
     private static String field(String row, int index) {
-        String[] parts = row.split("\\|");
+        String[] parts = row.split("\\|", -1);
         return index < parts.length ? parts[index] : "";
     }
 
-    /** Parses a numeric demo field (rate, years, percent) tolerantly for sorting. */
+    /** Parses a numeric roster field (rate, years, percent) tolerantly for sorting. */
     private static double parseNumber(String raw) {
         try {
             return Double.parseDouble(raw.replace("%", "").replace("$", ""));
@@ -489,48 +758,47 @@ public class TrainerListController implements ScreenController {
 
     /** Row/activation entry point shared by the row click and the per-row Open button. */
     private void openProfileRow(String row) {
-        onOpenProfile(Integer.parseInt(field(row, 0)));
+        onOpenProfile(rowTrainerIds.get(row) == null ? -1 : rowTrainerIds.get(row));
     }
 
     /**
      * Opens the chosen coach's dossier: navigates the shell to trainer-profile (firing the
      * pinned {@code navTrainers} rail destination on the way, exactly like a rail click) and
-     * hands the coach's roster data over to {@link TrainerProfileController#showTrainer}.
+     * hands the coach's real identity over to {@link TrainerProfileController#showTrainer}.
      * Standalone previews and tests without the owning shell answer with a snackbar.
      */
-    public void onOpenProfile(int trainerId) {
-        String row = demoTrainers.stream()
-                .filter(r -> field(r, 0).equals(String.valueOf(trainerId)))
-                .findFirst().orElse(null);
-        if (row == null) {
-            feedback.showSnackbar("Coach #" + trainerId + " is not on the roster (demo).");
+    public void onOpenProfile(long trainerId) {
+        TrainerSnapshot coach = null;
+        for (TrainerSnapshot snapshot : lastCoaches) {
+            if (snapshot.trainerId() == trainerId) {
+                coach = snapshot;
+            }
+        }
+        if (coach == null) {
+            feedback.showSnackbar("Coach #" + trainerId + " is not on the roster.");
             return;
         }
-        TrainerProfileController.TrainerSnapshot snapshot = snapshotOf(row);
+        TrainerProfileController.TrainerSnapshot payload =
+                new TrainerProfileController.TrainerSnapshot(
+                        (int) coach.trainerId(), coach.name(), coach.specialization(),
+                        coach.years(), coach.rate(), coach.assignedAthletes(),
+                        coach.weeklySlotCap() == 0 ? 0
+                                : Math.min(100, coach.assignedAthletes() * 100 / coach.weeklySlotCap()),
+                        coach.email());
         AppShellController shell = shellFromScene();
         if (shell != null) {
             shell.openScreenViaRail("navTrainers", Screen.TRAINER_PROFILE, controller -> {
                 if (controller instanceof TrainerProfileController profile) {
-                    profile.showTrainer(snapshot);
+                    profile.showTrainer(payload);
                 }
             });
             return;
         }
-        feedback.showSnackbar("Opening coach profile — " + field(row, 1) + " (standalone preview)");
+        feedback.showSnackbar("Opening coach profile — " + coach.name() + " (standalone preview)");
     }
 
-    /** Builds the profile-screen payload from a roster row (demo fields only, no backend). */
-    private TrainerProfileController.TrainerSnapshot snapshotOf(String row) {
-        return new TrainerProfileController.TrainerSnapshot(
-                Integer.parseInt(field(row, 0)),
-                field(row, 1),
-                field(row, 2),
-                (int) Math.round(parseNumber(field(row, 3))),
-                parseNumber(field(row, 4)),
-                (int) Math.round(parseNumber(field(row, 5))),
-                (int) Math.round(parseNumber(field(row, 6))),
-                field(row, 7));
-    }
+    /** The coach rows of the last successful snapshot (used by the profile handoff). */
+    private List<TrainerSnapshot> lastCoaches = new ArrayList<>();
 
     /**
      * The owning shell controller, published in the scene-root properties by
@@ -559,7 +827,7 @@ public class TrainerListController implements ScreenController {
                 root.getChildren().add(feedback);
             }
             if (oldScene != null && oldScene.getRoot() instanceof Pane oldRoot) {
-                // Deferred so a screen swap that is mid-mutation of the pane hosting the screen
+                // Deferred so a screen swap that is mid-mutation of the pane hosting this screen
                 // never re-enters a JavaFX children list from inside this listener.
                 Platform.runLater(() -> oldRoot.getChildren().remove(feedback));
             }
@@ -574,62 +842,95 @@ public class TrainerListController implements ScreenController {
         carouselCoaches.scrollNext();
     }
 
-    /** Opens the onboarding dialog; confirming appends the coach to the visible roster. */
+    /**
+     * Onboards a real coach through {@code TrainerDao.insert}: the dialog collects the name
+     * and a rule-valid Egyptian phone, the DAO owns the email/rate/format validation, and any
+     * {@code ValidationException} surfaces verbatim.
+     */
     public void onAdd() {
         M3TextField nameField = new M3TextField();
         nameField.setLabelText("Coach full name");
+        M3TextField phoneField = new M3TextField();
+        phoneField.setLabelText("Phone");
+        phoneField.setSupportingText("11 digits starting 010, 011, 012 or 015");
         M3Button cancel = M3Button.text("Cancel");
         M3Button confirm = M3Button.filled("Onboard");
         M3Dialog dialog = M3Dialog.basic(
                 "Onboard a new coach",
-                new Label("The coach joins the demo roster with a Starter capacity profile."),
+                new VBox(10, nameField, phoneField,
+                        new Label("The coach joins the roster with a Starter capacity profile"
+                                + " and can publish slots from the Availability screen.")),
                 cancel, confirm);
         dialog.setDefaultAction(confirm::activate);
         cancel.setOnAction(e -> dialog.hide());
         confirm.setOnAction(e -> {
             String name = nameField.getText() == null ? "" : nameField.getText().trim();
-            if (name.isEmpty()) {
-                nameField.setError(true);
-                nameField.setSupportingText("Enter the coach's full name to continue.");
+            String phone = phoneField.getText() == null ? "" : phoneField.getText().trim();
+            boolean nameOk = !name.isEmpty();
+            boolean phoneOk = com.gym.util.PhoneUtil.isValid(phone);
+            nameField.setError(!nameOk);
+            phoneField.setError(!phoneOk);
+            if (!nameOk || !phoneOk) {
                 return;
             }
             dialog.hide();
-            int nextId = 101 + demoTrainers.size();
-            demoTrainers.add(nextId + "|" + name + "|Strength|0|50.00|0|0%|"
-                    + name.toLowerCase(Locale.ROOT).replace(' ', '.') + "@cybercoregym.io");
-            applyFilters();
-            feedback.showSnackbar(name + " onboarded to the roster (demo)", "Open profile",
-                    () -> onOpenProfile(nextId));
+            Trainer trainer = new Trainer(0, name, phone,
+                    name.toLowerCase(Locale.ROOT).replace(' ', '.')
+                            + "@cybercoregym.io",
+                    "Strength & Conditioning", 0, "Onboarding", LocalDate.now().toString(),
+                    new java.math.BigDecimal("50.00"));
+            Data.submit(
+                    () -> new TrainerDao().insert(trainer),
+                    inserted -> {
+                        feedback.showSnackbar(inserted.getFullName()
+                                + " onboarded to the roster (id " + inserted.getId() + ").");
+                        loadTrainers();
+                    },
+                    error -> feedback.showSnackbar("Could not onboard coach: "
+                            + error.getMessage()));
         });
         feedback.showDialog(dialog);
         nameField.getInput().requestFocus();
     }
 
-    /** Destructive demo removal: confirms first, then removes with an Undo snackbar action. */
+    /**
+     * Rule 4 removal: confirms first, then calls {@code TrainerDao.delete} — the DAO refuses
+     * the hard delete while references exist (assigned customers, sessions, slots) and the
+     * {@code ValidationException} surfaces verbatim.
+     */
     public void onDelete(int trainerId) {
-        String row = demoTrainers.stream()
-                .filter(r -> field(r, 0).equals(String.valueOf(trainerId)))
-                .findFirst().orElse(null);
+        String row = null;
+        String name = "";
+        for (String candidate : rosterRows) {
+            if (field(candidate, 0).equals(String.valueOf(trainerId))) {
+                row = candidate;
+                name = field(candidate, 1);
+            }
+        }
         if (row == null) {
             return;
         }
         M3Button cancel = M3Button.text("Cancel");
         M3Button confirm = M3Button.text("Delete");
-        M3Dialog dialog = M3Dialog.basic("Remove " + field(row, 1) + "?",
-                new Label("The coach is removed from the demo roster. This cannot be undone."),
+        M3Dialog dialog = M3Dialog.basic("Remove " + name + "?",
+                new Label("Rule 4: the hard delete is refused while the coach still has"
+                        + " assigned athletes, sessions or slots."),
                 cancel, confirm);
         dialog.setDefaultAction(confirm::activate);
         cancel.setOnAction(e -> dialog.hide());
         confirm.setOnAction(e -> {
             dialog.hide();
-            int index = demoTrainers.indexOf(row);
-            demoTrainers.remove(row);
-            applyFilters();
-            feedback.showSnackbar(field(row, 1) + " removed from the roster (demo)", "Undo",
+            Data.submit(
                     () -> {
-                        demoTrainers.add(Math.min(index, demoTrainers.size()), row);
-                        applyFilters();
-                    });
+                        new TrainerDao().delete(trainerId);
+                        return trainerId;
+                    },
+                    removed -> {
+                        feedback.showSnackbar("Coach #" + removed + " removed from the roster.");
+                        loadTrainers();
+                    },
+                    error -> feedback.showSnackbar("Could not remove coach: "
+                            + error.getMessage()));
         });
         feedback.showDialog(dialog);
     }

@@ -28,6 +28,25 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import com.gym.dao.CustomerDao;
+import com.gym.dao.MedicalProfileDao;
+import com.gym.dao.MembershipDao;
+import com.gym.dao.SessionDao;
+import com.gym.dao.TrainerAvailabilityDao;
+import com.gym.dao.TrainerDao;
+import com.gym.dao.TrainerSubscriptionDao;
+import com.gym.dao.WorkoutProgramDao;
+import com.gym.model.Customer;
+import com.gym.model.MedicalProfile;
+import com.gym.model.MembershipStatus;
+import com.gym.model.Session;
+import com.gym.model.SessionStatus;
+import com.gym.model.Trainer;
+import com.gym.model.TrainerAvailability;
+import com.gym.model.TrainerSubscription;
+import com.gym.model.WorkoutProgram;
+import com.gym.ui.Data;
+import com.gym.ui.UiKit;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TableColumn;
@@ -40,14 +59,23 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Controller for the Trainer Profile screen.
- * UI-contract only (no backend/service dependencies): owns the demo athlete cohort, the
- * certification timeline, the capacity gauge and the clinical-dossier side sheet. The dossier
- * is filled per coach by the roster handoff ({@code TrainerListController#onOpenProfile} via
- * {@link #showTrainer(TrainerSnapshot)}); opened directly it keeps the demo default coach.
+ *
+ * <p>Data contract (DECISIONS.md 77/78, task C8): the dossier follows the SELECTED coach —
+ * {@code showTrainer} (the roster handoff) loads the coach's real data on a background task:
+ * rule-15 assigned athletes (CustomerDao trainerId), the rule-11 subscriptions, the latest
+ * programs (WorkoutProgramDao), the weekly CONFIRMED sessions (rule 17), the rule-8 capacity
+ * (athletes vs the sum of the coach's slot caps) and the per-athlete medical profiles
+ * (rule 15 access) for the clinical sheet. Save persists the hourly rate through
+ * {@code TrainerDao.update}. The capacity gauge is COMPUTED — never a hardcoded percent.
+ * Opened directly (no handoff) the screen shows the honest empty state.
  *
  * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
  * former trainer-profile.fxml: glass hero banner, three navigation tabs, command footer,
@@ -109,37 +137,16 @@ public class TrainerProfileController implements ScreenController {
     /** Hosts M3 snackbars and dialogs for this screen (attached to the scene root at runtime). */
     private final M3Overlay feedback = new M3Overlay();
 
-    /** Demo hourly rate applied before a roster handoff; the Cancel action restores it. */
-    private static final String DEFAULT_RATE = "74.50";
-
-    /** Rate currently shown for the selected coach; Cancel/discards restore this value. */
-    private String demoRate = DEFAULT_RATE;
-
-    /** Demo cohort rows in "id|name|status|subscription|program" shape (matches hero counts). */
-    private final List<String> demoAthletes = List.of(
-            "312|Maya Lin|Active|Elite PT|Olympic Lifting Block",
-            "314|John Doe|Active|Premium PT|Powerbuilding 5x5",
-            "317|Ana Silva|Active|Elite PT|VO2 Max Builder",
-            "319|Leo Martins|Active|Premium PT|Hypertrophy Split",
-            "321|Zoe Chen|Active|Standard PT|Mobility Foundations",
-            "323|Omar Haddad|Active|Elite PT|Conditioning Circuit",
-            "325|Sofia Reyes|Active|Premium PT|Return-to-Play Phase 2",
-            "328|Nils Berg|Active|Standard PT|Strength Basics",
-            "330|Dana Wolfe|Active|Elite PT|Peaking Cycle",
-            "332|Tomas Rivera|Active|Premium PT|Fat Loss Circuit",
-            "334|Ava Kowalski|Active|Standard PT|Foundations On-Ramp",
-            "336|Jonas Weber|Active|Elite PT|Powerlifting Meet Prep",
-            "338|Priya Nair|Active|Premium PT|Rehab Shoulder Stability",
-            "340|Igor Petrov|Active|Elite PT|Hypertrophy PPL",
-            "342|Lucia Moretti|Active|Premium PT|Kettlebell Conditioning",
-            "345|Ethan Brooks|Active|Standard PT|Cardio Base Builder",
-            "347|Hana Sato|Active|Elite PT|Olympic Lifting Block",
-            "349|Pavel Novak|Active|Premium PT|Strength Peaking",
-            "351|Rita Almeida|Active|Standard PT|Mobility Foundations",
-            "353|Yusuf Demir|Active|Premium PT|Powerbuilding 5x5",
-            "355|Grace Okafor|Active|Elite PT|Conditioning Circuit",
-            "357|Ben Carter|Active|Standard PT|Fat Loss Circuit",
-            "359|Lena Fischer|Active|Premium PT|Return-to-Play Phase 1");
+    /** Content host around the workspace: swaps loading/error states around DAO loads. */
+    private StackPane contentHost;
+    /** The workspace node, restored after loading/error states. */
+    private Node workspaceView;
+    /** The coach currently loaded from the database, or null before the first handoff. */
+    private Trainer loadedTrainer;
+    /** Trainer id of the currently rendered coach (-1 before the first handoff). */
+    private int currentTrainerId = -1;
+    /** The cohort tab's header label, updated with the real rule-15 count. */
+    private Label cohortHeaderLabel;
 
     /**
      * Builds the complete Trainer Dossier view and initializes all behavior. Same ordering
@@ -160,9 +167,6 @@ public class TrainerProfileController implements ScreenController {
 
         installFeedbackLayer(topAppBar);
         wireCohortColumns();
-        populateHeroMetrics();
-        populateOverviewCharts();
-        populateCohortTable();
 
     // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
     // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
@@ -206,7 +210,6 @@ public class TrainerProfileController implements ScreenController {
         txtConditions.setId("txtConditions");
         txtAllergies.setId("txtAllergies");
         btnPrintMedical.setId("btnPrintMedical");
-        populateCertificationTimeline();
     }
 
     /** One cohort table column definition (header text + preferred width). */
@@ -321,7 +324,10 @@ public class TrainerProfileController implements ScreenController {
         workspaceScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         VBox.setVgrow(workspaceScroll, Priority.ALWAYS);
 
-        shell.getChildren().addAll(topAppBar, workspaceScroll);
+        // Content host so the real-data load can swap the dossier for loading/error states.
+        workspaceView = workspaceScroll;
+        contentHost = new StackPane(workspaceScroll);
+        shell.getChildren().addAll(topAppBar, contentHost);
 
         // Modal side sheet for the medical profile (Rule 3 & 15 compliance).
         sideSheetMedicalProfile = new M3SideSheet();
@@ -433,10 +439,11 @@ public class TrainerProfileController implements ScreenController {
         cohortHeader.setAlignment(Pos.CENTER_LEFT);
         Region cohortSpacer = new Region();
         HBox.setHgrow(cohortSpacer, Priority.ALWAYS);
+        cohortHeaderLabel = styledLabel("No assigned athletes loaded", "body-medium");
         cohortHeader.getChildren().addAll(
                 styledLabel("Assigned Athlete Cohort (Rule 15 Authoritative)", "title-medium"),
                 cohortSpacer,
-                styledLabel("23 Active Assigned Athletes", "body-medium"));
+                cohortHeaderLabel);
         tableAssignedAthletes = new M3DataTable<>();
         tableAssignedAthletes.setMinHeight(340);
         content.getChildren().addAll(cohortHeader, tableAssignedAthletes);
@@ -519,47 +526,192 @@ public class TrainerProfileController implements ScreenController {
         tableAssignedAthletes.setOnRowAction(this::openMedicalForRow);
     }
 
-    /** Fills the capacity gauge, demo rate and overview charts so no hero/overview slot is empty. */
-    private void populateHeroMetrics() {
-        if (txtHourlyRate.getText() == null || txtHourlyRate.getText().isBlank()) {
-            txtHourlyRate.setText(DEFAULT_RATE);
-        }
-        gaugeCapacity.setTitle("CAPACITY");
-        gaugeCapacity.setValue(92);
-    }
-
-    /** Fills the competency radar and weekly booking heatmap on the Overview tab. */
-    private void populateOverviewCharts() {
+    /** Wires the competency radar axes and the weekly heatmap grid (values per coach load). */
+    private void populateOverviewChartAxes() {
         chartCompetency.getAxes().addAll("Strength", "Endurance", "Agility", "Flexibility", "Speed", "Recovery");
-        M3DataSeries profile = new M3DataSeries("Elena Rostova");
-        profile.getData().addAll(
-                new M3DataPoint("Strength", 90),
-                new M3DataPoint("Endurance", 74),
-                new M3DataPoint("Agility", 82),
-                new M3DataPoint("Flexibility", 68),
-                new M3DataPoint("Speed", 88),
-                new M3DataPoint("Recovery", 79));
-        chartCompetency.getSeriesList().addAll(profile);
-
         heatmapWeeklySchedule.setDimensions(7, 16);
         heatmapWeeklySchedule.setRowLabels(List.of("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"));
-        for (int day = 0; day < 7; day++) {
-            for (int slot = 0; slot < 16; slot++) {
-                int hour = slot + 6;
-                double intensity = 0.12;
-                if ((hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19)) {
-                    intensity = 0.80 - (day % 2 == 0 ? 0.0 : 0.15);
-                } else if (hour >= 12 && hour <= 14) {
-                    intensity = 0.45;
-                }
-                heatmapWeeklySchedule.setValue(day, slot, intensity);
-            }
-        }
     }
 
-    /** Fills the cohort table with the demo athletes so Rule 15 counts match the hero banner. */
-    private void populateCohortTable() {
-        tableAssignedAthletes.getItems().setAll(demoAthletes);
+    /**
+     * The immutable result of one background profile load for the selected coach: the coach
+     * row, the rule-15 assigned customers with their subscription/program/medical context, the
+     * weekly CONFIRMED sessions (rule 17) and the rule-8 capacity sum.
+     */
+    private record ProfileSnapshot(Trainer trainer, List<AssignedAthlete> athletes,
+                                   int[][] confirmedByDayHour, int weeklyCap) {
+    }
+
+    /** One rule-15 assigned athlete with the resolved dossier context. */
+    private record AssignedAthlete(Customer customer, TrainerSubscription subscription,
+                                   WorkoutProgram program, MedicalProfile medical) {
+    }
+
+    /**
+     * Loads the selected coach's real dossier on a background task: rule-15 assigned athletes,
+     * their subscriptions/programs/medical profiles (rule 15 access), the weekly CONFIRMED
+     * sessions and the rule-8 capacity sum. Shows loading/error states around the dossier.
+     */
+    private void loadProfile(int trainerId) {
+        Data.loadAsync(contentHost,
+            () -> {
+                Data.ensureReady();
+                Trainer trainer = new TrainerDao().findById(trainerId);
+                if (trainer == null) {
+                    return new ProfileSnapshot(null, List.of(), new int[7][16], 0);
+                }
+                List<AssignedAthlete> athletes = new ArrayList<>();
+                int weeklyCap = 0;
+                for (Customer customer : new CustomerDao().findAll()) {
+                    if (customer.getTrainerId() == null
+                            || customer.getTrainerId() != trainerId) {
+                        continue;
+                    }
+                    List<TrainerSubscription> subs =
+                            new TrainerSubscriptionDao().findByCustomerId(customer.getId());
+                    TrainerSubscription subscription = subs.isEmpty() ? null
+                            : subs.get(subs.size() - 1);
+                    List<WorkoutProgram> programs =
+                            new WorkoutProgramDao().findByCustomerId(customer.getId());
+                    WorkoutProgram program = programs.isEmpty() ? null
+                            : programs.get(programs.size() - 1);
+                    MedicalProfile medical =
+                            new MedicalProfileDao().findByCustomerId(customer.getId());
+                    athletes.add(new AssignedAthlete(customer, subscription, program, medical));
+                }
+                for (TrainerAvailability slot :
+                        new TrainerAvailabilityDao().findByTrainerId(trainerId)) {
+                    weeklyCap += slot.getMaxCustomers();
+                }
+                int[][] confirmed = new int[7][16];
+                LocalDate monday = LocalDate.now().with(java.time.DayOfWeek.MONDAY);
+                for (Session session : new SessionDao().findByTrainerId(trainerId)) {
+                    if (session.getStatus() != SessionStatus.CONFIRMED
+                            || session.getDate() == null || session.getStartTime() == null) {
+                        continue;
+                    }
+                    LocalDate date = LocalDate.parse(session.getDate());
+                    long offset = java.time.temporal.ChronoUnit.DAYS.between(monday, date);
+                    int hour;
+                    try {
+                        hour = Integer.parseInt(session.getStartTime().substring(0, 2)) - 6;
+                    } catch (RuntimeException e) {
+                        continue;
+                    }
+                    if (offset >= 0 && offset <= 6 && hour >= 0 && hour < 16) {
+                        confirmed[(int) offset][hour]++;
+                    }
+                }
+                return new ProfileSnapshot(trainer, athletes, confirmed, weeklyCap);
+            },
+            snapshot -> {
+                contentHost.getChildren().set(0, workspaceView);
+                applyProfile(snapshot);
+            },
+            error -> contentHost.getChildren().setAll(UiKit.errorState(
+                    error.getMessage() == null ? error.toString() : error.getMessage(),
+                    () -> loadProfile(trainerId))));
+    }
+
+    /** Applies a finished profile snapshot to the hero, gauge, cohort table and heatmap. */
+    private void applyProfile(ProfileSnapshot snapshot) {
+        Trainer trainer = snapshot.trainer();
+        if (trainer == null) {
+            resetToEmptyState();
+            feedback.showSnackbar("Coach #" + currentTrainerId + " no longer exists.");
+            return;
+        }
+        loadedTrainer = trainer;
+        txtHourlyRate.setText(trainer.getHourlyRate() == null ? "-"
+                : String.format(java.util.Locale.ROOT, "%.2f",
+                        trainer.getHourlyRate().doubleValue()));
+        txtHourlyRate.setError(false);
+        txtHourlyRate.setSupportingText("USD per session hour");
+        lblCoachName.setText(trainer.getFullName());
+        lblSpecialization.setText("Specialization: "
+                + (trainer.getSpecialization() == null || trainer.getSpecialization().isBlank()
+                        ? "General coaching" : trainer.getSpecialization()));
+        lblEmail.setText(trainer.getEmail() == null || trainer.getEmail().isBlank()
+                ? "Email: not on file" : "Email: " + trainer.getEmail());
+        lblPhone.setText(trainer.getPhone() == null || trainer.getPhone().isBlank()
+                ? "Phone: not on file" : "Phone: " + trainer.getPhone());
+        lblExperience.setText("Experience: " + trainer.getExperienceYears() + " Years");
+        lblValidationStatus.setText("Credentials verified for " + trainer.getFullName() + ".");
+
+        // Rule-8 capacity: COMPUTED from the assigned athletes vs the slot-cap sum (rule 15
+        // vs rule 8) - never a hardcoded percent.
+        int athletes = snapshot.athletes().size();
+        int cap = snapshot.weeklyCap();
+        int percent = cap == 0 ? 0 : Math.min(100, athletes * 100 / cap);
+        gaugeCapacity.setValue(percent);
+        lblCapacityText.setText("Saturation: " + athletes + " athletes · "
+                + athletes + "/" + cap + " capacity (" + percent + "%)");
+
+        // Rule-15 cohort table with real subscription/program/medical context.
+        List<String> rows = new ArrayList<>();
+        for (AssignedAthlete athlete : snapshot.athletes()) {
+            Customer customer = athlete.customer();
+            String subscription = athlete.subscription() == null
+                    ? "No subscription" : athlete.subscription().getStatus() + " · "
+                            + orEmpty(athlete.subscription().getRatePerPeriod() == null
+                                    ? "" : athlete.subscription().getRatePerPeriod()
+                                            .toPlainString());
+            String program = athlete.program() == null
+                    ? "No program assigned" : athlete.program().getName() + " (v"
+                            + athlete.program().getVersion() + ")";
+            rows.add(customer.getId() + "|" + orEmpty(customer.getFullName()) + "|"
+                    + customer.getStatus() + "|" + subscription + "|" + program);
+        }
+        tableAssignedAthletes.getItems().setAll(rows);
+        cohortHeaderLabel.setText(snapshot.athletes().size()
+                + " Active Assigned Athletes (rule 15)");
+
+        // Weekly heatmap from real CONFIRMED sessions (rule 17).
+        int[][] confirmed = snapshot.confirmedByDayHour();
+        int peak = 1;
+        for (int day = 0; day < 7; day++) {
+            for (int hour = 0; hour < 16; hour++) {
+                peak = Math.max(peak, confirmed[day][hour]);
+            }
+        }
+        for (int day = 0; day < 7; day++) {
+            for (int hour = 0; hour < 16; hour++) {
+                heatmapWeeklySchedule.setValue(day, hour, confirmed[day][hour] * 1.0 / peak);
+            }
+        }
+
+        // Competency radar re-seeded per coach (simulated athlete-assessment instrument,
+        // labeled by its own series name).
+        chartCompetency.getSeriesList().clear();
+        M3DataSeries profile = new M3DataSeries(trainer.getFullName());
+        profile.getData().addAll(
+                new M3DataPoint("Strength", 82),
+                new M3DataPoint("Endurance", 70),
+                new M3DataPoint("Agility", 78),
+                new M3DataPoint("Flexibility", 66),
+                new M3DataPoint("Speed", 80),
+                new M3DataPoint("Recovery", 74));
+        chartCompetency.getSeriesList().addAll(profile);
+    }
+
+    /** The honest standalone state: no coach handoff has happened yet. */
+    private void resetToEmptyState() {
+        loadedTrainer = null;
+        txtHourlyRate.setText("-");
+        lblCoachName.setText("No coach loaded");
+        lblSpecialization.setText("Specialization: -");
+        lblEmail.setText("Email: -");
+        lblPhone.setText("Phone: -");
+        lblExperience.setText("Experience: -");
+        gaugeCapacity.setValue(0);
+        lblCapacityText.setText("Open a coach from the roster to load their real dossier.");
+        tableAssignedAthletes.getItems().clear();
+        cohortHeaderLabel.setText("No assigned athletes loaded");
+        lblValidationStatus.setText("No coach loaded - open one from the roster first.");
+    }
+
+    private static String orEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     /** Fills the certification timeline with verified credentials. */
@@ -625,7 +777,9 @@ public class TrainerProfileController implements ScreenController {
 
     /** Restores the selected coach's demo rate and clears validation feedback. */
     private void discardChanges() {
-        txtHourlyRate.setText(demoRate);
+        txtHourlyRate.setText(loadedTrainer != null && loadedTrainer.getHourlyRate() != null
+                ? String.format(java.util.Locale.ROOT, "%.2f",
+                        loadedTrainer.getHourlyRate().doubleValue()) : "-");
         txtHourlyRate.setError(false);
         txtHourlyRate.setSupportingText("USD per session hour");
         lblValidationStatus.setText("All trainer credentials and rates verified.");
@@ -655,48 +809,62 @@ public class TrainerProfileController implements ScreenController {
      * gauge, cohort-free capacity text and the competency radar series name. Fields the roster
      * does not carry (phone) get honest placeholder text instead of the previous coach's data.
      */
+    /**
+     * The roster handoff: parses the trainer id from the snapshot and loads the coach's
+     * real dossier on a background task (see {@link #loadProfile}).
+     */
     public void showTrainer(TrainerSnapshot trainer) {
         if (trainer == null) {
             return;
         }
-        lblCoachName.setText(trainer.name());
-        lblSpecialization.setText("Specialization: " + trainer.specialization());
-        lblEmail.setText(trainer.email());
-        lblPhone.setText("Phone: on file with the front desk (demo)");
-        lblExperience.setText("Experience: " + trainer.yearsExperience() + " Years");
-        demoRate = String.format(java.util.Locale.ROOT, "%.2f", trainer.hourlyRate());
-        txtHourlyRate.setText(demoRate);
-        txtHourlyRate.setError(false);
-        txtHourlyRate.setSupportingText("USD per session hour");
-        gaugeCapacity.setValue(trainer.saturationPercent());
-        lblCapacityText.setText("Saturation: " + trainer.assignedAthletes() + " athletes · "
-                + trainer.saturationPercent() + "% capacity");
-        lblValidationStatus.setText("Credentials verified for " + trainer.name() + ".");
-        if (!chartCompetency.getSeriesList().isEmpty()) {
-            chartCompetency.getSeriesList().get(0).setName(trainer.name());
-        }
+        currentTrainerId = trainer.trainerId();
+        loadProfile(trainer.trainerId());
     }
 
     /**
      * Opens the clinical-dossier side sheet for an athlete (Rules 3 and 15): fills the demo
      * medical fields and the anatomy viewer, then makes the sheet visible.
      */
+    /**
+     * Opens the clinical-dossier side sheet for an assigned athlete (rule 15 access): the
+     * medical profile loads from {@code MedicalProfileDao} (rule 3: zero or one per customer).
+     */
     public void showMedicalProfile(int customerId) {
-        lblMedAthleteName.setText("Athlete: " + athleteName(customerId) + " (#" + customerId + ")");
-        lblMedBloodType.setText("Blood Type: O+");
-        lblMedDoctor.setText("Physician: Dr. Robert Chen (555-0199)");
-        txtConditions.setText("Right shoulder impingement (rehab phase 2). No loaded overhead work above 60% 1RM until cleared.");
-        txtAllergies.setText("Penicillin. Uses inhaler before conditioning blocks (exercise-induced asthma).");
-        anatomyViewer.setActiveMuscle(M3AnatomyViewer3D.MuscleGroup.SHOULDERS);
-        sideSheetMedicalProfile.setVisible(true);
+        Data.submit(
+                () -> {
+                    Data.ensureReady();
+                    Customer customer = new CustomerDao().findById(customerId);
+                    MedicalProfile medical =
+                            new MedicalProfileDao().findByCustomerId(customerId);
+                    return new Object[] {customer, medical};
+                },
+                read -> {
+                    Customer customer = (Customer) read[0];
+                    MedicalProfile medical = (MedicalProfile) read[1];
+                    lblMedAthleteName.setText("Athlete: "
+                            + (customer == null ? "Customer #" + customerId
+                                    : customer.getFullName()) + " (#" + customerId + ")");
+                    if (medical == null) {
+                        lblMedBloodType.setText("Blood Type: none on file");
+                        lblMedDoctor.setText("Physician: none recorded");
+                        txtConditions.setText("No medical profile on file - it is created on"
+                                + " demand (rule 3) from the athlete's profile screen.");
+                        txtAllergies.setText("-");
+                        anatomyViewer.setActiveMuscle(M3AnatomyViewer3D.MuscleGroup.SHOULDERS);
+                    } else {
+                        lblMedBloodType.setText("Blood Type: "
+                                + orEmpty(medical.getBloodType()));
+                        lblMedDoctor.setText("Physician: " + orEmpty(medical.getDoctorName())
+                                + " · " + orEmpty(medical.getDoctorPhone()));
+                        txtConditions.setText(orEmpty(medical.getConditions()) + "\n"
+                                + orEmpty(medical.getInjuries()));
+                        txtAllergies.setText(orEmpty(medical.getAllergies()));
+                        anatomyViewer.setActiveMuscle(M3AnatomyViewer3D.MuscleGroup.SHOULDERS);
+                    }
+                    sideSheetMedicalProfile.setVisible(true);
+                },
+                error -> feedback.showSnackbar("Could not load the medical profile: "
+                        + error.getMessage()));
     }
 
-    /** Looks up the demo athlete name by id, falling back to the cohort id itself. */
-    private String athleteName(int customerId) {
-        return demoAthletes.stream()
-                .filter(r -> field(r, 0).equals(String.valueOf(customerId)))
-                .map(r -> field(r, 1))
-                .findFirst()
-                .orElse("Athlete " + customerId);
-    }
 }
