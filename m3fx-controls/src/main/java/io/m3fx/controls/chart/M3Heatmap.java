@@ -60,7 +60,7 @@ public class M3Heatmap extends Region {
 
         widthProperty().addListener((obs, o, n) -> render());
         heightProperty().addListener((obs, o, n) -> render());
-        sceneProperty().addListener((obs, o, n) -> render());
+        ChartThemeSupport.attach(this, this::render);
         maxColor.addListener((obs, o, n) -> render());
 
         initInteractivity();
@@ -161,7 +161,11 @@ public class M3Heatmap extends Region {
         this.maxColor.set(color);
     }
 
+    /** Render invocations, counted by the B6 theme-repaint tests (package-private). */
+    int renderCountForTesting;
+
     private void render() {
+        renderCountForTesting++;
         double w = getWidth() > 0 ? getWidth() : getPrefWidth();
         double h = getHeight() > 0 ? getHeight() : getPrefHeight();
         if (w <= 0 || h <= 0) return;

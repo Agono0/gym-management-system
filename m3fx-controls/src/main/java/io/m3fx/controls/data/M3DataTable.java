@@ -16,6 +16,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -115,6 +116,19 @@ public class M3DataTable<T> extends VBox {
     private final M3IconButton prevBtn = new M3IconButton(M3Icon.symbol("arrow_back"), IconButtonVariant.STANDARD);
     private final M3IconButton nextBtn = new M3IconButton(M3Icon.symbol("arrow_forward"), IconButtonVariant.STANDARD);
 
+    /**
+     * Search debounce in ms: keystrokes schedule one filter/rebuild after this quiet period
+     * instead of rebuilding the full row tree per character (B6). Enter applies at once.
+     */
+    static final long SEARCH_DEBOUNCE_MILLIS = 200;
+
+    private final javafx.animation.PauseTransition searchDebounce =
+            new javafx.animation.PauseTransition(
+                    javafx.util.Duration.millis(SEARCH_DEBOUNCE_MILLIS));
+    private String pendingQuery = "";
+    /** Row-tree rebuild invocations, counted by the B6 debounce tests (package-private). */
+    int rebuildCountForTesting;
+
     /** Creates an empty data table. */
     public M3DataTable() {
         getStyleClass().add("m3-data-table");
@@ -143,7 +157,13 @@ public class M3DataTable<T> extends VBox {
 
         getChildren().addAll(searchBar, headerRow, rowsContainer, paginationBar);
 
-        searchBar.queryProperty().addListener((obs, o, text) -> filterItems(text));
+        searchBar.queryProperty().addListener((obs, o, text) -> scheduleSearch(text));
+        // Enter applies the pending query immediately, cancelling the debounce.
+        searchBar.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == KeyCode.ENTER) {
+                applySearchNow();
+            }
+        });
         masterItems.addListener((ListChangeListener<T>) c -> filterItems(searchBar.getQuery()));
         columns.addListener((ListChangeListener<Column<T>>) c -> {
             rebuildHeaders();
@@ -235,6 +255,32 @@ public class M3DataTable<T> extends VBox {
         if (getCurrentPage() > maxPages - 1) {
             setCurrentPage(maxPages - 1);
         }
+    }
+
+    /** The search bar (package-private for the B6 debounce tests). */
+    M3SearchBar searchBarForTesting() {
+        return searchBar;
+    }
+
+    /** Number of items passing the current filter (package-private for the debounce tests). */
+    int visibleItemCountForTesting() {
+        return filteredItems.size();
+    }
+
+    /**
+     * Schedules the query's filter/rebuild after {@link #SEARCH_DEBOUNCE_MILLIS} of quiet,
+     * replacing any still-pending run (only the last query of a burst rebuilds).
+     */
+    private void scheduleSearch(String query) {
+        pendingQuery = query;
+        searchDebounce.setOnFinished(e -> filterItems(pendingQuery));
+        searchDebounce.playFromStart();
+    }
+
+    /** Applies the pending query immediately, cancelling a pending debounced run. */
+    private void applySearchNow() {
+        searchDebounce.stop();
+        filterItems(pendingQuery);
     }
 
     private void filterItems(String query) {
@@ -367,6 +413,7 @@ public class M3DataTable<T> extends VBox {
     }
 
     private void rebuildRows() {
+        rebuildCountForTesting++;
         rowsContainer.getChildren().clear();
         int total = filteredItems.size();
         int size = Math.max(1, getPageSize());

@@ -84,13 +84,17 @@ public class M3GaugeChart extends Region {
 
         animatedValue.addListener(e -> redraw());
 
-        sceneProperty().addListener((obs, o, n) -> redraw());
+        ChartThemeSupport.attach(this, this::redraw);
 
         setPrefSize(240, 240);
         setMinSize(160, 160);
     }
 
+    /** Render invocations, counted by the B6 theme-repaint tests (package-private). */
+    int renderCountForTesting;
+
     private void redraw() {
+        renderCountForTesting++;
         double w = getWidth();
         double h = getHeight();
         if (w <= 0 || h <= 0) return;

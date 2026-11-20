@@ -88,7 +88,7 @@ public class M3RadarChart extends Region {
 
         axes.addListener((ListChangeListener<String>) c -> redraw());
 
-        sceneProperty().addListener((obs, o, n) -> redraw());
+        ChartThemeSupport.attach(this, this::redraw);
 
         initHoverInspection();
 
@@ -162,7 +162,11 @@ public class M3RadarChart extends Region {
         addEventHandler(MouseEvent.MOUSE_EXITED, e -> tooltip.hide());
     }
 
+    /** Render invocations, counted by the B6 theme-repaint tests (package-private). */
+    int renderCountForTesting;
+
     private void redraw() {
+        renderCountForTesting++;
         double w = getWidth();
         double h = getHeight();
         if (w <= 0 || h <= 0) return;

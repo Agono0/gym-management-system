@@ -62,7 +62,7 @@ public class M3ScatterPlot extends Region {
 
         widthProperty().addListener((obs, o, n) -> render());
         heightProperty().addListener((obs, o, n) -> render());
-        sceneProperty().addListener((obs, o, n) -> render());
+        ChartThemeSupport.attach(this, this::render);
 
         seriesList.addListener((ListChangeListener<M3ScatterSeries>) c -> {
             while (c.next()) {
@@ -301,7 +301,11 @@ public class M3ScatterPlot extends Region {
         };
     }
 
+    /** Render invocations, counted by the B6 theme-repaint tests (package-private). */
+    int renderCountForTesting;
+
     private void render() {
+        renderCountForTesting++;
         double w = getWidth() > 0 ? getWidth() : getPrefWidth();
         double h = getHeight() > 0 ? getHeight() : getPrefHeight();
         if (w <= 0 || h <= 0) return;

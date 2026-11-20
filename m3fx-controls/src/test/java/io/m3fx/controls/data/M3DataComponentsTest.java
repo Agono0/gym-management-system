@@ -312,20 +312,29 @@ class M3DataComponentsTest {
 
     @Test
     void dataTableFilteredEmptyStateSaysNoMatchingItems() throws Throwable {
+        // B6: search filtering is debounced (SEARCH_DEBOUNCE_MILLIS), so the rows settle on a
+        // later pulse after each query change.
+        AtomicReference<M3DataTable<String>> tableRef = new AtomicReference<>();
+        AtomicReference<M3SearchBar> searchRef = new AtomicReference<>();
         runOnFx(() -> {
             M3DataTable<String> table = new M3DataTable<>();
             table.getColumns().add(new M3DataTable.Column<>("Name", String::toString, 140));
             table.getItems().addAll("Alice", "Bob");
-
             M3SearchBar search = (M3SearchBar) table.getChildren().get(0);
             search.setQuery("zzz-no-match");
-
-            VBox rows = (VBox) table.getChildren().get(2);
+            tableRef.set(table);
+            searchRef.set(search);
+        });
+        Thread.sleep(M3DataTable.SEARCH_DEBOUNCE_MILLIS + 250);
+        runOnFx(() -> {
+            VBox rows = (VBox) tableRef.get().getChildren().get(2);
             assertEquals(1, rows.getChildren().size());
             assertEquals("No matching items", ((Label) rows.getChildren().get(0)).getText());
-
-            search.setQuery("");
-            rows = (VBox) table.getChildren().get(2);
+            searchRef.get().setQuery("");
+        });
+        Thread.sleep(M3DataTable.SEARCH_DEBOUNCE_MILLIS + 250);
+        runOnFx(() -> {
+            VBox rows = (VBox) tableRef.get().getChildren().get(2);
             assertEquals(2, rows.getChildren().size(), "Rows return when the filter clears");
         });
     }
