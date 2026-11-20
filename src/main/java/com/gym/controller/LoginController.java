@@ -54,22 +54,6 @@ public class LoginController implements ScreenController {
     /** Demo password rule, matching the launch gate's rule (LaunchGateController). */
     private static final int MIN_PASSWORD_LENGTH = 4;
 
-    /**
-     * Material Symbols paths for the visibility glyphs the bundled {@code M3Icons} catalog lacks
-     * (same paths as the launch gate). Apache 2.0, (c) Google — attribution kept per the repo
-     * licensing rules.
-     */
-    private static final String EYE_PATH =
-            "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z"
-            + "M12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z";
-    private static final String EYE_OFF_PATH =
-            "M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75"
-            + "-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7z"
-            + "M2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84"
-            + "l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3"
-            + " .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2z"
-            + "m4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z";
-
     // ---- View fields (the former fx:id injections, now built by buildView) ----
     private StackPane rootPane;
     private M3ParticleCanvas particleBackdrop;
@@ -280,9 +264,7 @@ public class LoginController implements ScreenController {
         rootPane.getChildren().addAll(particleBackdrop, glassCanopy, mainHBox, authSnackbar);
 
         installFeedbackLayer(rootPane);
-        // Honest affordance: the bundled icon catalog lacks visibility icons, so the toggle
-        // carries the SVG eye (the markup used to ship a placeholder magnifier glyph).
-        passwordToggleBtn.setGraphic(M3Icon.ofSvg(EYE_PATH));
+        passwordToggleBtn.setGraphic(M3Icon.symbol("visibility"));
         passwordToggleBtn.setAccessibleText("Show password");
         // Editing again clears the inline tray and the field error.
         usernameField.textProperty().addListener((obs, ov, nv) -> clearErrors());
@@ -386,7 +368,7 @@ public class LoginController implements ScreenController {
         row.getChildren().set(index, visibleNext);
         HBox.setHgrow(visibleNext, Priority.ALWAYS);
         passwordRevealed = !passwordRevealed;
-        passwordToggleBtn.setGraphic(M3Icon.ofSvg(passwordRevealed ? EYE_OFF_PATH : EYE_PATH));
+        passwordToggleBtn.setGraphic(M3Icon.symbol(passwordRevealed ? "visibility_off" : "visibility"));
         passwordToggleBtn.setAccessibleText(passwordRevealed ? "Hide password" : "Show password");
         visibleNext.requestFocus();
         if (visibleNext instanceof TextField textField) {

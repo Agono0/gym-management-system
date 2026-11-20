@@ -13,6 +13,10 @@ import io.m3fx.controls.data.M3DataTable;
 import io.m3fx.controls.glass.GlassEffectParams;
 import io.m3fx.controls.glass.GlassShape;
 import io.m3fx.controls.glass.M3GlassPane;
+import io.m3fx.controls.icon.M3Icon;
+import io.m3fx.controls.iconbutton.IconButtonVariant;
+import io.m3fx.controls.iconbutton.M3IconButton;
+import io.m3fx.controls.common.M3Tooltip;
 import io.m3fx.controls.sheet.M3SideSheet;
 import io.m3fx.controls.textfield.M3TextField;
 import javafx.collections.FXCollections;
@@ -24,6 +28,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -239,7 +244,9 @@ public class MembershipController implements ScreenController {
         sheetHeader.setAlignment(Pos.CENTER_LEFT);
         Region sheetSpacer = new Region();
         HBox.setHgrow(sheetSpacer, Priority.ALWAYS);
-        M3Button closeBtn = new M3Button("✕", ButtonVariant.TEXT);
+        M3IconButton closeBtn = new M3IconButton(M3Icon.symbol("close"), IconButtonVariant.STANDARD);
+        closeBtn.setAccessibleText("Close the agreement inspector");
+        Tooltip.install(closeBtn, M3Tooltip.plain("Close inspector"));
         closeBtn.setOnAction(e -> onCloseDetailSheet());
         sheetHeader.getChildren().addAll(
                 styledLabel("Agreement Inspector", "headline-small"),

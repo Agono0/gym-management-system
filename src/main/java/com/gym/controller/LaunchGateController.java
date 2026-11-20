@@ -78,26 +78,6 @@ public class LaunchGateController {
     private static final double SPLASH_SCRIM_OPACITY = 0.97;
     private static final double SIGNOUT_SCRIM_OPACITY = 0.88;
 
-    /**
-     * Material Symbols paths for the two glyphs the bundled {@code M3Icons} catalog lacks
-     * (visibility / visibility_off). Apache 2.0, (c) Google — attribution kept here per the
-     * repo licensing rules.
-     */
-    private static final String EYE_PATH =
-            "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z"
-            + "M12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z";
-    private static final String EYE_OFF_PATH =
-            "M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75"
-            + "-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7z"
-            + "M2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84"
-            + "l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3"
-            + " .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2z"
-            + "m4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z";
-    private static final String LOCK_PATH =
-            "M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10"
-            + "c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1"
-            + " 1.71 0 3.1 1.39 3.1 3.1v2z";
-
     /** The shell that owns this gate (created once by {@link AppShellController#initialize} flow). */
     private AppShellController shell;
 
@@ -323,7 +303,7 @@ public class LaunchGateController {
 
         passwordField = new M3TextField("Password", TextFieldVariant.FILLED);
         passwordField.setMaxWidth(Double.MAX_VALUE);
-        passwordField.setLeadingIcon(M3Icon.ofSvg(LOCK_PATH));
+        passwordField.setLeadingIcon(M3Icon.symbol("lock"));
         buildPasswordInput();
 
         capsHint = buildCapsHint();
@@ -462,7 +442,7 @@ public class LaunchGateController {
 
     /** Show/hide (eye) toggle: swaps the masked and plain inputs and flips its own glyph. */
     private M3IconButton buildPasswordToggle() {
-        passwordToggle = M3IconButton.standard(M3Icon.ofSvg(EYE_PATH));
+        passwordToggle = M3IconButton.standard(M3Icon.symbol("visibility"));
         passwordToggle.setAccessibleText(passwordHidden ? "Show password" : "Hide password");
         passwordToggle.setOnAction(e -> togglePasswordVisibility());
         return passwordToggle;
@@ -482,7 +462,7 @@ public class LaunchGateController {
         HBox.setHgrow(visibleNext, Priority.ALWAYS);
         passwordHidden = !passwordHidden;
         passwordToggle.setAccessibleText(passwordHidden ? "Show password" : "Hide password");
-        passwordToggle.setGraphic(M3Icon.ofSvg(passwordHidden ? EYE_PATH : EYE_OFF_PATH));
+        passwordToggle.setGraphic(M3Icon.symbol(passwordHidden ? "visibility" : "visibility_off"));
         visibleNext.requestFocus();
         if (visibleNext instanceof TextField tf) {
             tf.positionCaret(tf.getText() == null ? 0 : tf.getText().length());

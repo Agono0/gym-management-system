@@ -298,16 +298,20 @@ public class LiveWorkoutController implements ScreenController {
         actionDock.setAlignment(Pos.CENTER_RIGHT);
         actionDock.getStyleClass().add("hud-bottom-action-dock");
         actionDock.setPadding(new Insets(14, 20, 14, 20));
-        M3Button abortBtn = new M3Button("⚠️ ABORT SET / REST", ButtonVariant.FILLED);
+        M3Button abortBtn = new M3Button("ABORT SET / REST", ButtonVariant.FILLED);
+        abortBtn.setGraphic(M3Icon.symbol("stop"));
         abortBtn.getStyleClass().add("hud-danger-btn");
         abortBtn.setOnAction(e -> onAbortSet());
-        M3Button pauseBtn = new M3Button("⏸️ PAUSE", ButtonVariant.FILLED);
+        M3Button pauseBtn = new M3Button("PAUSE", ButtonVariant.FILLED);
+        pauseBtn.setGraphic(M3Icon.symbol("pause"));
         pauseBtn.getStyleClass().add("hud-neutral-btn");
         pauseBtn.setOnAction(this::onTogglePause);
-        M3Button recalibrateBtn = new M3Button("🔄 RE-CALIBRATE", ButtonVariant.FILLED);
+        M3Button recalibrateBtn = new M3Button("RE-CALIBRATE", ButtonVariant.FILLED);
+        recalibrateBtn.setGraphic(M3Icon.symbol("refresh"));
         recalibrateBtn.getStyleClass().add("hud-neutral-btn");
         recalibrateBtn.setOnAction(e -> onRecalibrateSensor());
-        completeSetButton = new M3Button("✅ COMPLETE SET (140kg)", ButtonVariant.FILLED);
+        completeSetButton = new M3Button("COMPLETE SET (140kg)", ButtonVariant.FILLED);
+        completeSetButton.setGraphic(M3Icon.symbol("check"));
         completeSetButton.getStyleClass().add("hud-complete-set-btn");
         completeSetButton.setOnAction(e -> onCompleteSet());
         Region dockSpacer = new Region();
@@ -436,7 +440,10 @@ public class LiveWorkoutController implements ScreenController {
             intervalCountdownTimer.pause();
         }
         if (event.getSource() instanceof M3Button pauseButton) {
-            pauseButton.setText(paused ? "⏸️ PAUSE" : "▶ RESUME");
+            // The clocks just flipped: what was paused now resumes, so the button offers the
+            // opposite action (Material Symbols pause / play_arrow instead of emoji glyphs).
+            pauseButton.setText(paused ? "PAUSE" : "RESUME");
+            pauseButton.setGraphic(M3Icon.symbol(paused ? "pause" : "play_arrow"));
         }
     }
 

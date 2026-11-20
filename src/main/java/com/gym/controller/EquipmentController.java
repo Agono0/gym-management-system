@@ -7,6 +7,7 @@ import io.m3fx.controls.card.M3Card;
 import io.m3fx.controls.chip.ChipVariant;
 import io.m3fx.controls.chip.M3Chip;
 import io.m3fx.controls.data.M3DataTable;
+import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.scene3d.M3ModelViewer3D;
 import io.m3fx.controls.selection.M3Switch;
 import io.m3fx.controls.sheet.M3SideSheet;
@@ -210,10 +211,12 @@ public class EquipmentController implements ScreenController {
         // Quick maintenance logger CTA.
         HBox dockActions = new HBox(12);
         dockActions.setAlignment(Pos.CENTER_LEFT);
-        M3Button logMaintenanceBtn = new M3Button("🛠️ Log Today's Maintenance", ButtonVariant.TONAL);
+        M3Button logMaintenanceBtn = new M3Button("Log Today's Maintenance", ButtonVariant.TONAL);
+        logMaintenanceBtn.setGraphic(M3Icon.symbol("edit"));
         logMaintenanceBtn.getStyleClass().add("tonal-button");
         logMaintenanceBtn.setOnAction(e -> handleLogMaintenanceToday());
-        M3Button deleteBtn = new M3Button("🗑️ Delete Item", ButtonVariant.TEXT);
+        M3Button deleteBtn = new M3Button("Delete Item", ButtonVariant.TEXT);
+        deleteBtn.setGraphic(M3Icon.symbol("delete"));
         deleteBtn.getStyleClass().add("danger-text-btn");
         deleteBtn.setOnAction(e -> handleDeleteSelected());
         Region dockSpacer = new Region();
