@@ -191,7 +191,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   where `MotionUtil` picks presets, reading a documented property + API.
   done-when: with reduced motion on, no spring/overshoot animation runs (test), gallery demo
   works.
-  claimed-by: — | status: BLOCKED (A3)
+  claimed-by: A (pooled) | status: DONE (round 3, commit 57ccd5c — MotionScheme enum in core,
+  snap semantics + live flag-flip in SpringAnimation, 150 ms fades in MotionUtil, instant
+  StateLayer; 13 new tests; M3BottomSheet one-line migration pending in B2)
 
 - [ ] B8 | lane:B | deps:B1,B2,B3,B4,B5,B6,B7 | files: m3fx-controls/build.gradle (orchestrator applies), m3fx-controls/CHANGELOG.md
   goal: Version bump to 0.1.1 and CHANGELOG.md entry listing every additive API + fix from
@@ -360,3 +362,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 1 | A1 (1b82828) | B1 (6164e24) | C0 (a7f23de) | a7f23de, pushed — build green, core tests 23, controls 168, customer-list real-data render verified |
 | 2 | A2 (356c3c2), A3 (0a794ff), A4 (26a86e9) | B3 (949e301) | C1 (1d60941) | all merged locally 2802906 — pushes deferred per user directive |
 | 3 | A5 (696a73a), A6 (f73b4f7), A7 (5b667e9) | B12 | C2 | A batch merged locally 168bbb3 — lane A queue EMPTY (A1-A7 done); core tests 61, controls 174 |
+| 3b | B7 (57ccd5c, pooled to A) | — | — | merged locally 57ccd5c; core tests 62, controls 185 |
