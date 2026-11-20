@@ -208,6 +208,18 @@ public class AppShellController implements ScreenController {
         searchTriggerBar.setMaxWidth(380);
         HBox.setHgrow(searchTriggerBar, Priority.ALWAYS);
         searchTriggerBar.setOnMouseClicked(e -> onOpenCommandPalette());
+        // B/Q3: the search trigger is keyboard operable too (Tab to it, Enter/Space opens
+        // the palette; Ctrl+K works anywhere in the scene via the scene accelerator).
+        searchTriggerBar.setFocusTraversable(true);
+        searchTriggerBar.addEventHandler(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ENTER
+                    || e.getCode() == javafx.scene.input.KeyCode.SPACE) {
+                onOpenCommandPalette();
+                e.consume();
+            }
+        });
+        searchTriggerBar.setAccessibleText(
+                "Quick Command or Search — opens the command palette (Ctrl+K)");
         Region searchSpacer = new Region();
         HBox.setHgrow(searchSpacer, Priority.ALWAYS);
         searchTriggerBar.getChildren().addAll(
@@ -233,7 +245,9 @@ public class AppShellController implements ScreenController {
                 placeholderLabel("DB: WAL ONLINE", "telemetry-text"));
 
         themeModeSwitch = new M3Switch(true);
-        themeModeSwitch.setOnMouseClicked(e -> onToggleThemeMode());
+        // B/Q3: the theme toggle fires on the selection change, so keyboard Space toggles
+        // (M3Switch's own key handling) re-theme the app exactly like mouse clicks do.
+        themeModeSwitch.selectedProperty().addListener((obs, o, sel) -> onToggleThemeMode());
 
         userRoleChip = new M3Chip("Alex Carter [ADMIN]", ChipVariant.ASSIST);
         userRoleChip.setOnAction(e -> onOpenUserMenu());
@@ -315,6 +329,15 @@ public class AppShellController implements ScreenController {
         StackPane.setAlignment(globalSnackbar, Pos.BOTTOM_CENTER);
         StackPane.setMargin(globalSnackbar, new Insets(0, 0, 24.0, 0));
         viewRoot.getChildren().addAll(commandPalette, globalSnackbar);
+        // B/Q3: Ctrl+K opens the command palette from anywhere in the shell scene (the
+        // search placeholder promises it).
+        viewRoot.addEventHandler(javafx.scene.input.KeyEvent.KEY_PRESSED, e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.K
+                    && e.isControlDown() && !e.isConsumed()) {
+                onOpenCommandPalette();
+                e.consume();
+            }
+        });
 
 
     // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
