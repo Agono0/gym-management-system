@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import io.m3fx.controls.data.M3Timeline.Status;
 import io.m3fx.controls.icon.M3Icon;
+import io.m3fx.controls.iconbutton.M3IconButton;
 import io.m3fx.controls.search.M3SearchBar;
 import javafx.application.Platform;
 import javafx.scene.Cursor;
@@ -94,6 +95,27 @@ class M3DataComponentsTest {
             assertEquals(1, table.getCurrentPage());
             table.prevPage();
             assertEquals(0, table.getCurrentPage());
+
+            // Pagination arrows announce pages and carry tooltips (B2).
+            javafx.scene.Parent content =
+                    (javafx.scene.Parent) table.getChildren().get(table.getChildren().size() - 1);
+            javafx.scene.control.Tooltip prevTip = null;
+            javafx.scene.control.Tooltip nextTip = null;
+            for (javafx.scene.Node child : content.getChildrenUnmodifiable()) {
+                if (child instanceof M3IconButton iconButton) {
+                    if (prevTip == null) {
+                        prevTip = iconButton.getTooltip();
+                        assertEquals("Previous page", iconButton.getAccessibleText());
+                    } else if (nextTip == null) {
+                        nextTip = iconButton.getTooltip();
+                        assertEquals("Next page", iconButton.getAccessibleText());
+                    }
+                }
+            }
+            assertTrue(prevTip != null && "Previous page".equals(prevTip.getText()),
+                    "the previous-page arrow carries its tooltip");
+            assertTrue(nextTip != null && "Next page".equals(nextTip.getText()),
+                    "the next-page arrow carries its tooltip");
         });
     }
 

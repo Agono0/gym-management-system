@@ -18,9 +18,11 @@ public class SpringInterpolator extends Interpolator {
     /**
      * Default M3 Expressive spring: subtle ~4-6% overshoot, settles naturally.
      *
-     * <p>Hand-tuned pre-token-grid value that diverges from
-     * {@code MotionTokens.SPATIAL_EXPRESSIVE_DEFAULT}; kept because existing controls consume it.
+     * @deprecated Hand-tuned pre-token-grid value that diverges from the SpringToken grid; use
+     *     {@code MotionTokens.SPATIAL_EXPRESSIVE_DEFAULT.toInterpolator()} (the canonical A4
+     *     bridge).
      */
+    @Deprecated
     public static final SpringInterpolator DEFAULT = new SpringInterpolator(0.70, 7.5);
 
     /**

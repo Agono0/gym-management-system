@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.m3fx.controls.card.CardVariant;
 import io.m3fx.controls.card.M3Card;
 import javafx.application.Platform;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.control.Label;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -121,6 +123,66 @@ class M3CarouselTest {
         }
         assertEquals(7, carousel.getActiveIndex()); // Clamped to last item index (0..7)
         });
+    }
+
+    private static KeyEvent keyPressed(KeyCode code) {
+        return new KeyEvent(KeyEvent.KEY_PRESSED, "", "", code, false, false, false, false);
+    }
+
+    @Test
+    void arrowKeysMoveTheActiveItem() throws Exception {
+        onFx(() -> {
+            M3Carousel carousel = buildCarousel(3);
+            carousel.fireEvent(keyPressed(KeyCode.RIGHT));
+            assertEquals(1, carousel.getActiveIndex(), "Right moves forward");
+            carousel.fireEvent(keyPressed(KeyCode.RIGHT));
+            carousel.fireEvent(keyPressed(KeyCode.RIGHT));
+            assertEquals(2, carousel.getActiveIndex(), "Right clamps at the last item");
+            carousel.fireEvent(keyPressed(KeyCode.LEFT));
+            assertEquals(1, carousel.getActiveIndex(), "Left moves back");
+        });
+    }
+
+    @Test
+    void homeAndEndJumpToTheEnds() throws Exception {
+        onFx(() -> {
+            M3Carousel carousel = buildCarousel(4);
+            carousel.setActiveIndex(2);
+            carousel.fireEvent(keyPressed(KeyCode.HOME));
+            assertEquals(0, carousel.getActiveIndex(), "Home jumps to the first item");
+            carousel.fireEvent(keyPressed(KeyCode.END));
+            assertEquals(3, carousel.getActiveIndex(), "End jumps to the last item");
+        });
+    }
+
+    @Test
+    void accessibleTextAnnouncesThePosition() throws Exception {
+        onFx(() -> {
+            M3Carousel carousel = buildCarousel(5);
+            assertEquals("Slide 1 of 5", carousel.getAccessibleText());
+            carousel.setActiveIndex(3);
+            assertEquals("Slide 4 of 5", carousel.getAccessibleText());
+            carousel.getItems().remove(4);
+            assertEquals("Slide 4 of 4", carousel.getAccessibleText(),
+                    "item removal re-announces with the clamped index");
+            carousel.getItems().clear();
+            assertEquals("Empty carousel", carousel.getAccessibleText());
+        });
+    }
+
+    @Test
+    void carouselIsFocusTraversableWithAPaginationRole() {
+        M3Carousel carousel = new M3Carousel(M3Carousel.CarouselLayout.MULTI_BROWSE);
+        assertTrue(carousel.isFocusTraversable(), "keyboard navigation needs focus");
+        assertEquals(javafx.scene.AccessibleRole.PAGINATION, carousel.getAccessibleRole());
+    }
+
+    private static M3Carousel buildCarousel(int count) {
+        M3Carousel carousel = new M3Carousel(M3Carousel.CarouselLayout.MULTI_BROWSE);
+        for (int i = 0; i < count; i++) {
+            carousel.getItems().add(M3Card.of(CardVariant.ELEVATED, new Label("Item " + (i + 1))));
+        }
+        return carousel;
     }
 }
 

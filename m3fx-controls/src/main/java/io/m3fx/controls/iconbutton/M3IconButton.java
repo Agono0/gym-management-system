@@ -1,17 +1,21 @@
 package io.m3fx.controls.iconbutton;
 
+import io.m3fx.controls.common.M3Tooltip;
 import io.m3fx.controls.internal.MotionUtil;
 import io.m3fx.controls.common.PressableControl;
 import io.m3fx.controls.internal.Ripple;
 import io.m3fx.controls.internal.StateLayer;
 import io.m3fx.controls.internal.ThemeColors;
+import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.core.theme.ColorRole;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Skin;
 import javafx.scene.control.SkinBase;
+import javafx.scene.control.Tooltip;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
@@ -20,6 +24,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
+import java.util.Objects;
 
 /**
  * M3 icon button: a 48x48 touch target with a 40dp container circle and an icon, in
@@ -29,6 +34,10 @@ import javafx.scene.shape.Rectangle;
  * real {@code Control} + {@code Skin} with live ripple, state-layer overlays and spring
  * press-scale, all resolved from the theme (correct in dark mode). Toggle mode keeps a selected
  * state rendered like the filled variant. Keyboard operable via Space/Enter.
+ *
+ * <p>Accessibility: an {@link M3Icon} graphic announces its symbol name capitalized
+ * ("delete" &rarr; "Delete"); an {@code accessibleText} set by the caller always wins. A tooltip
+ * with the announced text is installed automatically unless the caller already installed one.
  */
 // Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
 // (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
@@ -45,6 +54,15 @@ public class M3IconButton extends PressableControl {
     private final ObjectProperty<Node> graphic = new SimpleObjectProperty<>(this, "graphic");
     private final ObjectProperty<IconButtonVariant> variant =
             new SimpleObjectProperty<>(this, "variant", IconButtonVariant.STANDARD);
+
+    /** The accessible text this control last derived from its graphic; caller changes win. */
+    private String lastDerivedText;
+    /** Set once the caller writes an accessible text that differs from the derived one. */
+    private boolean accessibleTextOverridden;
+    /** The auto-installed tooltip; stops being managed if the caller replaces it. */
+    private Tooltip autoTooltip;
+    private M3Icon watchedIcon;
+    private ChangeListener<String> symbolListener;
 
     /** Creates a standard icon button. */
     public M3IconButton() {
@@ -66,7 +84,16 @@ public class M3IconButton extends PressableControl {
         setGraphic(graphic);
         setVariant(variant == null ? IconButtonVariant.STANDARD : variant);
         variantProperty().addListener((obs, oldV, newV) -> updateStyleClass(oldV, newV));
-        setAccessibleText("Icon button");
+        // Accessible label: derived from an M3Icon graphic; a caller-written accessible text
+        // (anything different from what we derived) disables auto-derivation permanently.
+        accessibleTextProperty().addListener((obs, oldV, newV) -> {
+            if (!Objects.equals(newV, lastDerivedText)) {
+                accessibleTextOverridden = true;
+            }
+            refreshAutoTooltip();
+        });
+        graphicProperty().addListener((obs, oldGraphic, newGraphic) -> watchGraphicIcon(newGraphic));
+        watchGraphicIcon(graphic);
     }
 
     /**
@@ -152,6 +179,74 @@ public class M3IconButton extends PressableControl {
     @Override
     protected Skin<?> createDefaultSkin() {
         return new IconButtonSkin(this);
+    }
+
+    /** Re-derives the accessible label from the graphic's icon and refreshes the tooltip. */
+    private void deriveAccessibleText() {
+        if (accessibleTextOverridden) {
+            return;
+        }
+        String derived = null;
+        if (watchedIcon != null) {
+            // M3Icon announces its symbol name (renderSymbol sets it as the icon's accessible
+            // text even when built through M3Icon.symbol, whose name property stays unset).
+            String announced = watchedIcon.getSymbolName() != null
+                    ? watchedIcon.getSymbolName()
+                    : watchedIcon.getAccessibleText();
+            if (announced != null && !announced.startsWith(UNKNOWN_ICON_PREFIX)) {
+                derived = capitalize(announced);
+            }
+        }
+        lastDerivedText = derived;
+        setAccessibleText(derived);
+        refreshAutoTooltip();
+    }
+
+    /** Tracks the current graphic's icon name so label changes re-derive the announcement. */
+    private void watchGraphicIcon(Node graphic) {
+        if (watchedIcon != null && symbolListener != null) {
+            watchedIcon.symbolNameProperty().removeListener(symbolListener);
+        }
+        watchedIcon = graphic instanceof M3Icon icon ? icon : null;
+        if (watchedIcon != null) {
+            symbolListener = (obs, oldV, newV) -> deriveAccessibleText();
+            watchedIcon.symbolNameProperty().addListener(symbolListener);
+        } else {
+            symbolListener = null;
+        }
+        deriveAccessibleText();
+    }
+
+    /** Keeps the auto-installed tooltip in sync with the announced text. */
+    private void refreshAutoTooltip() {
+        if (autoTooltip != null && getTooltip() != autoTooltip) {
+            // The caller replaced the tooltip; stop managing it.
+            autoTooltip = null;
+        }
+        String text = getAccessibleText();
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        if (autoTooltip == null) {
+            if (getTooltip() != null) {
+                return; // a caller-installed tooltip wins, never double-install
+            }
+            autoTooltip = M3Tooltip.plain(text);
+            setTooltip(autoTooltip);
+        } else {
+            autoTooltip.setText(text);
+        }
+    }
+
+    /** Prefix M3Icon announces for catalog names it does not render; not a usable label. */
+    private static final String UNKNOWN_ICON_PREFIX = "unknown icon: ";
+
+    /** "delete" -> "Delete": screen readers announce the icon name with a leading capital. */
+    private static String capitalize(String symbolName) {
+        if (symbolName == null || symbolName.isEmpty()) {
+            return symbolName;
+        }
+        return Character.toUpperCase(symbolName.charAt(0)) + symbolName.substring(1);
     }
 
     private void updateStyleClass(IconButtonVariant oldV, IconButtonVariant newV) {

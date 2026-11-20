@@ -1,6 +1,10 @@
 package io.m3fx.controls.common;
 
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 import javafx.scene.Node;
+import javafx.scene.control.Control;
 import javafx.scene.control.Tooltip;
 import javafx.util.Duration;
 
@@ -57,6 +61,10 @@ public final class M3Tooltip {
         return tooltip;
     }
 
+    /** Tooltips this helper installed, keyed weakly by owner node. */
+    private static final Map<Node, Tooltip> INSTALLED =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     /**
      * Installs a plain tooltip on a node.
      *
@@ -64,6 +72,33 @@ public final class M3Tooltip {
      * @param text tooltip text
      */
     public static void install(Node node, String text) {
-        Tooltip.install(node, plain(text));
+        Tooltip tooltip = plain(text);
+        if (node instanceof Control control) {
+            // Controls carry the tooltip as a property, so it is queryable via getTooltip().
+            control.setTooltip(tooltip);
+        } else {
+            Tooltip.install(node, tooltip);
+            INSTALLED.put(node, tooltip);
+        }
+    }
+
+    /**
+     * Installs a plain tooltip unless the node already carries one — the auto-tooltip sites
+     * (icon buttons, snackbar close, table pagination) use this so a caller-installed tooltip
+     * always wins and is never duplicated. Node has no tooltip query API, so an existing
+     * M3Tooltip install is tracked in {@link #INSTALLED} and a caller tooltip on a
+     * {@link Control} is honored directly.
+     *
+     * @param node the owner node
+     * @param text tooltip text (blank text installs nothing)
+     */
+    public static void installIfAbsent(Node node, String text) {
+        if (text == null || text.isBlank() || INSTALLED.containsKey(node)) {
+            return;
+        }
+        if (node instanceof Control control && control.getTooltip() != null) {
+            return;
+        }
+        install(node, text);
     }
 }

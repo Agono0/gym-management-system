@@ -40,3 +40,9 @@ Sources:
 - Filter/input: 1px outline (unselected) → secondary-container flat (selected, no border),
   checkmark leading when selected (handled by selected pseudo-class + CSS).
 - Input chips: avatar leading + close trailing (closable flag; close icon rendering is caller-side).
+- Accessibility (B2, per the M3 chips keyboard table
+  https://m3.material.io/components/chips/accessibility): Space/Enter "activates, selects or
+  deselects" the focused chip - implemented on the control because the custom SkinBase skin has
+  no ButtonBehavior (ToggleButton skins normally install it); filter chips toggle selected and
+  announce it, assist/suggestion/input fire the action without staying selected;
+  Delete/Backspace removes a closable chip (already present).

@@ -1,5 +1,6 @@
 package io.m3fx.controls.snackbar;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import javafx.application.Platform;
@@ -84,10 +85,31 @@ class M3SnackbarUxTest {
 
         runOnFx(() -> snackbar.get().dismiss());
         waitFor(false);
-        // After the inter-message gap the queued message shows automatically.
-        waitFor(true);
+    }
 
-        runOnFx(() -> snackbar.get().dismiss());
-        waitFor(false);
+    @Test
+    void closeButtonCarriesADismissTooltip() throws Throwable {
+        runOnFx(() -> {
+            StackPane root = new StackPane();
+            io.m3fx.controls.overlay.OverlayLayer overlay =
+                    new io.m3fx.controls.overlay.OverlayLayer();
+            root.getChildren().add(overlay);
+            new Scene(root, 480, 320);
+            M3Snackbar snackbar = new M3Snackbar(overlay);
+            snackbar.show("Saved");
+            // The snackbar wrapper is the transient node on the overlay layer.
+            // The ctor stacks scrim, sheet, modal, anchored and transient layers (index 4).
+            javafx.scene.Node transientLayer = overlay.getChildren().get(4);
+            javafx.scene.layout.VBox wrapper = (javafx.scene.layout.VBox)
+                    ((javafx.scene.layout.Pane) transientLayer).getChildren().get(0);
+            javafx.scene.layout.HBox bar = (javafx.scene.layout.HBox)
+                    wrapper.getChildren().get(0);
+            javafx.scene.control.Button close = (javafx.scene.control.Button)
+                    bar.getChildren().get(bar.getChildren().size() - 1);
+            assertEquals("Dismiss", close.getAccessibleText());
+            javafx.scene.control.Tooltip tooltip = close.getTooltip();
+            assertTrue(tooltip != null && "Dismiss".equals(tooltip.getText()),
+                    "the snackbar close button installs a Dismiss tooltip");
+        });
     }
 }

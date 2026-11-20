@@ -12,7 +12,10 @@ import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.geometry.Pos;
+import javafx.scene.AccessibleRole;
 import javafx.scene.Node;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -25,7 +28,10 @@ import javafx.scene.shape.Rectangle;
  * and spring-driven snapping physics.
  *
  * <p>See <a href="https://m3.material.io/components/carousel/overview">M3 Carousels</a>.
- * Supports Multi-browse and Hero configurations with interactive drag and button scrolling.
+ * Supports Multi-browse and Hero configurations with interactive drag, button scrolling and
+ * keyboard navigation (Left/Right move the active item, Home/End jump to the first/last).
+ * Uses the pagination accessibility role and announces {@code "Slide <n> of <m>"} so screen
+ * readers report the position.
  */
 // Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
 // (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
@@ -98,10 +104,44 @@ public class M3Carousel extends Region {
         items.addListener((ListChangeListener<Node>) c -> {
             track.getChildren().setAll(items);
             updateNavState();
+            updateCarouselAccessibleText();
         });
 
         prevButton.setOnAction(e -> scrollPrev());
         nextButton.setOnAction(e -> scrollNext());
+
+        // Keyboard navigation + a11y: the carousel is one focusable group; arrow keys move the
+        // active item like the arrow buttons, Home/End jump to the ends, and the accessible text
+        // announces the position ("Slide 2 of 5") whenever it changes.
+        setFocusTraversable(true);
+        setAccessibleRole(AccessibleRole.PAGINATION);
+        addEventHandler(KeyEvent.KEY_PRESSED, e -> {
+            if (items.isEmpty()) {
+                return;
+            }
+            switch (e.getCode()) {
+                case LEFT -> {
+                    e.consume();
+                    scrollPrev();
+                }
+                case RIGHT -> {
+                    e.consume();
+                    scrollNext();
+                }
+                case HOME -> {
+                    e.consume();
+                    setActiveIndex(0);
+                }
+                case END -> {
+                    e.consume();
+                    setActiveIndex(items.size() - 1);
+                }
+                default -> {
+                    // other keys are not carousel navigation
+                }
+            }
+        });
+        activeIndex.addListener((obs, oldV, newV) -> updateCarouselAccessibleText());
 
         initDragGestures();
 
@@ -201,6 +241,17 @@ public class M3Carousel extends Region {
         if (getActiveIndex() < items.size() - 1) {
             setActiveIndex(getActiveIndex() + 1);
         }
+    }
+
+    /** Announces the carousel position ("Slide <n> of <m>") for screen readers. */
+    private void updateCarouselAccessibleText() {
+        int count = items.size();
+        if (count == 0) {
+            setAccessibleText("Empty carousel");
+            return;
+        }
+        int index = Math.min(Math.max(getActiveIndex(), 0), count - 1);
+        setAccessibleText("Slide " + (index + 1) + " of " + count);
     }
 
     private double getItemOffset(int index) {

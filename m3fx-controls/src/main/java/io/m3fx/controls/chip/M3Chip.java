@@ -21,9 +21,12 @@ import javafx.scene.layout.StackPane;
 /**
  * M3 chip: assist, filter, input and suggestion variants with icon support and selection state.
  *
- * <p>See <a href="https://m3.material.io/components/chips/overview">M3 chips</a>. Height 32dp,
- * small shape (8dp), label-large type. Filter chips toggle selection; input chips expose a close
- * action; all variants meet the 48dp touch target via padding.
+ * <p>See <a href="https://m3.material.io/components/chips/overview">M3 chips</a> and the
+ * <a href="https://m3.material.io/components/chips/accessibility">chips accessibility table</a>.
+ * Height 32dp, small shape (8dp), label-large type. Filter chips toggle selection; input chips
+ * expose a close action; all variants meet the 48dp touch target via padding. Keyboard:
+ * Space/Enter activate (and select/deselect) the focused chip, Delete/Backspace removes a
+ * closable one.
  */
 // Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
 // (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
@@ -66,6 +69,20 @@ public class M3Chip extends ToggleButton {
             }
         });
         setFocusTraversable(true);
+        // Keyboard parity per the M3 chips keyboard table: Space/Enter activate, select or
+        // deselect the focused chip (the custom SkinBase skin has no ButtonBehavior, so the
+        // firing that ToggleButton skins normally install must be done here). Filter chips
+        // toggle via fire(); assist/suggestion/input fire action and the ACTION handler below
+        // resets the selection.
+        addEventHandler(KeyEvent.KEY_PRESSED, e -> {
+            if (isDisabled()) {
+                return;
+            }
+            if (e.getCode() == KeyCode.SPACE || e.getCode() == KeyCode.ENTER) {
+                e.consume();
+                fire();
+            }
+        });
         // Keyboard parity with the X affordance: Delete/Backspace removes a closable chip.
         addEventHandler(KeyEvent.KEY_PRESSED, e -> {
             if (isDisabled() || !isClosable()) {

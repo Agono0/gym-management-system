@@ -126,12 +126,12 @@ public final class MotionTokens {
     /**
      * M3 Expressive spring interpolator (mild natural overshoot, settles smoothly).
      *
-     * <p>Hand-tuned pre-token-grid values that diverge from
-     * {@link #SPATIAL_EXPRESSIVE_DEFAULT}; kept because existing controls consume it. Prefer
-     * {@code SPATIAL_EXPRESSIVE_DEFAULT.toInterpolator()} for new code.
-     *
+     * @deprecated Hand-tuned pre-token-grid values that diverge from the SpringToken grid; use
+     *     {@code SPATIAL_EXPRESSIVE_DEFAULT.toInterpolator()} (the canonical A4 bridge) or
+     *     {@code MotionUtil.spring()} in the controls layer.
      * @return the default spring interpolator
      */
+    @Deprecated
     public static Interpolator spring() {
         return SpringInterpolator.DEFAULT;
     }

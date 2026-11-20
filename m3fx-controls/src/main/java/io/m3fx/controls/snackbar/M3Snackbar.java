@@ -1,5 +1,6 @@
 package io.m3fx.controls.snackbar;
 
+import io.m3fx.controls.common.M3Tooltip;
 import io.m3fx.controls.overlay.OverlayHost;
 import io.m3fx.core.token.MotionTokens;
 import javafx.animation.FadeTransition;
@@ -116,6 +117,7 @@ public class M3Snackbar {
         close.getStyleClass().add("m3-snackbar-close");
         close.setOnAction(e -> dismiss());
         close.setAccessibleText("Dismiss");
+        M3Tooltip.installIfAbsent(close, "Dismiss");
         bar.getChildren().add(close);
         Region bottomMargin = new Region();
         bottomMargin.setMinHeight(24);

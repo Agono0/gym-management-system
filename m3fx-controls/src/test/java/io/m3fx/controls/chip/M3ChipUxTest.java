@@ -70,6 +70,50 @@ class M3ChipUxTest {
     }
 
     @Test
+    void spaceAndEnterFireActionPerVariant() throws Throwable {
+        runOnFx(() -> {
+            // Assist chips fire ACTION without staying selected (M3 keyboard table:
+            // "Space or Enter activates, selects, or deselects the focused chip").
+            M3Chip assist = M3Chip.assist("Add");
+            AtomicInteger fired = new AtomicInteger();
+            assist.setOnAction(e -> fired.incrementAndGet());
+            assist.fireEvent(keyPressed(KeyCode.SPACE));
+            assertEquals(1, fired.get(), "Space fires the action");
+            assertFalse(assist.isSelected(), "assist chips do not stay selected");
+            assist.fireEvent(keyPressed(KeyCode.ENTER));
+            assertEquals(2, fired.get(), "Enter fires the action too");
+
+            // Suggestion chips behave like assist chips.
+            M3Chip suggestion = M3Chip.suggestion("Try");
+            suggestion.setOnAction(e -> fired.incrementAndGet());
+            suggestion.fireEvent(keyPressed(KeyCode.SPACE));
+            assertEquals(3, fired.get(), "suggestion chips fire the action");
+            assertFalse(suggestion.isSelected());
+        });
+    }
+
+    @Test
+    void spaceTogglesFilterChips() throws Throwable {
+        runOnFx(() -> {
+            M3Chip filter = M3Chip.filter("Cardio");
+            AtomicInteger fired = new AtomicInteger();
+            filter.setOnAction(e -> fired.incrementAndGet());
+            assertFalse(filter.isSelected());
+
+            filter.fireEvent(keyPressed(KeyCode.SPACE));
+            assertTrue(filter.isSelected(), "Space selects a filter chip");
+            assertEquals(1, fired.get(), "toggling fires the action");
+            assertEquals("Cardio, selected", filter.getAccessibleText(),
+                    "the selection announcement follows the keyboard toggle");
+
+            filter.fireEvent(keyPressed(KeyCode.ENTER));
+            assertFalse(filter.isSelected(), "Enter deselects a selected filter chip");
+            assertEquals(2, fired.get());
+            assertFalse(filter.getAccessibleText().contains("selected"));
+        });
+    }
+
+    @Test
     void deleteKeyRunsOnCloseForClosableChips() throws Throwable {
         runOnFx(() -> {
             M3Chip chip = M3Chip.input("Tag");

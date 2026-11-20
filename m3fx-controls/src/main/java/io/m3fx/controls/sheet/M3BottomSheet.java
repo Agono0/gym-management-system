@@ -1,5 +1,6 @@
 package io.m3fx.controls.sheet;
 
+import io.m3fx.controls.internal.MotionUtil;
 import io.m3fx.controls.overlay.OverlayLayer;
 import io.m3fx.core.token.MotionTokens;
 import javafx.animation.FadeTransition;
@@ -180,7 +181,7 @@ public class M3BottomSheet extends VBox {
                 TranslateTransition back = new TranslateTransition(
                         Duration.millis(MotionTokens.DURATION_MEDIUM_2), this);
                 back.setToY(0);
-                back.setInterpolator(MotionTokens.spring());
+                back.setInterpolator(MotionUtil.spring());
                 back.play();
             }
             e.consume();

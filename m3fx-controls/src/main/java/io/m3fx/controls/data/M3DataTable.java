@@ -127,6 +127,8 @@ public class M3DataTable<T> extends VBox {
         rowsContainer.getStyleClass().add("m3-data-table-rows");
 
         paginationBar.setAlignment(Pos.CENTER_RIGHT);
+        prevBtn.setAccessibleText("Previous page");
+        nextBtn.setAccessibleText("Next page");
         paginationBar.setPadding(new Insets(8, 12, 8, 12));
         pageInfoLabel.getStyleClass().add("m3-data-table-page-info");
 

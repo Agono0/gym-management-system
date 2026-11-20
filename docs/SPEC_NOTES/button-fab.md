@@ -26,6 +26,12 @@ Sources:
 - Standard: no container, icon on-surface-variant.
 - Filled: primary container / on-primary icon. Tonal: secondary-container. Outlined: outline border.
 - Toggle: unselected = standard look, selected = filled look (primary container); width 48.
+- Accessibility (B2): an M3Icon graphic announces its symbol name capitalized ("delete" ->
+  "Delete") as the button's accessible text; a caller-written accessibleText always wins; an
+  icon button without a derivable name publishes no generic label (callers must label it). A
+  plain M3Tooltip with the announced text is installed automatically and never duplicates a
+  caller tooltip (M3Tooltip.installIfAbsent; installed tooltips live in the Control's tooltip
+  property so getTooltip() can query them).
 
 ## FAB (M3Fab)
 - Sizes: small 40px, medium 56px (default), large 96px.

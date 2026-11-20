@@ -16,8 +16,10 @@ class SpringInterpolatorEndpointsTest {
     @Test
     void presetsSatisfyTheInterpolatorEndpoints() {
         // Only the non-deprecated presets here; the deprecated ones are covered by construction.
+        // The preset values (0.70, 7.5) built directly: the deprecated DEFAULT constant must not
+        // leak into test compilation, and the endpoint contract is per-parameter anyway.
         for (SpringInterpolator spring : new SpringInterpolator[] {
-            SpringInterpolator.DEFAULT, SpringInterpolator.FLUID,
+            new SpringInterpolator(0.70, 7.5), SpringInterpolator.FLUID,
         }) {
             assertEquals(0.0, spring.interpolate(0.0, 1.0, 0.0), 1e-12,
                     spring.getDampingRatio() + " must start at 0");
