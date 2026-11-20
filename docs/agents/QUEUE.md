@@ -182,7 +182,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   (screenshots at 1280).
   done-when: no duplicate text on the three reproducer screens, glass tests green, no
   performance regression in the glass path.
-  claimed-by: — | status: READY
+  claimed-by: B | status: DONE (round 3, salvage commit 42c2a51 → main 2fa2fa5 — Worker B hit
+  the quota limit after implementing + green tests; orchestrator verified reproducer
+  screenshots (single text on login/availability/attendance) and committed)
 
 - [ ] B7 | lane:B | deps:A3 | files: m3fx-controls/.../internal/MotionUtil.java, internal/SpringAnimation.java, internal/StateLayer.java
   goal: Honor `MotionTokens.isReducedMotion()` in the controls internals: `MotionUtil.enter/exit/
@@ -244,11 +246,20 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   goal: Anti-slop sweep (mechanical, no behavior change): every emoji glyph → `M3Icon`
   (LiveWorkout ⚠️⏸️🔄✅, Equipment 🛠️🗑️, Membership ✕); every hardcoded `Color.web("#…")` →
   theme roles via UiKit helper (dashboard green/red, progress purple, schedule cyan, floor-map
-  legend) keeping the semantic (success/error/tint) mapping documented.
+  legend) keeping the semantic (success/error/tint) mapping documented. PLUS the dashboard
+  600px clip fix (from C1 findings): make the KPI strip/action row reflow at compact width.
+  **HANDOFF NOTE (quota interruption)**: `../gym-wt-C` holds a DIRTY reference implementation —
+  the emoji/hex purge portion there passed ALL greps (zero emoji, zero `Color.web("#`) and
+  compiles, but the dashboard-600 reflow is BROKEN mid-pivot (overlapping content at 600).
+  Worker C's verified lesson before dying: binding content pref-height to width corrupts layout
+  (measured 716px) — use width-class-driven reflow with shared nodes (like the C1
+  `applyResponsiveChrome` swap pattern), NO width-bound ScrollPanes. Redo the sweep fresh in
+  your own worktree (inspect the reference for the mapping choices), and finish the reflow
+  properly.
   done-when: `grep -rn "Color.web(\"#" src/main/java/com/gym/controller` returns nothing except
   GymApp SEED_PURPLE; `grep -rnP "[\x{1F300}-\x{1FAFF}\x{2600}-\x{27BF}]"` over controllers is
-  empty; screenshots show no regression.
-  claimed-by: — | status: BLOCKED (C0,B3)
+  empty; dashboard renders clean at 600 AND 1280 (screenshots); no regression on touched screens.
+  claimed-by: — | status: READY (reassigned — reference diff in ../gym-wt-C)
 
 - [ ] C3 | lane:C | deps:C0,C2 | files: src/main/java/com/gym/controller/{DashboardController,CustomerListController,CustomerProfileController}.java
   goal: Real-data rebuild: Dashboard KPIs/charts/tables query CustomerDao/MembershipDao/
@@ -363,3 +374,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 2 | A2 (356c3c2), A3 (0a794ff), A4 (26a86e9) | B3 (949e301) | C1 (1d60941) | all merged locally 2802906 — pushes deferred per user directive |
 | 3 | A5 (696a73a), A6 (f73b4f7), A7 (5b667e9) | B12 | C2 | A batch merged locally 168bbb3 — lane A queue EMPTY (A1-A7 done); core tests 61, controls 174 |
 | 3b | B7 (57ccd5c, pooled to A) | — | — | merged locally 57ccd5c; core tests 62, controls 185 |
+| 3c | — | B12 (42c2a51, salvaged) | — | merged locally 2fa2fa5 — ghost text fixed; workers A/B/C hit quota limits; remaining tasks handed to zcode1/zcode2 |
