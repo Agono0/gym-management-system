@@ -406,7 +406,11 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   per customer, created on demand) via MedicalProfileDao; Login gate credential check (shared
   with C1's AdministratorDao work — coordinate, C1 owns the shell path).
   done-when: log weight→chart updates; medical create→edit→delete(undo) round-trips; screenshots.
-  claimed-by: — | status: BLOCKED (C0,C2)
+  claimed-by: A (pooled) | status: DONE (round 12, commits bcfb32f+769c98b+ce47801 → main
+  ce47801 — real record-driven analytics with honest no-target/VBT dashes, real PR celebration,
+  rule-3 create-on-demand medical console with real Undo delete; sqlite evidence for both;
+  VBT stays a dash (no schema source). Residual for Q2/Q4: activity-calendar footer text
+  still overlaps/garbles at 1280 ("streaks…longest streak" collision))
 
 - [ ] C10 | lane:C | deps:B3,C0 | files: src/main/java/com/gym/MainApp.java
   goal: Gallery pass: demo pages updated for the new library behavior (icon additions, reduced
@@ -466,3 +470,5 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 8 | B15 (1cce386) | B10 (088e259→7adc969) + B11 (869bbb6) | C4 (d3540b6), C5 (7f6d12f) | B10+B11 merged; A's text-field test lookups adapted (a37e16c); B16 queued |
 | 9 | B16 | B8 (40b7699) | C6 | **LANE B COMPLETE** (B1-B16); merged locally 40b7699 |
 | 10 | B16 (in flight) | C7 (in flight) | C6 (73c72c9) | C6 merged after spec-note renumber resolution |
+| 11 | B16 (63942b6) | C7 (in flight) | C8 (in flight) | B16 merged locally b0616ac |
+| 12 | C9 (bcfb32f+769c98b+ce47801, pooled to A) | — | — | merged locally ce47801 |
