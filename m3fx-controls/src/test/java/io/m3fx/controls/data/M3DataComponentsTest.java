@@ -8,11 +8,13 @@ import io.m3fx.controls.iconbutton.M3IconButton;
 import io.m3fx.controls.search.M3SearchBar;
 import javafx.application.Platform;
 import javafx.scene.Cursor;
+import javafx.scene.Scene;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -69,6 +71,58 @@ class M3DataComponentsTest {
             assertFalse(card.isDeltaPositive());
 
             assertDoesNotThrow(() -> card.setSparkline(10, 20, 15, 30, 42));
+        });
+    }
+
+    @Test
+    void statCardHeaderWrapsTitleAndNeverCutsTheBadgeMidWord() throws Throwable {
+        AtomicReference<M3StatCard> squeezed = new AtomicReference<>();
+        AtomicReference<M3StatCard> roomy = new AtomicReference<>();
+        runOnFx(() -> {
+            // The dashboard/customer-list squeeze: a long title plus a long delta badge in a
+            // 240px card (B10). CSS and layout must run before measuring (C3 lesson).
+            M3StatCard card = new M3StatCard(
+                    "TOTAL ACTIVE MEMBERS ON ROSTER", "142", "of 20 members on roster");
+            card.resize(240, 100);
+            Scene scene = new Scene(new StackPane(card));
+            card.applyCss();
+            card.resize(240, card.prefHeight(-1));
+            card.layout();
+            squeezed.set(card);
+            M3StatCard wide = new M3StatCard("Monthly Revenue", "$48,250", "+14.5%");
+            wide.resize(300, 100);
+            Scene wideScene = new Scene(new StackPane(wide));
+            wide.applyCss();
+            wide.resize(300, wide.prefHeight(-1));
+            wide.layout();
+            roomy.set(wide);
+        });
+        runOnFx(() -> {
+            M3StatCard card = squeezed.get();
+            Label title = (Label) card.lookup(".m3-stat-title");
+            Label badge = (Label) card.lookup(".m3-stat-delta");
+            assertNotNull(title);
+            assertNotNull(badge);
+            assertTrue(title.getWidth() >= 72,
+                    "the title keeps at least the sane minimum width");
+            assertTrue(title.getHeight() <= 20,
+                    "single-line title, height=" + title.getHeight());
+            System.out.println("PROBE cardW=" + card.getWidth() + " badgePref=" + badge.prefWidth(-1)
+                    + " visible=" + badge.isVisible() + " managed=" + badge.isManaged()
+                    + " parent=" + badge.getParent());
+            // The long badge cannot fit beside the title minimum: it hides whole instead of
+            // cutting mid-word, and the title tooltip carries the full delta.
+            assertFalse(badge.isVisible(), "a badge that cannot fit hides instead of truncating");
+            assertNotNull(title.getTooltip());
+            assertTrue(title.getTooltip().getText().contains("of 20 members on roster"),
+                    "title tooltip carries the full delta: " + title.getTooltip().getText());
+
+            M3StatCard wide = roomy.get();
+            Label wideBadge = (Label) wide.lookup(".m3-stat-delta");
+            Label wideTitle = (Label) wide.lookup(".m3-stat-title");
+            assertTrue(wideBadge.isVisible(), "a fitting badge stays visible");
+            assertTrue(wideBadge.getWidth() + 0.01 >= wideBadge.prefWidth(-1),
+                    "the visible badge keeps its full-text width");
         });
     }
 

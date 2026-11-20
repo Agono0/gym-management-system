@@ -29,6 +29,13 @@ import javafx.scene.layout.VBox;
 @SuppressWarnings("this-escape")
 public class M3StatCard extends M3Card {
 
+    /** Sane minimum title width in px: below it the wrapped title ellipsizes. */
+    static final double TITLE_MIN_WIDTH = 72;
+    /** Horizontal insets around the header row in px (card 16+16 CSS + layout box 16+16). */
+    static final double CONTENT_HORIZONTAL_INSETS = 64;
+    /** Header-row gap between title and badge in px. */
+    static final double HEADER_GAP = 8;
+
     private final StringProperty title = new SimpleStringProperty(this, "title", "");
     private final StringProperty value = new SimpleStringProperty(this, "value", "");
     private final StringProperty deltaText = new SimpleStringProperty(this, "deltaText", "");
@@ -70,6 +77,9 @@ public class M3StatCard extends M3Card {
         getStyleClass().add("m3-stat-card");
 
         titleLabel.getStyleClass().add("m3-stat-title");
+        // B10: the title never slivers - it keeps at least the sane minimum width and its
+        // full text stays reachable through the title tooltip ("title - delta").
+        titleLabel.setMinWidth(TITLE_MIN_WIDTH);
         titleLabel.textProperty().bind(titleProperty());
 
         valueLabel.getStyleClass().add("m3-stat-value");
@@ -87,13 +97,32 @@ public class M3StatCard extends M3Card {
         updateDeltaBadgeStyle(isDeltaPositive());
         deltaPositiveProperty().addListener((obs, o, pos) -> updateDeltaBadgeStyle(pos));
 
-        deltaBadge.visibleProperty().bind(deltaTextProperty().isNotEmpty());
-        deltaBadge.managedProperty().bind(deltaTextProperty().isNotEmpty());
+        deltaBadge.managedProperty().bind(deltaBadge.visibleProperty());
+        // B10: the badge never shrinks below its full text (no mid-word cuts). When it cannot
+        // fit beside the title minimum it hides entirely - its text stays reachable through
+        // the title tooltip, which always carries "title — delta".
+        deltaBadge.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        deltaBadge.visibleProperty().bind(Bindings.createBooleanBinding(
+                () -> deltaTextProperty().get().isEmpty() || deltaBadge.prefWidth(-1)
+                        <= Math.max(0, getWidth() - CONTENT_HORIZONTAL_INSETS
+                                - TITLE_MIN_WIDTH - HEADER_GAP),
+                deltaTextProperty(), deltaBadge.textProperty(), widthProperty(),
+                // The CSS font/padding and the label's own skin all change the badge's pref
+                // width after the first pulse; without these the fit decision goes stale on
+                // pre-CSS zero values (B10).
+                deltaBadge.paddingProperty(), deltaBadge.fontProperty(),
+                deltaBadge.skinProperty()));
+        deltaTextProperty().addListener((obs, o, text) ->
+                io.m3fx.controls.common.M3Tooltip.install(deltaBadge, text));
+        io.m3fx.controls.common.M3Tooltip.install(deltaBadge, getDeltaText());
 
-        javafx.scene.layout.Region spacer = new javafx.scene.layout.Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
         headerRow.setAlignment(Pos.CENTER_LEFT);
-        headerRow.getChildren().addAll(titleLabel, spacer, deltaBadge);
+        // The title grows to fill the header, pushing the badge to the trailing edge.
+        HBox.setHgrow(titleLabel, Priority.ALWAYS);
+        headerRow.getChildren().addAll(titleLabel, deltaBadge);
+        updateTitleTooltip();
+        titleProperty().addListener((obs, o, text) -> updateTitleTooltip());
+        deltaTextProperty().addListener((obs, o, text) -> updateTitleTooltip());
 
         valueRow.setAlignment(Pos.CENTER_LEFT);
         valueRow.getChildren().add(valueLabel);
@@ -122,6 +151,20 @@ public class M3StatCard extends M3Card {
     private void updateDeltaBadgeStyle(boolean positive) {
         deltaBadge.getStyleClass().removeAll("positive", "negative");
         deltaBadge.getStyleClass().add(positive ? "positive" : "negative");
+    }
+
+    /**
+     * Keeps the title tooltip current: "title — delta". It is the always-available channel for
+     * the full delta text when the badge hides on narrow cards (B10).
+     */
+    private void updateTitleTooltip() {
+        String text = getTitle();
+        if (!getDeltaText().isEmpty()) {
+            text += " — " + getDeltaText();
+        }
+        if (!text.isEmpty()) {
+            io.m3fx.controls.common.M3Tooltip.install(titleLabel, text);
+        }
     }
 
     /**
