@@ -429,7 +429,10 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   goal: Reduced-motion + motion-scheme pass over the whole app (springs only where spec says,
   interruptible, timers stop, reduced-motion respected).
   done-when: checklist in STATE.md ticked with evidence.
-  claimed-by: — | status: BLOCKED (C3..C9)
+  claimed-by: B (pooled) | status: DONE (round 14, commit 0b8409f → main 0b8409f — shell gains
+  live Reduce motion + Standard springs switches (fx:id'd, keyboard-accessible) beside the
+  dark toggle; per-consumer degradation walkthrough recorded in app-ui-foundation §15; core
+  scheme tests green; no library gaps)
 - [ ] Q2 | lane:Q | deps:C3,C4,C5,C6,C7,C8,C9 | files: app-wide
   goal: Dark/light + contrast pass: every screen in both themes, text ≥4.5:1, borders visible.
   done-when: screenshots both themes reviewed, issues fixed.
