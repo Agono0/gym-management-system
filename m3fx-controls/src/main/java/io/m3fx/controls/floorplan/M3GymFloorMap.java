@@ -10,9 +10,12 @@ import io.m3fx.controls.internal.ThemeColors;
 import io.m3fx.controls.scene3d.M3ModelViewer3D.ModelType;
 import io.m3fx.core.theme.ColorRole;
 import io.m3fx.core.token.TypeScale;
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.ObjectProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -36,7 +39,14 @@ import java.util.function.Consumer;
 
 /**
  * Interactive 2D/2.5D Gym Facility Floorplan & Equipment Zone Map displaying real-time
- * equipment occupancy status pins, zone heat boundaries, and seamless one-click 3D inspection.
+ * equipment occupancy status pins, zone boundaries, and seamless one-click 3D inspection.
+ *
+ * <p>Layer visibility (B16): the two drawn layers — {@link #pinsVisibleProperty() pins} and
+ * {@link #zonesVisibleProperty() zone boundaries} — are toggleable through properties honored
+ * inside {@code redraw()}; a heatmap/sensor layer does not exist in this component, so no such
+ * visibility property is exposed (callers surface that as a disabled toggle, not a fake one).
+ * The equipment list is observed: adding, removing or clearing pins redraws the canvas without
+ * the caller having to re-mount the node.
  */
 // Suppressed this-escape (false positives javac 27 cannot see across the module boundary):
 // (1) the JavaFX property-bean idiom new Simple*Property(this, ...) - the property
@@ -154,6 +164,11 @@ public class M3GymFloorMap extends StackPane {
         widthProperty().addListener(e -> redraw());
         heightProperty().addListener(e -> redraw());
         sceneProperty().addListener((obs, o, n) -> redraw());
+        // Layer visibility and list changes both redraw: callers manage pins through the
+        // observable list without re-mounting the node (B16).
+        pinsVisible.addListener((obs, o, v) -> redraw());
+        zonesVisible.addListener((obs, o, v) -> redraw());
+        equipmentList.addListener((ListChangeListener<EquipmentNode>) c -> redraw());
 
         setPrefSize(720, 420);
         setMinSize(480, 300);
@@ -249,6 +264,14 @@ public class M3GymFloorMap extends StackPane {
         double mx = e.getX() / scaleX();
         double my = e.getY() / scaleY();
         EquipmentNode found = null;
+        if (!pinsVisible.get()) {
+            if (hoveredNode != null) {
+                hoveredNode = null;
+                setCursor(Cursor.DEFAULT);
+                redraw();
+            }
+            return;
+        }
 
         for (EquipmentNode eq : equipmentList) {
             double dx = mx - eq.x;
@@ -311,6 +334,8 @@ public class M3GymFloorMap extends StackPane {
     }
 
     private void redraw() {
+        System.out.println("[redraw] w=" + getWidth() + " pinsVisible=" + pinsVisible.get()
+                + " pins=" + equipmentList.size());
         double w = getWidth();
         double h = getHeight();
         if (w <= 0 || h <= 0 || !Double.isFinite(w) || !Double.isFinite(h)) return;
@@ -337,7 +362,7 @@ public class M3GymFloorMap extends StackPane {
         // 2. Gym Zones (design coords scaled to the live size)
         Color pinLabelColor = ThemeColors.resolve(this, ColorRole.ON_SURFACE);
         Color pinRingColor = ThemeColors.resolve(this, ColorRole.SURFACE);
-        for (ZoneArea z : zones) {
+        for (ZoneArea z : zonesVisible.get() ? zones : List.<ZoneArea>of()) {
             double zx = z.x * sx;
             double zy = z.y * sy;
             double zw = z.width * sx;
@@ -363,7 +388,7 @@ public class M3GymFloorMap extends StackPane {
         }
 
         // 3. Equipment Pins
-        for (EquipmentNode eq : equipmentList) {
+        for (EquipmentNode eq : pinsVisible.get() ? equipmentList : List.<EquipmentNode>of()) {
             boolean isHover = (eq == hoveredNode);
             boolean isSelect = (eq == selectedNode);
             double r = isHover || isSelect ? 13.0 : 9.0;
@@ -401,6 +426,51 @@ public class M3GymFloorMap extends StackPane {
                 (int) (c.getRed() * 255),
                 (int) (c.getGreen() * 255),
                 (int) (c.getBlue() * 255));
+    }
+
+    /** Whether the equipment pins layer is drawn (default true). */
+    private final BooleanProperty pinsVisible = new SimpleBooleanProperty(this, "pinsVisible", true);
+
+    /** Whether the zone boundaries layer is drawn (default true). */
+    private final BooleanProperty zonesVisible = new SimpleBooleanProperty(this, "zonesVisible", true);
+
+    /**
+     * Whether the equipment pins layer is drawn. Hiding it also removes the pins from hover
+     * and click hit-testing.
+     *
+     * @return the pins layer visibility property
+     */
+    public BooleanProperty pinsVisibleProperty() {
+        return pinsVisible;
+    }
+
+    /** Returns whether the pins layer is drawn. */
+    public boolean isPinsVisible() {
+        return pinsVisible.get();
+    }
+
+    /** Shows or hides the equipment pins layer. */
+    public void setPinsVisible(boolean visible) {
+        pinsVisible.set(visible);
+    }
+
+    /**
+     * Whether the zone boundaries layer (fills, borders, titles) is drawn.
+     *
+     * @return the zones layer visibility property
+     */
+    public BooleanProperty zonesVisibleProperty() {
+        return zonesVisible;
+    }
+
+    /** Returns whether the zone boundaries layer is drawn. */
+    public boolean isZonesVisible() {
+        return zonesVisible.get();
+    }
+
+    /** Shows or hides the zone boundaries layer. */
+    public void setZonesVisible(boolean visible) {
+        zonesVisible.set(visible);
     }
 
     /** Returns the live equipment list rendered as pins on the map. */
