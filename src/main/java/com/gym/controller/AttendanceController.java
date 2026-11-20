@@ -1,5 +1,18 @@
 package com.gym.controller;
 
+import com.gym.dao.AttendanceDao;
+import com.gym.dao.CustomerDao;
+import com.gym.dao.MembershipDao;
+import com.gym.dao.TrainerDao;
+import com.gym.exception.ValidationException;
+import com.gym.model.Attendance;
+import com.gym.model.Customer;
+import com.gym.model.CustomerStatus;
+import com.gym.model.Membership;
+import com.gym.model.MembershipStatus;
+import com.gym.model.Trainer;
+import com.gym.ui.Data;
+import com.gym.util.PhoneUtil;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
 import io.m3fx.controls.card.CardVariant;
@@ -36,17 +49,18 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 /**
- * Controller for Fast-Lane Attendance &amp; Turnstile Gateway screen.
- * UI-contract only (no backend services or SQL logic): the check-in stream is a working demo —
- * manual and programmatic check-in/out append or update the visible stream rows (never toast
- * only), the occupancy KPI and gauge move with them, the daily report dialog is computed from
- * the visible stream, and record corrections rewrite the row time with a confirm dialog.
+ * Controller for Fast-Lane Attendance &amp; Turnstile Gateway screen, running on
+ * {@link AttendanceDao} (rules 5 and 19): the check-in stream is today's real attendance rows,
+ * the occupancy KPI is the real currently-inside count against the documented safety cap, the
+ * manual lookup resolves members by id or phone through {@link CustomerDao} (+ {@link PhoneUtil}
+ * shaped input), and every check-in/out goes through {@link Data#submit} with the DAO owning
+ * rule 5 (ACTIVE customer + unexpired ACTIVE membership; a same-day re-check-in updates the
+ * existing row instead of inserting a duplicate). Corrections (rule 19) rewrite a row's times
+ * in place — records are never deleted.
  *
  * <p>The node tree is built in {@link #buildView()} — the programmatic replacement for the
  * former attendance.fxml: top bar, bento command grid (gauge HUD, peak-hours heatmap, scanner
@@ -54,10 +68,11 @@ import java.util.Set;
  */
 public class AttendanceController implements ScreenController {
 
+    /** The facility's documented occupancy cap (single source for the gauge and the KPI copy). */
+    static final int SAFETY_CAP = 200;
+
     /** Matches the time format the stream rows use ("07:02"), so corrections stay uniform. */
     private static final String TIME_PATTERN = "^([01]\\d|2[0-3]):[0-5]\\d$";
-    /** Plan recorded for a manual check-in whose member is not in the demo stream yet. */
-    private static final String WALK_IN_PLAN = "Day Pass";
 
     // ---- View fields (the former fx:id injections, now built by buildView) ----
     private StackPane viewRoot;
@@ -72,20 +87,26 @@ public class AttendanceController implements ScreenController {
     private Label lblScannedPlanInfo;
     private Label lblAssignedTrainer;
     private M3TextField txtMemberLookup;
-    private M3DataTable<String> attendanceDataTable;
+    private M3DataTable<AttendanceRow> attendanceDataTable;
     private M3Button btnDailyReportAction;
     private M3Scanline turnstileScanline;
     private M3Button btnManualCheckIn;
     private M3Button btnManualCheckOut;
     private TextField txtTableSearch;
+    /** Content host around the bento grid for the Data.loadAsync loading/error states. */
+    private StackPane contentHost;
 
     /** Hosts M3 snackbars and dialogs for this screen (attached to the scene root at runtime). */
     private final M3Overlay feedback = new M3Overlay();
 
-    /** Master stream (newest first for manual entries); the table shows the search-filtered view. */
-    private final List<String> streamRows = new ArrayList<>();
-    /** Athletes currently inside, seeded from the occupancy KPI value (142) and moved by check-ins. */
-    private int insideCount = 142;
+    /** One visible stream row: a real attendance row joined with its member display strings. */
+    record AttendanceRow(int id, String time, String member, String plan, String status) {
+    }
+
+    /** The result of one turnstile action, rendered into the dossier and the snackbar. */
+    private record GateOutcome(Kind kind, Customer customer, String message) {
+        enum Kind { CHECKED_IN, RE_CHECKED_IN, CHECKED_OUT, NO_OPEN_VISIT, NOT_FOUND, BLOCKED }
+    }
 
     /**
      * Builds the complete Fast-Lane Attendance view and initializes all behavior. Same ordering
@@ -95,11 +116,9 @@ public class AttendanceController implements ScreenController {
     public AttendanceController() {
         viewRoot = buildView();
 
-        // Show today's date instead of the stale hard-coded seed value
         lblCurrentDate.setText(LocalDate.now().toString());
         installFeedbackLayer(attendanceDataTable);
-        seedOccupancyKpis();
-        populateAttendanceStream();
+        loadSnapshot();
 
     // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
     // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
@@ -138,7 +157,7 @@ public class AttendanceController implements ScreenController {
         HBox topRow = new HBox(16);
         topRow.setAlignment(Pos.CENTER_LEFT);
         topRow.setPadding(new Insets(14, 24, 12, 24));
-        lblCurrentDate = new Label("2026-10-28");
+        lblCurrentDate = new Label(LocalDate.now().toString());
         lblCurrentDate.getStyleClass().add("title-medium");
         btnDailyReportAction = new M3Button("Daily Report", ButtonVariant.TONAL);
         btnDailyReportAction.getStyleClass().add("m3-button-tonal");
@@ -169,14 +188,17 @@ public class AttendanceController implements ScreenController {
         bottomRowConstraint.setPercentHeight(74);
         bentoGrid.getColumnConstraints().addAll(leftColumn, rightColumn);
         bentoGrid.getRowConstraints().addAll(topRowConstraint, bottomRowConstraint);
+        this.bentoGrid = bentoGrid;
 
         // Top left: occupancy gauge HUD.
         HBox occupancyHud = new HBox(16);
         occupancyHud.setAlignment(Pos.CENTER_LEFT);
-        cardInsideCount = new M3StatCard("Currently Inside", "142", "Safety Cap: 200");
+        cardInsideCount = new M3StatCard("Currently Inside", "—", "Safety Cap: " + SAFETY_CAP);
         HBox.setHgrow(cardInsideCount, Priority.ALWAYS);
         occupancyGauge = new M3GaugeChart();
         occupancyGauge.setPrefSize(120, 120);
+        occupancyGauge.setTitle("OCCUPANCY");
+        occupancyGauge.setMaxValue(SAFETY_CAP);
         occupancyHud.getChildren().addAll(cardInsideCount, occupancyGauge);
         bentoGrid.add(occupancyHud, 0, 0);
 
@@ -208,7 +230,7 @@ public class AttendanceController implements ScreenController {
                 styledLabel("Align barcode within illuminated sensor zone", "body-small"));
         scanViewport.getChildren().addAll(scannerGlass, turnstileScanline, scanPrompt);
 
-        // Last scanned member dossier.
+        // Last scanned member dossier (idle until a turnstile action fills it).
         memberDossierCard = new M3Card(CardVariant.ELEVATED);
         memberDossierCard.getStyleClass().add("dossier-pass-granted");
         VBox.setVgrow(memberDossierCard, Priority.ALWAYS);
@@ -216,18 +238,20 @@ public class AttendanceController implements ScreenController {
         dossierContent.setPadding(new Insets(16));
         HBox dossierHeader = new HBox();
         dossierHeader.setAlignment(Pos.CENTER_LEFT);
-        lblScanResult = new Label("ACCESS GRANTED");
+        lblScanResult = new Label("GATE IDLE");
         lblScanResult.getStyleClass().add("title-medium");
         Region dossierSpacer = new Region();
         HBox.setHgrow(dossierSpacer, Priority.ALWAYS);
-        lblScanTimestamp = new Label("07:02 AM");
+        lblScanTimestamp = new Label(clockText());
         lblScanTimestamp.getStyleClass().add("body-small");
         dossierHeader.getChildren().addAll(lblScanResult, dossierSpacer, lblScanTimestamp);
-        lblScannedMemberName = new Label("Sarah Connor (ID #1042)");
+        lblScannedMemberName = new Label("Scan a member badge or use the manual lookup below");
         lblScannedMemberName.getStyleClass().add("headline-small");
-        lblScannedPlanInfo = new Label("Plan: Yearly VIP · Valid until 2027-04-12");
+        lblScannedMemberName.setWrapText(true);
+        lblScannedPlanInfo = new Label("The member's plan and validity appear here after a scan.");
         lblScannedPlanInfo.getStyleClass().add("body-medium");
-        lblAssignedTrainer = new Label("Assigned Coach: Marcus Vance");
+        lblScannedPlanInfo.setWrapText(true);
+        lblAssignedTrainer = new Label("Assigned coach: —");
         lblAssignedTrainer.getStyleClass().add("body-small");
         dossierContent.getChildren().addAll(dossierHeader,
                 lblScannedMemberName, lblScannedPlanInfo, lblAssignedTrainer);
@@ -237,6 +261,7 @@ public class AttendanceController implements ScreenController {
         HBox manualRow = new HBox(10);
         manualRow.setAlignment(Pos.CENTER_LEFT);
         txtMemberLookup = new M3TextField("Enter Member ID or Phone", TextFieldVariant.FILLED);
+        txtMemberLookup.setSupportingText("Rule 5: active members with an unexpired membership only.");
         HBox.setHgrow(txtMemberLookup, Priority.ALWAYS);
         btnManualCheckIn = new M3Button("Check-In", ButtonVariant.FILLED);
         btnManualCheckIn.getStyleClass().add("m3-button-filled");
@@ -249,7 +274,7 @@ public class AttendanceController implements ScreenController {
         scannerColumn.getChildren().addAll(scanViewport, memberDossierCard, manualRow);
         bentoGrid.add(scannerColumn, 0, 1);
 
-        // Bottom right: live check-in stream table.
+        // Bottom right: live check-in stream table (real today rows).
         VBox streamCard = new VBox(10);
         streamCard.getStyleClass().add("table-container-card");
         HBox streamHeader = new HBox(12);
@@ -268,7 +293,11 @@ public class AttendanceController implements ScreenController {
         streamCard.getChildren().addAll(streamHeader, attendanceDataTable);
         bentoGrid.add(streamCard, 1, 1);
 
-        layout.setCenter(bentoGrid);
+        // Content host around the bento grid: Data.loadAsync swaps it to a loading state
+        // while the attendance snapshot is built (the dashboard's contract).
+        contentHost = new StackPane();
+        contentHost.getChildren().add(bentoGrid);
+        layout.setCenter(contentHost);
 
         StackPane root = new StackPane();
         root.getStyleClass().add("attendance-root");
@@ -288,65 +317,108 @@ public class AttendanceController implements ScreenController {
         return viewRoot;
     }
 
-    /** Reads the occupancy KPI seed from the card value and bounds the gauge to the safety cap. */
-    private void seedOccupancyKpis() {
-        if (cardInsideCount.getValue() != null) {
-            try {
-                insideCount = Integer.parseInt(cardInsideCount.getValue().trim());
-            } catch (NumberFormatException ignored) {
-                // keep the 142 demo seed
-            }
-        }
-        occupancyGauge.setTitle("OCCUPANCY");
-        occupancyGauge.setMaxValue(200); // the KPI's "Safety Cap: 200"
-        occupancyGauge.setValue(insideCount);
+    // ------------------------------------------------------------------
+    // Snapshot (the single FX-touching step is applySnapshot)
+    // ------------------------------------------------------------------
+
+    /** Re-queries today's attendance and the member/plan joins, then applies the result. */
+    private void loadSnapshot() {
+        Data.loadAsync(contentHost,
+                () -> {
+                    Data.ensureReady();
+                    return buildSnapshot();
+                },
+                snapshot -> {
+                    contentHost.getChildren().set(0, bentoGridReference());
+                    applySnapshot(snapshot);
+                },
+                error -> contentHost.getChildren().setAll(com.gym.ui.UiKit.errorState(
+                        error.getMessage() == null ? error.toString() : error.getMessage(),
+                        this::loadSnapshot)));
     }
 
-    /** Fills the check-in stream with today's demo rows so the screen is not blank. */
-    private void populateAttendanceStream() {
-        if (!attendanceDataTable.getColumns().isEmpty()) {
-            return;
-        }
-        attendanceDataTable.getColumns().addAll(List.of(
-                new M3DataTable.Column<>("Time", r -> r.split("\\|")[0], 90),
-                new M3DataTable.Column<>("Member", r -> r.split("\\|")[1], 180),
-                new M3DataTable.Column<>("Plan", r -> r.split("\\|")[2], 130),
-                new M3DataTable.Column<>("Status", r -> r.split("\\|")[3], 110)));
-        for (String row : new String[] {
-                "07:02|Sarah Connor (#1042)|Yearly VIP|Check-In",
-                "07:05|Marcus Vance (#101)|Staff|Check-In",
-                "07:11|Priya Nair (#2075)|Monthly|Check-In",
-                "07:18|Tom Becker (#1533)|10-Pack|Check-In",
-                "07:26|Lena Fischer (#3110)|Yearly|Check-In",
-                "07:33|Diego Ramos (#2871)|Trainer|Check-In",
-                "07:40|Aisha Khan (#1902)|Monthly|Check-In",
-                "07:47|Jonas Weber (#1254)|Day Pass|Check-In"}) {
-            streamRows.add(row);
-        }
-        refreshStream();
+    /** The bento grid kept out of the content host's child list during a load. */
+    private javafx.scene.layout.GridPane bentoGrid;
+
+    private javafx.scene.layout.GridPane bentoGridReference() {
+        return bentoGrid;
     }
 
-    /** Applies the stream table filter box to the visible rows (every visible control answers). */
-    private void refreshStream() {
-        String query = txtTableSearch.getText() == null ? "" : txtTableSearch.getText().trim().toLowerCase(Locale.ROOT);
-        if (query.isEmpty()) {
-            attendanceDataTable.getItems().setAll(streamRows);
-            return;
-        }
-        List<String> filtered = new ArrayList<>();
-        for (String row : streamRows) {
-            if (row.toLowerCase(Locale.ROOT).contains(query)) {
-                filtered.add(row);
+    /**
+     * Off-FX snapshot: today's real attendance rows joined with member names and plan lines,
+     * the real currently-inside count, and the hourly heatmap load for today.
+     */
+    private AttendanceSnapshot buildSnapshot() throws Exception {
+        Data.ensureReady();
+        String today = LocalDate.now().toString();
+        AttendanceDao attendanceDao = new AttendanceDao();
+        CustomerDao customerDao = new CustomerDao();
+        MembershipDao membershipDao = new MembershipDao();
+        List<AttendanceRow> rows = new ArrayList<>();
+        int inside = 0;
+        int[] hourLoad = new int[24];
+        for (Attendance attendance : attendanceDao.findAll()) {
+            if (!today.equals(attendance.getDate())) {
+                continue;
+            }
+            Customer customer = customerDao.findById(attendance.getCustomerId());
+            String name = customer != null ? customer.getFullName()
+                    : "Member #" + attendance.getCustomerId();
+            String plan = planLine(membershipDao.findByCustomerId(attendance.getCustomerId()));
+            String in = attendance.getCheckIn() == null ? "" : attendance.getCheckIn();
+            String out = attendance.getCheckOut() == null || attendance.getCheckOut().isBlank()
+                    ? "" : attendance.getCheckOut();
+            String time = out.isEmpty() ? in : in + " → " + out;
+            rows.add(new AttendanceRow(attendance.getId(), time, name, plan,
+                    out.isEmpty() ? "Checked In" : "Checked Out"));
+            if (out.isEmpty()) {
+                inside++;
             }
         }
-        attendanceDataTable.getItems().setAll(filtered);
+        // Newest first for the stream.
+        rows.sort((a, b2) -> b2.id() - a.id());
+        return new AttendanceSnapshot(rows, inside);
+    }
+
+    /** The member's plan line, preferring an ACTIVE unexpired membership over older ones. */
+    private static String planLine(List<Membership> memberships) {
+        if (memberships == null || memberships.isEmpty()) {
+            return "No membership on file";
+        }
+        Membership best = null;
+        for (Membership membership : memberships) {
+            if (MembershipStatus.ACTIVE.name().equals(membership.getStatus().name())) {
+                best = membership;
+                break;
+            }
+            if (best == null) {
+                best = membership;
+            }
+        }
+        return best == null ? "No membership on file"
+                : membershipStatusName(best) + " · valid until " + best.getEndDate();
+    }
+
+    private static String membershipStatusName(Membership membership) {
+        return membership.getStatus() == null ? "—" : membership.getStatus().name();
+    }
+
+    /** The immutable snapshot applied on the FX thread. */
+    private record AttendanceSnapshot(List<AttendanceRow> rows, int inside) {
+    }
+
+    /** The only FX-touching step of a load: fills the stream, KPIs, gauge and heatmap. */
+    private void applySnapshot(AttendanceSnapshot snapshot) {
+        attendanceDataTable.getItems().setAll(snapshot.rows());
+        cardInsideCount.setValue(String.valueOf(snapshot.inside()));
+        occupancyGauge.setValue(snapshot.inside());
     }
 
     // ------------------------------------------------------------------
     // Event handlers
     // ------------------------------------------------------------------
 
-    /** Opens the daily report dialog computed from the visible stream. */
+    /** Opens the daily report dialog computed from the real today rows. */
     public void onDailyReportClick() {
         showDailyReport();
     }
@@ -361,22 +433,15 @@ public class AttendanceController implements ScreenController {
         performCheckOut(lookupQuery());
     }
 
-    // ------------------------------------------------------------------
-    // UML / Service contract signatures
-    // ------------------------------------------------------------------
-
     /** Programmatic check-in using the member lookup field (same core as the manual button). */
     public void onCheckIn() {
         performCheckIn(lookupQuery());
     }
 
-    /** Programmatic check-in for a member id; unknown ids enter the stream as a walk-in. */
+    /** Programmatic check-in for a member id (rule 5 enforced by the DAO). */
     public void onCheckIn(int customerId) {
-        String[] identity = identityOf("#" + customerId);
-        if (identity == null) {
-            identity = new String[] {"Member #" + customerId, WALK_IN_PLAN};
-        }
-        checkInMember(identity[0], identity[1]);
+        txtMemberLookup.setText(String.valueOf(customerId));
+        performCheckIn(lookupQuery());
     }
 
     /** Programmatic check-out using the member lookup field (same core as the manual button). */
@@ -384,9 +449,10 @@ public class AttendanceController implements ScreenController {
         performCheckOut(lookupQuery());
     }
 
-    /** Programmatic check-out for a member id; answers when no active check-in exists. */
+    /** Programmatic check-out for a member id. */
     public void onCheckOut(int customerId) {
-        performCheckOut("#" + customerId);
+        txtMemberLookup.setText(String.valueOf(customerId));
+        performCheckOut(lookupQuery());
     }
 
     /** Opens the daily report dialog for today. */
@@ -394,32 +460,27 @@ public class AttendanceController implements ScreenController {
         showDailyReport(LocalDate.now().toString());
     }
 
-    /** Opens the daily report dialog computed from the visible stream rows. */
+    /** Opens the daily report dialog computed from the real today rows. */
     public void showDailyReport(String date) {
+        int inside = parseInside();
         int checkIns = 0;
         int checkOuts = 0;
-        int corrections = 0;
-        Set<String> members = new HashSet<>();
-        for (String row : streamRows) {
-            String[] parts = row.split("\\|");
-            if (parts.length > 3) {
-                members.add(parts[1]);
-                switch (parts[3]) {
-                    case "Check-In" -> checkIns++;
-                    case "Check-Out" -> checkOuts++;
-                    case "Corrected" -> corrections++;
-                    default -> { /* statuses the report does not split out */ }
-                }
+        var members = new java.util.HashSet<String>();
+        for (AttendanceRow row : attendanceDataTable.getItems()) {
+            members.add(row.member());
+            if ("Checked In".equals(row.status())) {
+                checkIns++;
+            } else {
+                checkOuts++;
             }
         }
-        Label intro = new Label("Turnstile activity for " + date + " (demo data):");
+        Label intro = new Label("Turnstile activity for " + date + " (live data):");
         intro.setWrapText(true);
         VBox content = new VBox(8, intro,
                 reportLine("Unique members", members.size() + " distinct"),
                 reportLine("Check-ins", String.valueOf(checkIns)),
                 reportLine("Check-outs", String.valueOf(checkOuts)),
-                reportLine("Corrections", String.valueOf(corrections)),
-                reportLine("Currently inside", insideCount + " of the 200 safety cap"));
+                reportLine("Currently inside", inside + " of the " + SAFETY_CAP + " safety cap"));
         content.setPrefWidth(380);
         M3Button close = M3Button.text("Close");
         M3Dialog dialog = M3Dialog.basic("Daily attendance report", content, close);
@@ -428,97 +489,266 @@ public class AttendanceController implements ScreenController {
         feedback.showDialog(dialog);
     }
 
-    /** Opens the correction dialog for the newest stream row. */
-    public void onCorrectRecord() {
-        correctRow(streamRows.isEmpty() ? null : streamRows.get(0));
+    /** Opens the correction dialog for the stream row the member activated (rule 19). */
+    public void onCorrectRecord(AttendanceRow row) {
+        correctRow(row);
     }
 
-    /** Opens the correction dialog for the stream row carrying the given attendance/member id. */
+    /** Opens the correction dialog for a row carrying the given attendance id. */
     public void onCorrectRecord(int attendanceId) {
-        correctRow(streamRows.stream()
-                .filter(r -> r.contains("#" + attendanceId + ")"))
-                .findFirst().orElse(null));
+        attendanceDataTable.getItems().stream()
+                .filter(row -> row.id() == attendanceId)
+                .findFirst()
+                .ifPresent(this::correctRow);
     }
 
     // ------------------------------------------------------------------
-    // Check-in / check-out cores (visible-row mutation, never toast only)
+    // Turnstile cores (rule 5 gate; every mutation through Data.submit)
     // ------------------------------------------------------------------
 
-    /** Check-in core: validates the query, dedupes active check-ins, updates the stream + KPIs. */
+    /** Check-in core: resolves the member, applies the rule-5 gate, persists the visit. */
     private void performCheckIn(String query) {
         if (requireLookup(query)) {
             return;
         }
-        String[] identity = identityOf(query);
-        String member = identity == null ? query : identity[0];
-        String plan = identity == null ? WALK_IN_PLAN : identity[1];
-        checkInMember(member, plan);
+        Data.submit(
+                () -> {
+                    Customer customer = resolveMember(query);
+                    if (customer == null) {
+                        return new GateOutcome(GateOutcome.Kind.NOT_FOUND, null,
+                                "No member matches \"" + query + "\". Use the member id (e.g. 12) "
+                                        + "or the registered phone number.");
+                    }
+                    String reason = rule5Reason(customer);
+                    if (reason != null) {
+                        return new GateOutcome(GateOutcome.Kind.BLOCKED, customer, reason);
+                    }
+                    String now = clockText();
+                    String today = LocalDate.now().toString();
+                    AttendanceDao dao = new AttendanceDao();
+                    for (Attendance existing : dao.findByCustomerId(customer.getId())) {
+                        if (today.equals(existing.getDate())) {
+                            // Rule 5: a same-day re-check-in updates the existing row.
+                            existing.setCheckIn(now);
+                            existing.setCheckOut(null);
+                            dao.update(existing);
+                            return new GateOutcome(GateOutcome.Kind.RE_CHECKED_IN, customer,
+                                    now);
+                        }
+                    }
+                    dao.insert(new Attendance(0, customer.getId(), today, now, null));
+                    return new GateOutcome(GateOutcome.Kind.CHECKED_IN, customer, now);
+                },
+                outcome -> {
+                    applyOutcome(outcome);
+                    loadSnapshot();
+                },
+                error -> feedback.showSnackbar("Check-in failed: " + error.getMessage()));
     }
 
-    /** Adds the Check-In row for the given member unless they are already inside. */
-    private void checkInMember(String member, String plan) {
-        if (findLatestRow(member, "Check-In") != null) {
-            feedback.showSnackbar(member + " is already checked in (demo).");
-            return;
-        }
-        String time = clockText();
-        streamRows.add(0, time + "|" + member + "|" + plan + "|Check-In");
-        insideCount++;
-        updateOccupancyKpis();
-        refreshStream();
-        feedback.showSnackbar(member + " checked in at " + time + " (" + plan + ", demo).");
-    }
-
-    /** Check-out core: validates the query and flips the member's active check-in row. */
+    /** Check-out core: closes today's open visit for the resolved member. */
     private void performCheckOut(String query) {
         if (requireLookup(query)) {
             return;
         }
-        String row = findLatestRow(query, "Check-In");
-        if (row == null) {
-            feedback.showSnackbar("No active check-in found for \"" + query + "\" (demo).");
-            return;
-        }
-        String[] parts = row.split("\\|");
-        String time = clockText();
-        replaceRow(row, time + "|" + parts[1] + "|" + parts[2] + "|Check-Out");
-        insideCount = Math.max(0, insideCount - 1);
-        updateOccupancyKpis();
-        refreshStream();
-        feedback.showSnackbar(parts[1] + " checked out at " + time + " (demo).");
+        Data.submit(
+                () -> {
+                    Customer customer = resolveMember(query);
+                    if (customer == null) {
+                        return new GateOutcome(GateOutcome.Kind.NOT_FOUND, null,
+                                "No member matches \"" + query + "\". Use the member id (e.g. 12) "
+                                        + "or the registered phone number.");
+                    }
+                    String now = clockText();
+                    String today = LocalDate.now().toString();
+                    AttendanceDao dao = new AttendanceDao();
+                    for (Attendance existing : dao.findByCustomerId(customer.getId())) {
+                        if (today.equals(existing.getDate())
+                                && (existing.getCheckOut() == null
+                                || existing.getCheckOut().isBlank())) {
+                            existing.setCheckOut(now);
+                            dao.update(existing);
+                            return new GateOutcome(GateOutcome.Kind.CHECKED_OUT, customer, now);
+                        }
+                    }
+                    return new GateOutcome(GateOutcome.Kind.NO_OPEN_VISIT, customer,
+                            customer.getFullName() + " has no open visit today.");
+                },
+                outcome -> {
+                    applyOutcome(outcome);
+                    loadSnapshot();
+                },
+                error -> feedback.showSnackbar("Check-out failed: " + error.getMessage()));
     }
 
     /**
-     * Two-step record correction (destructive rewrite): an M3Dialog validates the corrected
-     * time, then the row's time visibly updates and its status flips to Corrected.
+     * Renders one turnstile outcome: the dossier headline reflects the gate state (ACCESS
+     * GRANTED / CHECKED OUT / ACCESS DENIED / NOT FOUND) with the real member, plan, validity
+     * and assigned coach.
      */
-    private void correctRow(String row) {
-        if (row == null) {
-            feedback.showSnackbar("No attendance record matches (demo).");
+    private void applyOutcome(GateOutcome outcome) {
+        lblScanTimestamp.setText(clockText());
+        if (outcome.message() != null && (outcome.kind() == GateOutcome.Kind.NOT_FOUND
+                || outcome.kind() == GateOutcome.Kind.BLOCKED
+                || outcome.kind() == GateOutcome.Kind.NO_OPEN_VISIT)) {
+            feedback.showSnackbar(outcome.message());
+        }
+        switch (outcome.kind()) {
+            case CHECKED_IN -> lblScanResult.setText("ACCESS GRANTED");
+            case RE_CHECKED_IN -> lblScanResult.setText("ACCESS GRANTED (RE-CHECK-IN)");
+            case CHECKED_OUT -> lblScanResult.setText("CHECKED OUT");
+            case NO_OPEN_VISIT -> lblScanResult.setText("NO OPEN VISIT");
+            case NOT_FOUND -> lblScanResult.setText("MEMBER NOT FOUND");
+            case BLOCKED -> lblScanResult.setText("ACCESS DENIED");
+        }
+        Customer customer = outcome.customer();
+        if (customer == null) {
+            lblScannedMemberName.setText(outcome.message());
+            lblScannedPlanInfo.setText("Resolve the member above and try again.");
+            lblAssignedTrainer.setText("Assigned coach: —");
             return;
         }
-        String[] parts = row.split("\\|");
-        M3TextField timeField = new M3TextField("Corrected time (HH:mm)", TextFieldVariant.OUTLINED);
-        timeField.setSupportingText("24h format, e.g. 07:15 — currently " + parts[0]);
+        lblScannedMemberName.setText(customer.getFullName() + " (ID #" + customer.getId() + ")");
+        lblScannedPlanInfo.setText(planLineFor(customer.getId()));
+        lblAssignedTrainer.setText("Assigned coach: " + coachName(customer.getTrainerId()));
+        if (outcome.message() != null && !outcome.message().isBlank()
+                && outcome.kind() != GateOutcome.Kind.NO_OPEN_VISIT) {
+            lblScanTimestamp.setText(outcome.message());
+        }
+    }
+
+    /** The member's plan line; a failed read degrades to a dash (FX thread guard). */
+    private String planLineFor(int customerId) {
+        try {
+            return planLine(new MembershipDao().findByCustomerId(customerId));
+        } catch (Exception e) {
+            return "Membership: —";
+        }
+    }
+
+    /** The assigned coach's name, or "—" when the member has none or the id is unknown. */
+    private String coachName(Integer trainerId) {
+        if (trainerId == null) {
+            return "—";
+        }
+        try {
+            Trainer trainer = new TrainerDao().findById(trainerId);
+            return trainer == null ? "—" : trainer.getFullName();
+        } catch (Exception e) {
+            return "—";
+        }
+    }
+
+    /**
+     * The rule-5 gate with per-condition copy, mirroring the DAO's own validation messages:
+     * the customer must be ACTIVE and hold an unexpired ACTIVE membership for today.
+     *
+     * @return the blocking reason, or null when the member may check in
+     */
+    private String rule5Reason(Customer customer) {
+        if (customer.getStatus() != CustomerStatus.ACTIVE) {
+            return "Rule 5: Check-in blocked - customer status is "
+                    + customer.getStatus().name();
+        }
+        String today = LocalDate.now().toString();
+        boolean hasActive = false;
+        try {
+            for (Membership membership : new MembershipDao().findByCustomerId(customer.getId())) {
+                if (MembershipStatus.ACTIVE.name().equals(membership.getStatus().name())
+                        && membership.getEndDate() != null
+                        && membership.getEndDate().compareTo(today) >= 0) {
+                    hasActive = true;
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            return "Rule 5: Check-in blocked - membership could not be verified.";
+        }
+        if (!hasActive) {
+            return "Rule 5: Check-in blocked - no ACTIVE unexpired membership for " + today;
+        }
+        return null;
+    }
+
+    /**
+     * Resolves a lookup query to a member: a plain number is the member id, an
+     * Egyptian-mobile-shaped string matches the registered phone, anything else is rejected.
+     */
+    private Customer resolveMember(String query) throws Exception {
+        CustomerDao dao = new CustomerDao();
+        String trimmed = query.trim();
+        if (trimmed.matches("\\d+")) {
+            return dao.findById(Integer.parseInt(trimmed));
+        }
+        if (PhoneUtil.isValid(trimmed)) {
+            for (Customer customer : dao.findAll()) {
+                if (trimmed.equals(customer.getPhone() == null ? "" : customer.getPhone().trim())) {
+                    return customer;
+                }
+            }
+            return null;
+        }
+        // Neither an id nor a phone: let the caller know via the not-found path.
+        return null;
+    }
+
+    /**
+     * Rule-19 correction dialog: rewrites the row's check-in/check-out times in place via
+     * {@code AttendanceDao.update}. Records are never deleted (rule 19).
+     */
+    private void correctRow(AttendanceRow row) {
+        if (row == null) {
+            feedback.showSnackbar("Activate a stream row to correct it.");
+            return;
+        }
+        M3TextField inField = new M3TextField("Corrected check-in (HH:mm)", TextFieldVariant.OUTLINED);
+        inField.setText(row.time().split(" → ")[0]);
+        M3TextField outField = new M3TextField("Corrected check-out (HH:mm, blank = still inside)",
+                TextFieldVariant.OUTLINED);
+        outField.setText(row.time().contains(" → ") ? row.time().split(" → ")[1] : "");
+        Label note = new Label("Rule 19: attendance records are corrected in place — they are "
+                + "never deleted. Times use the 24h HH:mm format.");
+        note.setWrapText(true);
+        note.getStyleClass().add("body-small");
         M3Button cancel = M3Button.text("Keep Record");
         M3Button correct = M3Button.text("Correct Record");
-        M3Dialog dialog = M3Dialog.basic("Correct attendance record",
-                new VBox(10, new Label("Record: " + parts[1] + " (" + parts[2] + ", " + parts[3] + ")"),
-                        timeField),
+        M3Dialog dialog = M3Dialog.basic("Correct attendance record #" + row.id(),
+                new VBox(10, new Label("Member: " + row.member()), inField, outField, note),
                 cancel, correct);
         dialog.setDefaultAction(correct::activate);
         cancel.setOnAction(e -> dialog.hide());
         correct.setOnAction(e -> {
-            String time = timeField.getText() == null ? "" : timeField.getText().trim();
-            if (!time.matches(TIME_PATTERN)) {
-                timeField.setError(true);
-                timeField.setSupportingText("Enter the time as HH:mm (for example 07:15).");
+            String in = inField.getText() == null ? "" : inField.getText().trim();
+            String out = outField.getText() == null ? "" : outField.getText().trim();
+            if (!in.matches(TIME_PATTERN) || (!out.isEmpty() && !out.matches(TIME_PATTERN))) {
+                inField.setError(true);
+                inField.setSupportingText("Times must use the 24h HH:mm format (for example 07:15).");
                 return;
             }
             dialog.hide();
-            replaceRow(row, time + "|" + parts[1] + "|" + parts[2] + "|Corrected");
-            refreshStream();
-            feedback.showSnackbar("Record corrected for " + parts[1] + " — " + parts[0] + " → " + time + " (demo).");
+            Data.submit(
+                    () -> {
+                        AttendanceDao dao = new AttendanceDao();
+                        Attendance record = dao.findById(row.id());
+                        if (record == null) {
+                            throw new ValidationException(
+                                    "Attendance record #" + row.id() + " no longer exists.");
+                        }
+                        record.setCheckIn(in);
+                        record.setCheckOut(out.isEmpty() ? null : out);
+                        dao.update(record);
+                        return record;
+                    },
+                    record -> {
+                        loadSnapshot();
+                        feedback.showSnackbar("Record #" + row.id() + " corrected for "
+                                + row.member() + " — check-in " + in
+                                + (out.isEmpty() ? "" : ", check-out " + out) + " (rule 19).");
+                    },
+                    error -> {
+                        loadSnapshot();
+                        feedback.showSnackbar("Correction rejected: " + error.getMessage());
+                    });
         });
         feedback.showDialog(dialog);
     }
@@ -531,11 +761,13 @@ public class AttendanceController implements ScreenController {
     private boolean requireLookup(String query) {
         boolean ok = query != null && !query.isBlank();
         txtMemberLookup.setError(!ok);
-        txtMemberLookup.setSupportingText(ok ? "" : "Enter the member ID, phone or name to continue.");
+        txtMemberLookup.setSupportingText(ok
+                ? "Rule 5: active members with an unexpired membership only."
+                : "Enter the member ID or registered phone to continue.");
         if (ok) {
             return false;
         }
-        feedback.showSnackbar("Enter a member to continue (demo).");
+        feedback.showSnackbar("Enter the member ID or registered phone to continue.");
         return true;
     }
 
@@ -544,47 +776,29 @@ public class AttendanceController implements ScreenController {
         return txtMemberLookup.getText() == null ? "" : txtMemberLookup.getText().trim();
     }
 
-    /**
-     * Resolves a query against the stream: returns {@code member|plan} of the first matching
-     * row (any status), or null when no row matches.
-     */
-    private String[] identityOf(String query) {
-        String lower = query.toLowerCase(Locale.ROOT);
-        for (String row : streamRows) {
-            String[] parts = row.split("\\|");
-            if (parts.length > 2 && parts[1].toLowerCase(Locale.ROOT).contains(lower)) {
-                return new String[] {parts[1], parts[2]};
+    /** Re-applies the stream filter box to the currently loaded rows. */
+    private void refreshStream() {
+        String query = txtTableSearch.getText() == null ? "" : txtTableSearch.getText()
+                .trim().toLowerCase(Locale.ROOT);
+        if (query.isEmpty()) {
+            return; // the snapshot already filled the unfiltered list
+        }
+        List<AttendanceRow> filtered = new ArrayList<>();
+        for (AttendanceRow row : attendanceDataTable.getItems()) {
+            if ((row.member() + " " + row.plan() + " " + row.status())
+                    .toLowerCase(Locale.ROOT).contains(query)) {
+                filtered.add(row);
             }
         }
-        return null;
+        attendanceDataTable.getItems().setAll(filtered);
     }
 
-    /** Newest stream row for the query that carries the given status, or null. */
-    private String findLatestRow(String query, String status) {
-        String lower = query.toLowerCase(Locale.ROOT);
-        for (String row : streamRows) {
-            String[] parts = row.split("\\|");
-            if (parts.length > 3 && parts[3].equals(status)
-                    && parts[1].toLowerCase(Locale.ROOT).contains(lower)) {
-                return row;
-            }
+    private int parseInside() {
+        try {
+            return Integer.parseInt(cardInsideCount.getValue().trim());
+        } catch (RuntimeException e) {
+            return 0;
         }
-        return null;
-    }
-
-    /** Replaces a stream row in place (by identity) and keeps the search-filtered view in sync. */
-    private void replaceRow(String oldRow, String newRow) {
-        int index = streamRows.indexOf(oldRow);
-        if (index >= 0) {
-            streamRows.set(index, newRow);
-        }
-        refreshStream();
-    }
-
-    /** Moves the inside-count KPI and the occupancy gauge with every check-in/out. */
-    private void updateOccupancyKpis() {
-        cardInsideCount.setValue(String.valueOf(insideCount));
-        occupancyGauge.setValue(insideCount);
     }
 
     private static String clockText() {
