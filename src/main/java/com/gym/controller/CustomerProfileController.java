@@ -194,10 +194,10 @@ public class CustomerProfileController implements ScreenController {
         biometricsContent.setPadding(new Insets(16));
         biometricsContent.getChildren().add(styledLabel("BIOMETRIC TELEMETRY", "title-small"));
         GridPane biometricsGrid = new GridPane(12, 12);
-        statWeight = new M3StatCard("WEIGHT", "-- kg", null);
-        statBodyFat = new M3StatCard("BODY FAT", "-- %", null);
-        statTarget = new M3StatCard("TARGET", "-- kg", null);
-        statVbt = new M3StatCard("VBT 1RM", "-- kg", null);
+        statWeight = new M3StatCard("WEIGHT", "-- kg", "");
+        statBodyFat = new M3StatCard("BODY FAT", "-- %", "");
+        statTarget = new M3StatCard("TARGET", "-- kg", "");
+        statVbt = new M3StatCard("VBT 1RM", "-- kg", "");
         statWeight.setMaxWidth(Double.MAX_VALUE);
         statBodyFat.setMaxWidth(Double.MAX_VALUE);
         statTarget.setMaxWidth(Double.MAX_VALUE);

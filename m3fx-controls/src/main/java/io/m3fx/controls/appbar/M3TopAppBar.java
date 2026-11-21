@@ -226,6 +226,11 @@ public class M3TopAppBar extends VBox {
                     setPrefHeight(HEIGHT_SMALL);
                 }
             }
+            // The bar is a VBox: children get their PREF heights, so the single row needs its
+            // spec height as a pref too — the CSS min-height alone left a text-height row that
+            // clipped title descenders (Q2 finding on the availability screen).
+            row.setMinHeight(HEIGHT_SMALL);
+            row.setPrefHeight(HEIGHT_SMALL);
         }
 
         if (newV == TopAppBarVariant.CENTER_ALIGNED) {

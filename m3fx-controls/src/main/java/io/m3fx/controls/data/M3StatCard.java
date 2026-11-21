@@ -103,9 +103,14 @@ public class M3StatCard extends M3Card {
         // the title tooltip, which always carries "title — delta".
         deltaBadge.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
         deltaBadge.visibleProperty().bind(Bindings.createBooleanBinding(
-                () -> deltaTextProperty().get().isEmpty() || deltaBadge.prefWidth(-1)
-                        <= Math.max(0, getWidth() - CONTENT_HORIZONTAL_INSETS
-                                - TITLE_MIN_WIDTH - HEADER_GAP),
+                () -> {
+                    // Null-safe: callers may pass a null delta (CustomerProfileController's
+                    // placeholder cards) — a null delta behaves like an empty one.
+                    String deltaText = deltaTextProperty().get();
+                    return deltaText == null || deltaText.isEmpty() || deltaBadge.prefWidth(-1)
+                            <= Math.max(0, getWidth() - CONTENT_HORIZONTAL_INSETS
+                                - TITLE_MIN_WIDTH - HEADER_GAP);
+                },
                 deltaTextProperty(), deltaBadge.textProperty(), widthProperty(),
                 // The CSS font/padding and the label's own skin all change the badge's pref
                 // width after the first pulse; without these the fit decision goes stale on

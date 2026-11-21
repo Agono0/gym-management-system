@@ -196,6 +196,9 @@ public class PaymentController implements ScreenController {
         txtSearchReceipt = new TextField();
         txtSearchReceipt.setPromptText("Search receipt # (e.g. REC-1002)");
         txtSearchReceipt.setPrefWidth(250);
+        // Raw TextField: adopt the library's token-styled input rule so the prompt text uses
+        // -md-sys-color-on-surface-variant (visible in dark mode — Q2 finding).
+        txtSearchReceipt.getStyleClass().add("m3-text-field-input");
         M3Button lookupBtn = new M3Button("Lookup Receipt", ButtonVariant.TONAL);
         lookupBtn.getStyleClass().add("m3-button-tonal");
         lookupBtn.setOnAction(e -> onReceiptLookupClick());
