@@ -5,8 +5,10 @@
 > the companion **Terminal Workflow Console (`com.gym.cli`, `GymCliApp`)** added per `docs/DECISIONS.md` 78.
 > The Milestone 2 backend packages (`model/`, `dao/`, `util/`, `exception/`) are shipped with SQLite
 > persistence (`gym.db`) and binary serialization (`SerializationUtil`). The separate service layer
-> (`service/`) and app tests (`src/test/`) were removed per `docs/DECISIONS.md` 77 to fit COMP 301
-> Lectures 1–6 beginner scope. Wiring the JavaFX UI controllers to the live DAOs is **Milestone 3**.
+> (`service/`) was removed per `docs/DECISIONS.md` 77 to fit COMP 301 Lectures 1–6 beginner scope.
+> **Milestone 3 has landed** (`docs/DECISIONS.md` 80-82): the JavaFX controllers read and write the
+> live DAOs through the `com.gym.ui.Data`/`UiKit` real-data layer — no service tier was restored,
+> and `src/test/` holds the rule-16 login test (`DataAuthenticateTest`).
 >
 > **Signature authority:** `docs/UML.md` owns the domain model, DAOs, and runtime spine; the
 > launcher and shell details below match the shipped code (`GymApp.java`, `MainApp.java`,
@@ -25,10 +27,12 @@ application owns:
 | `GymApp.java` | 166 | The **app entry point**: registers the M3 theme, constructs `AppShellController`, maximizes the window, starts a daemon freeze watchdog, and (when `main()` sets `SHOW_LAUNCH_GATES`) runs splash → login → shell launch gates |
 
 Everything visually inside the shell lives in `controller/` (`Screen`, `ScreenController`,
-`AppShellController`, `LaunchGateController`, and 18 screen controllers). The Milestone 2 backend
-(`model/`, `dao/`, `util/`, `exception/`) is implemented and waiting for **Milestone 3**, when
-controllers and startup will call `DatabaseConnection.initializeDatabase()` and concrete `*Dao`
-classes. Today, launchers and controllers deliberately do **not** read or write SQLite rows at startup.
+`AppShellController`, `LaunchGateController`, and 18 screen controllers), with the shared
+real-data layer in `ui/` (`Data`, `UiKit`, `DemoSeeder`). **Milestone 3 is wired**: screens call
+the concrete `*Dao` classes on background threads (`Data.loadAsync`/`Data.submit`) and
+`Data.ensureReady()` bootstraps the schema and demo seed at the first screen load — no launchers
+read or write SQLite rows at startup, and no business rules live outside the DAOs
+(`docs/DECISIONS.md` 80-82).
 
 **What breaks if the launchers are done wrong.** JavaFX has one `start(Stage)` per `Application`.
 If the theme is applied after controls are built or shown, controls flash unstyled; if closing one

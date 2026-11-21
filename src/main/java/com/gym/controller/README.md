@@ -5,11 +5,16 @@
 >    exist in this package today! In commit `fb3486d`, the screens were converted from FXML to pure Java
 >    views implementing [`ScreenController`](ScreenController.java) (`getRoot()`) and registered in
 >    [`Screen`](Screen.java) (`javafx.fxml` is no longer a project dependency).
-> 2. **Current Demo Mode vs Milestone 3:** Today's controllers hold hardcoded demo data so every screen
->    renders cleanly right away. Meanwhile, the Milestone 2 SQLite/serialization backend (`model/`, `dao/`,
->    `util/`, `exception/`) is shipped on disk. Per [`docs/DECISIONS.md`](../../../../docs/DECISIONS.md) 77,
->    the planned 11-service tier (`com.gym.service`) was retired and `src/test/` removed: **Milestone 3**
->    will connect these controllers directly to concrete `com.gym.dao.*` classes instead of `*Service`.
+> 2. **Real data (Milestone 3 landed, `docs/DECISIONS.md` 80-82):** every screen loads and mutates
+>    live SQLite data through the concrete `com.gym.dao.*` classes on background threads — the shared
+>    [`com.gym.ui.Data`](../ui/Data.java) snapshot/submit plumbing and
+>    [`com.gym.ui.UiKit`](../ui/UiKit.java) helpers (loading/empty/error states, confirm dialogs,
+>    theme-role colors) replaced the demo datasets. No service tier was restored (77); every DAO
+>    `ValidationException` surfaces verbatim in a snackbar or dialog, and business rules live only in
+>    the DAOs (78). The real-data pattern per screen: `buildView()` wires static structure with
+>    honest placeholders -> `loadX()` wraps a content host in `UiKit.loadingState()` -> a
+>    `Data.loadAsync` snapshot computes immutable display values off the FX thread ->
+>    `applySnapshot` lands them on the FX thread -> actions run through `Data.submit` and re-query.
 > 3. **Reading this file:** Sections §1–§8 below still preserve early FXML/`*Service` teaching sketches
 >    for reference; use [`Screen.java`](Screen.java), [`AppShellController.java`](AppShellController.java),
 >    and [`docs/UML.md`](../../../../docs/UML.md) §2 & §5 as the canonical view of shipped names.

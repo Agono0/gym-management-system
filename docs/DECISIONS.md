@@ -611,3 +611,71 @@
     The fields are now required, so a blank phone is a `ValidationException`. The DAOs call
     `PhoneUtil.requireValid`, and the JavaFX controllers call `PhoneUtil.isValid` for inline field errors.
     The same class is copied into the standalone `submission/` build so both code trees enforce one rule.
+
+80. **Real-Data GUI Foundation: `com.gym.ui.Data` / `UiKit` (C0, Nov 2026).** Milestone 3 landed:
+    the 19 Java-built screens read and write live SQLite data through the concrete DAOs, with no
+    restored service tier (per 77). Two shared classes own the cross-screen contracts:
+    `com.gym.ui.Data` — `ensureReady()` (schema bootstrap + `DemoSeeder` seed), `loadAsync`
+    (background Task + FX-thread result application with per-host generation counters and
+    loading/error state swaps), `submit` (write path), `authenticate` (rule-16 credential check
+    returning an `AuthResult` with OK/INVALID_CREDENTIALS/INACTIVE outcomes); and
+    `com.gym.ui.UiKit` — id-based node lookup, feedback-overlay install, confirm-dialog factory,
+    loading/empty/error state builders, form rows, looked-up theme colors (`lookedUpColor`) and
+    pre-scene role resolution (`themeRole(ColorRole)`). `DemoSeeder` extends the CLI seed to
+    6 trainers / 20 customers through the DAOs (every insert passes the 78 validation). Worker
+    threads are non-daemon on purpose: JVM exit must wait for in-flight database work.
+
+81. **Controller-to-DAO Threading Contract (C0/C3-C10, Nov 2026).** No DAO call may run on the
+    FX thread: every screen load wraps a content host in a loading state, runs its queries on a
+    background `Task`, and applies results on the FX thread; every write goes through
+    `Data.submit`. DAO `ValidationException` messages surface verbatim in snackbars or dialogs —
+    the UI never re-implements a rule. Loading, empty and error states are mandatory per screen
+    region (anti-slop). Screens own their re-query: an action that changes data reloads the
+    snapshot rather than patching rows in place.
+
+82. **Width-Class Reflow with Shared Nodes (C1/C2/C3, Nov 2026).** The shell and dashboard use
+    the library's window size classes to swap layouts while REUSING the same nodes (M3Adaptive-
+    Scaffold swap pattern): compact containers are built EMPTY and filled only on the first class
+    swap — building them from shared nodes at construction drains the desktop containers (the
+    C3 lesson). Two rejected approaches are on record: width-bound ScrollPane wrappers corrupt
+    HBox pref heights when the bound pref width feeds a prefHeight computation, and any
+    container-height derivation from pre-CSS content measurements is unreliable.
+
+83. **Honest Plan Distribution over Conversion Funnel (C6, Nov 2026).** The membership screen's
+    invented conversion funnel was replaced by an active-agreements-per-plan bar chart: paid and
+    active agreements are overlapping sets, not nested stages, so a funnel shape misrepresents
+    them. `M3FunnelChart` also accepts non-monotonic stage data silently (parked lane-B guard).
+    The tier cards show PlanType reality (active count + average SOLD price), not marketing
+    prices.
+
+84. **Equipment Delete Semantics (C5, Worker A, Nov 2026).** Equipment hard delete is confirmed
+    and removed through the DAO, with RETIRED status as the rule-4-compatible alternative for
+    units with history; the floor map derives occupancy from real equipment status.
+
+85. **Admin-Overlay Pattern for Async States (C1-C10, Nov 2026).** Screens own a private
+    `M3Overlay` feedback layer attached to the scene root on attach and detached on screen swap
+    (deferred via Platform.runLater to avoid re-entrant children mutation). All async answers —
+    rule refusals, confirmations, error copy — surface through this layer as snackbars or
+    dialogs; standalone previews (no scene) answer via the same layer once attached or fall back
+    to a visible in-screen state.
+
+86. **Motion Scheme + Reduced-Motion Shell Switches (Q1, Worker A/B, Nov 2026).** The motion
+    scheme (expressive/standard) and a reduced-motion switch are shell-level toggles; every
+    library animation gates on `MotionTokens.isReducedMotion()` and degrades to short fades
+    (see the B-lane one-liners in `COVERAGE.md`).
+
+87. **ScreenShooter Visual-Regression Tool (C0, Nov 2026).** `com.gym.tools.ScreenShooter`
+    snapshots every registered screen plus the shell into `build/screens` PNGs
+    (`./gradlew screenshots --args="--widths=... --themes=... --screens=..."`). It is the QA
+    lanes' evidence engine (Q2/Q4 matrices) and caught real defects (Staff null-child NPE,
+    dashboard 600dp clipping, trainer hero demo labels).
+
+88. **Badge Hide-Not-Truncate Policy (Q4/B10, Nov 2026).** Stat-card badges that overflow their
+    card are HIDDEN rather than clipped mid-glyph: delta text is written to stay within the card
+    width, and over-long badges are dropped (the card's value remains the information carrier).
+    The library-side truncation fix is parked (B10).
+
+89. **Honest Empty Audit Timeline (C7, Worker B, Nov 2026).** The staff screen's audit trail
+    shows a single explicit "No audit trail recorded yet" entry instead of invented history;
+    empty states across the app follow the same policy (real states or explicit empties, never
+    seeded fiction).

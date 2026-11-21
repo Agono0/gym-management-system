@@ -132,8 +132,60 @@ Milestone 3 DAO wiring.
 - [x] Backend domain model, concrete SQLite DAOs, and exceptions (`13` `Serializable` entities, `11` enums, `13` concrete DAOs with `UML.md` format/FK/uniqueness/rule validation guards, `DatabaseConnection`, `SerializationUtil`, `GymException`/`ValidationException`/`DatabaseException`) — **shipped (Milestone 2 + Decision 78)**; abstract service tier retired for beginner simplicity (`DECISIONS.md` 77)
 - [x] SQLite auto-bootstrapping schema (`DatabaseConnection.initializeDatabase()` DDL creating all 13 tables) + binary serialization (`SerializationUtil.saveToFile` / `loadFromFile`) — **shipped (Milestone 2)**
 - [x] Terminal UI Workflow Console (`com.gym.cli`, `runCli` / `run-cli.bat`, `DECISIONS.md` 78): SQLite Login Gate (`Rule 16` active/RBAC checks), interactive Modules `[1]`–`[10]` (Member 360, Coaches/Slots/Subs, Memberships Freeze/Unfreeze/Renew, Schedule/State Machine, Live Workout HUD, Attendance Rule 5, Payments XOR/Void/Balance, Equipment Floor Map, Staff RBAC, `.ser` Export/Load + `DatabaseException` Traps), and `[T]` TA Showcase (22/22 automated sandbox suite + category picker) — **shipped**
-- [ ] Milestone 3: Connect the 20 UI controllers from demo data to the shipped SQLite DAOs and `SerializationUtil`
-- Note on tests (`DECISIONS.md` 77): `src/test/` was removed from the gym app root module (`./gradlew test` on root reports `NO-SOURCE`), while the JUnit 5 suites for `:m3fx-core` and `:m3fx-controls` remain active.
+- [x] Milestone 3: all UI controllers connect to the shipped SQLite DAOs through the
+      `com.gym.ui.Data`/`UiKit` real-data layer (`DECISIONS.md` 80-82) — per-batch rule coverage
+      below; `src/test/` holds `DataAuthenticateTest` (rule-16 login), while the JUnit 5 suites
+      for `:m3fx-core` and `:m3fx-controls` remain active.
+
+## Real-data app pass (Nov 2026) — Milestone 3 DAO wiring (C0-C10)
+
+All 19 screens + shell render and mutate live SQLite data (`gym.db`) through the
+`com.gym.ui.Data` snapshot/submit plumbing and `UiKit` shared helpers (`DECISIONS.md` 80-82).
+Rule coverage per batch (UML.md rules 1-19):
+
+- [x] C0 shared foundation — `com.gym.ui.Data` (snapshot loadAsync/submit threading),
+      `UiKit` (findById, feedback layer, confirm dialog, loading/empty/error states,
+      form rows, looked-up theme colors), `DemoSeeder` (rule-valid seed: 20 customers,
+      6 coaches, memberships/payments/sessions/slots incl. rule 12 XOR + rule 19 void pair)
+- [x] C1 shell + login — width-class reflow (compact bottom bar, medium collapsed rail,
+      expanded rail, large padding), real rule-16 login (AdministratorDao, inactive refused),
+      real Help dialog, 600dp stage minimum
+- [x] C2 anti-slop sweep — Material Symbols only (emoji purged), theme-role colors via
+      `UiKit.themeRole` (no hardcoded hex in controllers), dashboard 600dp reflow
+- [x] C3 dashboard + customers — rule-5 check-in (same-day updates), rule-17 slot occupancy,
+      rule-18 agenda confirmations, rule-6 revenue, rule-15 cohort, rule-16 login
+      (`DataAuthenticateTest`), honest empty agenda
+- [x] C4 schedule + live HUD — rule-1 booking (slot-in CONFIRMED / outside REQUESTED /
+      admin override), rule-10 cancel with reason verdict, rule-17 capacity, rule-18
+      lifecycle; 7-day real week navigation; HUD runs a real CONFIRMED session with
+      SIMULATED-telemetry labeling
+- [x] C5 equipment + floor map (Worker A batch) — rule-4 delete/RETIRED semantics,
+      rule-13 condition/status editors, real floor occupancy
+- [x] C6 membership + payment — rule-7 freeze/unfreeze/renew (CLI-mirrored arithmetic),
+      rule-6 outstanding balance (mirror of the CLI computation), rule-12 record (exactly one
+      link), rule-19 void fields + replacement payment (no hard delete), receipt preview
+- [x] C8 trainers + availability + workout — rule-15 authoritative roster, rule-8 slot editor
+      (start<end, caps), rule-17-guarded slot delete, rule-11 program versioning
+      (creator = rule-15 coach), real version history
+- [x] C9 progress/medical/login remainder (Worker A batch) — rule-3 medical profiles
+
+QA passes (evidence in `docs/agents/STATE.md` + session reports):
+
+- [x] Q1 animation-spec pass (Worker A/B batch)
+- [x] Q3 keyboard pass (Worker B batch)
+- [x] Q4 resize pass — 600/1280 matrices per screen batch; dashboard/availability reflow fixed
+- [x] Q5 performance + memory pass — idle CPU measured (gate + post-login shell), full
+      AnimationTimer/timeline audit (all gated on visibility), 2x screenshot-matrix memory
+      soak; found + fixed the Staff screen null-child NPE and the login-gate particle idle burn
+
+Parked items (documented, not bugs — candidates for a future run):
+
+- [ ] Idle-cost library candidates: interactive-glass idle pause and beacon redraw budget
+      (login gate ~26% / shell idle ~25% of one core, measured in Q5).
+- [ ] `M3FunnelChart` monotonic-stage guard (the membership screen replaced its funnel with a
+      plan-distribution bar chart because paid/active agreements are overlapping sets).
+- [ ] 40dp text-field icon target (leading/trailing icon hit area below the 48dp minimum).
+- [ ] Trainer-list day headers truncate at 1280 with 7 columns (Q4 residual, B10-adjacent).
 
 ### Documentation for the app
 
