@@ -159,8 +159,11 @@ public class M3StatCard extends M3Card {
      */
     private void updateTitleTooltip() {
         String text = getTitle();
-        if (!getDeltaText().isEmpty()) {
-            text += " — " + getDeltaText();
+        // Null-safe: callers (e.g. CustomerProfileController's placeholder cards) may pass a
+        // null delta — treat it like an empty one instead of NPE-ing the FX thread.
+        String delta = getDeltaText();
+        if (delta != null && !delta.isEmpty()) {
+            text += " — " + delta;
         }
         if (!text.isEmpty()) {
             io.m3fx.controls.common.M3Tooltip.install(titleLabel, text);
