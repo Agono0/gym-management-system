@@ -146,8 +146,10 @@ public class LoginController implements ScreenController {
         Region telemetrySpacer = new Region();
         HBox.setHgrow(telemetrySpacer, Priority.ALWAYS);
         securityBadgeChip = new M3Chip("TLS 1.3 / WAL ACTIVE", ChipVariant.ASSIST);
+        // Short station copy: the previous "STATION: FRONT_DESK_01" collapsed to a bare
+        // "..." pill at compact width; this form fits the telemetry bar at every width.
         telemetryBar.getChildren().addAll(statusBeacon,
-                styledLabel("STATION: FRONT_DESK_01", "telemetry-label"),
+                styledLabel("STATION: FRONT DESK", "telemetry-label"),
                 telemetrySpacer,
                 securityBadgeChip);
 
@@ -186,7 +188,7 @@ public class LoginController implements ScreenController {
         // Staff ID field — the M3TextField's floating label is the identifier label; the old
         // static label above it duplicated the text (the login overlay bug).
         VBox staffIdGroup = new VBox(6);
-        usernameField = new M3TextField("Staff Identifier", TextFieldVariant.OUTLINED);
+        usernameField = new M3TextField("Staff Identifier", TextFieldVariant.FILLED);
         usernameField.setPrefHeight(56);
         usernameHelper = styledLabel("Case-sensitive unique employee ID", "helper-label");
         staffIdGroup.getChildren().addAll(usernameField, usernameHelper);

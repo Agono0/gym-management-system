@@ -183,7 +183,9 @@ public class M3GymFloorMap extends StackPane {
         zones.add(new ZoneArea("FUNCTIONAL CROSSFIT CAGE", 20, 220, 320, 180,
                 ThemeColors.resolve(this, ColorRole.SECONDARY)));
         zones.add(new ZoneArea("RECOVERY LOUNGE & SPA", 360, 220, 320, 180,
-                ThemeColors.resolve(this, ColorRole.INVERSE_PRIMARY)));
+                // INVERSE_PRIMARY is near-white in light mode and washed the zone title out
+                // (visual QA finding) - SURFACE_CONTAINER_HIGH stays legible in both modes.
+                ThemeColors.resolve(this, ColorRole.SURFACE_CONTAINER_HIGH)));
     }
 
     private void buildDefaultEquipment() {
