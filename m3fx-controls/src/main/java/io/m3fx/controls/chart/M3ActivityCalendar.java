@@ -37,6 +37,13 @@ public class M3ActivityCalendar extends Region {
     private static final int WEEKS = 53;
     private static final int DAYS_IN_WEEK = 7;
 
+    /** Fixed right-aligned span of the "Less → More" legend block on the footer line. */
+    private static final double FOOTER_LEGEND_SPAN = 100.0;
+    /** Minimum gap between the stats text and the legend block on a shared footer line. */
+    private static final double FOOTER_SEGMENT_GAP = 8.0;
+    /** Bottom padding when the footer segments stack (stats line + legend line). */
+    private static final double FOOTER_STACKED_BOTTOM = 42.0;
+
     private final Map<LocalDate, Integer> activityMap = new HashMap<>();
 
     private final IntegerProperty year = new SimpleIntegerProperty(this, "year", LocalDate.now().getYear());
@@ -322,6 +329,37 @@ public class M3ActivityCalendar extends Region {
     /** Render invocations, counted by the B6 theme-repaint tests (package-private). */
     int renderCountForTesting;
 
+    /** Whether the last render stacked the stats/legend footer (package-private for tests). */
+    boolean footerStacked;
+
+    /**
+     * Width of {@code text} under {@code font} via an off-scene {@link javafx.scene.text.Text}.
+     * Falls back to a character-count estimate when the FX toolkit is not running (headless
+     * unit tests call render through the public setters); the estimate only shifts the
+     * ~600px stack crossover, it never widens the drawn line.
+     */
+    static double textWidth(Font font, String text) {
+        try {
+            javafx.scene.text.Text t = new javafx.scene.text.Text(text);
+            t.setFont(font);
+            return t.getLayoutBounds().getWidth();
+        } catch (RuntimeException toolkitDown) {
+            return text.length() * font.getSize() * 0.6;
+        }
+    }
+
+    /** Truncates {@code text} with an ellipsis so it fits {@code maxWidth} under {@code font}. */
+    static String ellipsize(Font font, String text, double maxWidth) {
+        if (textWidth(font, text) <= maxWidth) {
+            return text;
+        }
+        String t = text;
+        while (t.length() > 1 && textWidth(font, t + "…") > maxWidth) {
+            t = t.substring(0, t.length() - 1);
+        }
+        return t.stripTrailing() + "…";
+    }
+
     private void render() {
         renderCountForTesting++;
         double w = getWidth() > 0 ? getWidth() : getPrefWidth();
@@ -333,10 +371,22 @@ public class M3ActivityCalendar extends Region {
 
         double padLeft = isShowDayLabels() ? 32.0 : 12.0;
         double padTop = isShowMonthLabels() ? 22.0 : 10.0;
-        double padBottom = isShowStatsFooter() ? 26.0 : 10.0;
         double padRight = 12.0;
 
+        // Footer layout is measured, not assumed: below ~600px the stats line and the
+        // legend no longer fit side by side (the Q7 overlap), so they stack and the stats
+        // copy ellipsizes. The full string stays on accessibleText either way.
+        Font footerFont = Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL,
+                TypeScale.LABEL_SMALL.size());
+        String statsStr = String.format("Year %d: %d total workouts  •  Current streak: %d days  •  Longest streak: %d days",
+                getYear(), getTotalWorkouts(), getCurrentStreak(), getLongestStreak());
+        double statsWidth = textWidth(footerFont, statsStr);
         double gridW = w - padLeft - padRight;
+        footerStacked = isShowStatsFooter()
+                && statsWidth > gridW - FOOTER_LEGEND_SPAN - FOOTER_SEGMENT_GAP;
+        double padBottom = isShowStatsFooter()
+                ? (footerStacked ? FOOTER_STACKED_BOTTOM : 26.0) : 10.0;
+
         double gridH = h - padTop - padBottom;
         if (gridW <= 0 || gridH <= 0) return;
 
@@ -429,21 +479,21 @@ public class M3ActivityCalendar extends Region {
             double footerY = padTop + DAYS_IN_WEEK * (cellSize + gap) + 16.0;
 
             gc.setFill(textColor);
-            // Footer stats: 10px mapped to M3 label-small (11sp), the nearest type role.
-            gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
-            String statsStr = String.format("Year %d: %d total workouts  •  Current streak: %d days  •  Longest streak: %d days",
-                    getYear(), getTotalWorkouts(), getCurrentStreak(), getLongestStreak());
-            gc.fillText(statsStr, padLeft, footerY);
+            gc.setFont(footerFont);
+            setAccessibleText(statsStr);
+            gc.fillText(footerStacked ? ellipsize(footerFont, statsStr, gridW) : statsStr,
+                    padLeft, footerY);
 
-            // Legend on right (Less -> More)
-            double legendX = w - padRight - 100.0;
-            gc.fillText("Less", legendX - 26, footerY);
+            // Legend on right (Less -> More); on its own row when stacked
+            double legendY = footerY + (footerStacked ? 16.0 : 0.0);
+            double legendX = w - padRight - FOOTER_LEGEND_SPAN;
+            gc.fillText("Less", legendX - 26, legendY);
             for (int lvl = 0; lvl <= 3; lvl++) {
                 gc.setFill(resolveIntensityColor(lvl));
-                gc.fillRoundRect(legendX + lvl * 12.0, footerY - 8.0, 9.0, 9.0, 2, 2);
+                gc.fillRoundRect(legendX + lvl * 12.0, legendY - 8.0, 9.0, 9.0, 2, 2);
             }
             gc.setFill(textColor);
-            gc.fillText("More", legendX + 52.0, footerY);
+            gc.fillText("More", legendX + 52.0, legendY);
         }
 
         // Tooltip
