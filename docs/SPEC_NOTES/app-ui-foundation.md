@@ -463,3 +463,59 @@ Both switches apply live without a restart (the token layer's static state is re
 and consumers attach no cached preset objects). Keyboard: both switches are M3Switches — Tab,
 Space toggles, announced — consistent with the dark-mode toggle beside them. Q3 gap check for
 the new controls: none (they are switches, the covered component).
+## 16. Trainer screens + workout builder on real data (task C8)
+
+### 16.1 Trainer list
+
+One `Data.loadAsync` snapshot per view: TrainerDao rows joined with the rule-15 assignment
+counts (CustomerDao.trainerId), the rule-8 weekly slot caps and today's slot fill
+(TrainerAvailabilityDao + SessionDao rule-17 CONFIRMED counts). Stat cards, the on-duty
+carousel (only coaches with slots today) and the roster are computed from the snapshot; the
+sort menu reorders a DISPLAY COPY (the source list order is never permanently mutated);
+the domain chips are relabeled from the real roster's specialization keywords. The radar
+counts coaches per real domain keyword; the heatmap intensity is real CONFIRMED sessions per
+day/hour. Onboarding inserts through `TrainerDao.insert` (name + rule-valid Egyptian phone;
+the DAO owns email/rate validation); removal confirms first and calls `TrainerDao.delete`,
+surfacing the rule-4 reference refusal verbatim.
+
+### 16.2 Trainer profile
+
+`showTrainer` (roster handoff) loads the coach's real dossier via `Data.loadAsync`
+(`ProfileSnapshot`): rule-15 assigned athletes each with their rule-11 subscription, latest
+WorkoutProgramDao program and rule-3 medical profile; the weekly CONFIRMED session heatmap
+(rule 17); the capacity gauge COMPUTED as assigned athletes vs the sum of the coach's slot
+caps (rule 8) — the 121.7%-for-92% hardcode is gone. Save persists the hourly rate through
+`TrainerDao.update`; the medical sheet reads `MedicalProfileDao` (rule 15 access; rule 3
+on-demand copy when none exists). The demo cohort and demo person are removed; standalone
+previews show the honest empty state.
+
+### 16.3 Availability
+
+Real slot editor over `TrainerAvailabilityDao`: the coach selector lists the real roster,
+week navigation re-queries the selected coach's slots for the rendered week, the density
+heatmap and banner show rule-17 CONFIRMED occupancy per slot hour against the rule-8 caps
+(no Random), and the annual calendar counts real CONFIRMED sessions per day. The bottom
+command bar edits the selected real slot: Pick Slot (menu over the coach's slots), per-slot
+cap persisted via `TrainerAvailabilityDao.update` (rule 8: maxCustomers > 0), open/close
+status persisted, Delete Slot refused while rule-17 CONFIRMED sessions occupy it. Batch
+Publish REALLY creates the week's slots — one `TrainerAvailabilityDao.insert` per hour
+between start and end per day in the range, for the selected coach (rule 8: start < end and
+maxCustomers > 0 owned by the DAO). The app-bar arrow navigates back to the schedule screen
+through the owning shell. The dead M3Steppers are replaced by discrete M3Sliders whose values
+are actually consumed.
+
+### 16.4 Workout builder
+
+Programs are real `WorkoutProgramDao` rows. The header combo lists real customers; the
+creator label resolves the selected athlete's rule-15 coach (the program record stores its
+creator, so saving requires an assigned coach). Save Routine inserts the staged pipeline as
+the NEXT version for the customer + title (the DAO owns version uniqueness; rule 11 session
+pricing stays session-level in the schedule screen). History & Versions lists the real
+version history per athlete and loads the chosen version into the builder; Duplicate saves a
+new version; Delete confirms and removes the LOADED version row; Reassign moves the loaded
+program to another customer via `WorkoutProgramDao.update` (version uniqueness excludes the
+program's own id). Template buttons REALLY insert preset programs (honest in-app copy; they
+require an assigned coach). The exercise library is labeled as the UI catalog it is; the
+staged pipeline persists into the program record's exercise list, and the volume telemetry
+shows honest dashes (the catalog carries no loads/RPE). Rule-18 note: the combo listener
+compares ids as ints (an earlier String-vs-int comparison always cleared the builder).
