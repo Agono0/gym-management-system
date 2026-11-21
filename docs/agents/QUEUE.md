@@ -481,7 +481,12 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   goal: Performance/memory pass: idle CPU ~0%, no jank while resizing/animating, 50× screen
   open/close without growth (watchdog clean).
   done-when: measurements recorded in STATE.md.
-  claimed-by: — | status: BLOCKED (C3..C9)
+  claimed-by: C | status: DONE (round 16, commit 710543d → main 814a5d8 — **fixed: Staff
+  screen null-child NPE (crashed on every build — explains why Q2/Q4 couldn't audit it) +
+  splash particle canvas burning ~11% CPU behind the hidden layer**; full 16-timer animation
+  audit table + memory release audit recorded. Library findings parked: pulse beacon + glass
+  idle cost ~25% of one core at login idle (both correctly gated — suggest beacon redraw
+  budget + glass idle pause; candidate lane-B task, parked for a future run))
 - [ ] Q6 | lane:Q | deps:Q1..Q5 | files: docs/
   goal: Final visual acceptance: full screenshot matrix vs spec notes + anti-slop list; update
   COVERAGE.md, DECISIONS.md, layer READMEs; CHANGELOG.
@@ -513,3 +518,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 14 | Q2 (in flight) | Q4 (in flight) | C8 (d76c2b4) | **LANE C COMPLETE (C0-C10)**; C8 merged after spec-note renumber resolution |
 | 15 | Q2 (94c8863: StatCard NPE fix + shooter capture fix) | — | — | Q2 merged; findings queued: Q7 (glass tint + calendar footer), app residuals (speed-dial overlap, payment dark hint, availability title clip, null-isEmpty binding noise) |
 | 16 | Q2-residuals (aabaf44 → 1c5c77d, pooled to A) | — | — | binding noise root-caused (B10 badge-visibility binding + app placeholder nulls), payment raw fields token-styled, availability title clip fixed (M3TopAppBar row pref height). Speed-dial "overlap" was a MISDIAGNOSIS — dial is at spec position; the real bug is the dashboard light-mode radar-card collapse (Workers-C file, fix queued for A) |
+| 17 | dashboard-collapse (in flight) | Q7 (in flight) | Q5 (710543d) | Q5 merged locally 814a5d8 — staff NPE + particle burn fixed; idle-cost library candidates parked |
