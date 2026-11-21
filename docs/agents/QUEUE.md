@@ -250,7 +250,9 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   footer segments.
   done-when: light-mode glass no longer occludes content (light screenshots of the three
   screens), calendar footer clean at 420px width, tests added, suite green.
-  claimed-by: — | status: READY
+  claimed-by: Worker B | status: REVIEW (61598d3 glass tint, ac86256 calendar footer;
+  light HUD visors (255,202,243)->(255,246,253), dark unchanged; footer stacks below ~600px
+  with ellipsize + accessibleText, M3ActivityCalendarFooterTest added; suite + root build green)
 
 - [ ] B7 | lane:B | deps:A3 | files: m3fx-controls/.../internal/MotionUtil.java, internal/SpringAnimation.java, internal/StateLayer.java
   goal: Honor `MotionTokens.isReducedMotion()` in the controls internals: `MotionUtil.enter/exit/
