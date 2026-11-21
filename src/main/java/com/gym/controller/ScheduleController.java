@@ -255,8 +255,12 @@ public class ScheduleController implements ScreenController {
         agendaGrid.setHgap(8);
         agendaGrid.setVgap(8);
         agendaGrid.getStyleClass().add("agenda-grid-container");
+        // Q4: fitToWidth(true) squeezed the seven day columns into any viewport and garbled
+        // the day headers at compact widths (600px shots). Without it the agenda keeps its
+        // column widths and scrolls horizontally at compact widths, filling the viewport
+        // at expanded widths (the grid's pref width tracks the seven columns).
         ScrollPane agendaScroll = new ScrollPane(agendaGrid);
-        agendaScroll.setFitToWidth(true);
+        agendaScroll.setFitToWidth(false);
         agendaScroll.setFitToHeight(false);
         agendaView = agendaScroll;
         // Content host so the real-data week load can swap the agenda for loading/error states.

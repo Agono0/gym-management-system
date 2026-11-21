@@ -117,6 +117,8 @@ public class DashboardController implements ScreenController {
     // ---- Responsive layout (width-class reflow, shared nodes — see applyDashboardLayout) ----
     private VBox bentoGrid;
     private HBox heroRow;
+    /** Q4: wraps the hero action cluster below the greeting at compact widths. */
+    private javafx.scene.layout.FlowPane heroActionsWrap;
     private VBox heroColumn;
     private Region heroSpacer;
     private VBox greetingBlock;
@@ -163,6 +165,11 @@ public class DashboardController implements ScreenController {
         heroBannerCard.setPadding(new Insets(16, 24, 16, 24));
         heroRow = new HBox(16);
         heroRow.setAlignment(Pos.CENTER_LEFT);
+        // Q4: the action cluster moves below the greeting at compact widths instead of
+        // clipping at the window edge (600px dashboard shots) — HBox cannot wrap, so the
+        // hero actions live in a FlowPane that reflows when the width runs out.
+        heroActionsWrap = new javafx.scene.layout.FlowPane(12, 8);
+        heroActionsWrap.setMaxWidth(Double.MAX_VALUE);
 
         greetingBlock = new VBox(4);
         welcomeGreetingLabel = new Label("Good Morning, Administrator");
@@ -193,10 +200,11 @@ public class DashboardController implements ScreenController {
         logoutButton.setGraphic(M3Icon.symbol("close"));
         logoutButton.setOnAction(e -> onLogout());
         actionsBar.getChildren().addAll(refreshButton, quickActionSplitBtn, logoutButton);
+        heroActionsWrap.getChildren().add(actionsBar);
 
         heroSpacer = new Region();
         HBox.setHgrow(heroSpacer, Priority.ALWAYS);
-        heroRow.getChildren().addAll(greetingBlock, heroSpacer, actionsBar);
+        heroRow.getChildren().addAll(greetingBlock, heroSpacer, heroActionsWrap);
         heroColumn = new VBox(12);
         heroColumn.setAlignment(Pos.CENTER_LEFT);
         heroBannerCard.setContent(heroRow);
