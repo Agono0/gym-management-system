@@ -421,7 +421,10 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   motion, headline classes); motion-scheme toggle + reduced-motion demo page; unknown-icon
   audit clean; remove dead `WritableImage` import; keep `run`/`runSamples` launching clean.
   done-when: gallery screenshots reviewed, zero stderr warnings.
-  claimed-by: — | status: BLOCKED (B3,C0)
+  claimed-by: A | status: DONE (round 15, commit 53b1e67 → main 94f7582 — motion switches +
+  floor-map toggles + headline classes + stat-card hide-case demos added to the gallery pages;
+  34/34 icon names resolve; dead import removed; all 19 screens still instantiate in the
+  viewer page. **LANE C COMPLETE except C8 (in flight).**)
 
 ## Lane Q — QA passes (P5)
 
@@ -483,3 +486,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 10 | B16 (in flight) | C7 (in flight) | C6 (73c72c9) | C6 merged after spec-note renumber resolution |
 | 11 | B16 (63942b6) | C7 (in flight) | C8 (in flight) | B16 merged locally b0616ac |
 | 12 | C9 (bcfb32f+769c98b+ce47801, pooled to A) | — | — | merged locally ce47801 |
+| 13 | C10 (53b1e67) | Q1 (0b8409f) | C8 (in flight) | identity+Q3 (da68830) merged; C10 merged locally 94f7582 — **lane C complete except C8** |
