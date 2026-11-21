@@ -85,6 +85,7 @@ public class LaunchGateController {
     private StackPane gateOverlay;      // full-window child of the shell's scene root
     private Region scrim;               // dimming backdrop (also the "veil" that hides boot)
     private StackPane splashLayer;      // splash content (brand + title + progress)
+    private M3ParticleCanvas splashParticles; // ambient field; stopped once the splash hides
     private VBox splashText;            // the part of the splash that dissolves via splashOut
     private StackPane brandHolder;      // keeps the brand mark centered during the splash
     private M3GlassPane splashGlassPanel; // CLEAR glass surface behind the splash brand
@@ -161,6 +162,7 @@ public class LaunchGateController {
             scrim.setOpacity(SIGNOUT_SCRIM_OPACITY);
             resetGateState();
             splashLayer.setVisible(false);
+            splashParticles.setVisible(false);
             gateLayer.setVisible(true);
             loginCard.setVisible(true);
             gateShowing = true;
@@ -264,7 +266,8 @@ public class LaunchGateController {
         // clear glass is for content-rich backdrops). Purely decorative — mouse-transparent and
         // non-interactive — and it hides with the splash layer, so the brand handoff choreography
         // never sees it.
-        M3ParticleCanvas particles = new M3ParticleCanvas();
+        splashParticles = new M3ParticleCanvas();
+        M3ParticleCanvas particles = splashParticles;
         particles.setInteractive(false);
         particles.setMouseTransparent(true);
         particles.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
@@ -558,6 +561,9 @@ public class LaunchGateController {
         MotionUtil.splashOut(splashText, () -> {
             // First statement: hide before splashOut's reset can repaint the dissolved text.
             splashLayer.setVisible(false);
+            // The ambient particle field's timer gates on the node's own visible flag only,
+            // so a canvas behind a hidden layer would keep burning CPU — stop it explicitly.
+            splashParticles.setVisible(false);
             handBrandIntoCard();
             gateLayer.setVisible(true);
             loginCard.setVisible(true);

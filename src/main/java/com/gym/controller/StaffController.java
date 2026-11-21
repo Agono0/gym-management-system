@@ -162,6 +162,8 @@ public class StaffController implements ScreenController {
         HBox topRow = new HBox(16);
         topRow.setAlignment(Pos.CENTER_LEFT);
         topRow.setPadding(new Insets(4, 24, 12, 24));
+        btnTopAddStaff = new M3Button("Add Staff", io.m3fx.controls.button.ButtonVariant.FILLED);
+        btnTopAddStaff.setOnAction(e -> onAddStaff());
         Label topCaption = new Label("Role-based access, audit trail and administrative overrides");
         topCaption.getStyleClass().add("body-medium");
         Region topSpacer = new Region();
