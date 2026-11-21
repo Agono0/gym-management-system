@@ -250,9 +250,13 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   footer segments.
   done-when: light-mode glass no longer occludes content (light screenshots of the three
   screens), calendar footer clean at 420px width, tests added, suite green.
-  claimed-by: Worker B | status: REVIEW (61598d3 glass tint, ac86256 calendar footer;
-  light HUD visors (255,202,243)->(255,246,253), dark unchanged; footer stacks below ~600px
-  with ellipsize + accessibleText, M3ActivityCalendarFooterTest added; suite + root build green)
+  claimed-by: Worker B | status: DONE (orchestrator-reviewed → merged 61598d3+ac86256 → main
+  b93244f; root cause: multiplicative tint cannot wash + ColorAdjust saturation re-pinkifies →
+  light bakes a SURFACE-derived veil into the rendered image, bypasses saturation, dark
+  byte-identical; light HUD visors (255,202,243)→(255,246,253) verified on main; footer
+  measured/stacked/ellipsized with M3ActivityCalendarFooterTest. Parked findings: glass
+  tintLayer/specularRing 0×0 never painted (dark-scoped task), DisplacementMap vestigial,
+  refractedImage stale on resize)
 
 - [ ] B7 | lane:B | deps:A3 | files: m3fx-controls/.../internal/MotionUtil.java, internal/SpringAnimation.java, internal/StateLayer.java
   goal: Honor `MotionTokens.isReducedMotion()` in the controls internals: `MotionUtil.enter/exit/
@@ -522,4 +526,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 16 | Q2-residuals (aabaf44 → 1c5c77d, pooled to A) | — | — | binding noise root-caused (B10 badge-visibility binding + app placeholder nulls), payment raw fields token-styled, availability title clip fixed (M3TopAppBar row pref height). Speed-dial "overlap" was a MISDIAGNOSIS — dial is at spec position; the real bug is the dashboard light-mode radar-card collapse (Workers-C file, fix queued for A) |
 | 17 | dashboard-collapse (in flight) | Q7 (in flight) | Q5 (710543d) | Q5 merged locally 814a5d8 — staff NPE + particle burn fixed; idle-cost library candidates parked |
 | 17b | dashboard-collapse → DONE as **no-change-needed** (Worker A probe: card + dial render correct in both themes at 600/1280; the Q2 collapse was the shooter race already fixed by cc12b82) | — | — | evidence: build/screens/dashboard_{light,dark}_w{600,1280}.png |
-| 18 | — | Q7 (in flight) | Q6 part 1 + ui-README fix (be7a129+c025bae → 102a275) | Q6 docs merged (coverage, decisions 80-89, layer READMEs); part 2 final matrix held until Q7 lands |
+| 18 | — | Q7 (61598d3+ac86256) | Q6 part 1 + ui-README fix (be7a129+c025bae → 102a275) | Q7 merged locally b93244f — light glass verified on main; **Q6 part 2 GO** |
