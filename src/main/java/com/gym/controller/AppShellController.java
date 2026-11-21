@@ -157,6 +157,8 @@ public class AppShellController implements ScreenController {
     /** Q1: drives MotionTokens.setMotionScheme live (no restart). */
     private M3Switch schemeSwitch;
     private M3Chip userRoleChip;
+    /** The Ctrl+K badge inside the search trigger; hidden when the cluster is tight. */
+    private Label shortcutBadge;
     /** The signed-in identity from the login gate (null until a gate sign-in publishes it). */
     private String signedInName;
     private StaffRole signedInRole;
@@ -186,12 +188,23 @@ public class AppShellController implements ScreenController {
      */
     public AppShellController() {
         rootShellPane = new BorderPane();
+        // B/Q4: allow the shell to shrink below its content's natural minimums — the top
+        // bar chain (title label, search trigger, system cluster) pins ~876px otherwise,
+        // which kept the responsive chrome from ever reaching the compact class and
+        // rendered 600/840 windows as a clipped expanded shell.
+        rootShellPane.setMinWidth(0);
 
         // TOP: glass canopy top app bar container.
         StackPane appBarContainer = new StackPane();
         appBarContainer.getStyleClass().add("glass-app-bar-container");
 
         topAppBar = new M3TopAppBar("GYM-OS // ENTERPRISE 2026", TopAppBarVariant.SMALL);
+        topAppBar.setMinWidth(0);
+        // Q4: the title label must not pin the top-bar minimum — it ellipsizes instead.
+        Label shellTitle = (Label) topAppBar.lookup(".m3-top-app-bar-title");
+        if (shellTitle != null) {
+            shellTitle.setMinWidth(0);
+        }
         topAppBar.setPrefHeight(64.0);
         topAppBar.getStyleClass().add("glass-app-bar");
 
@@ -230,7 +243,7 @@ public class AppShellController implements ScreenController {
                 M3Icon.symbol("search"),
                 placeholderLabel("Quick Command or Search...", "search-placeholder"),
                 searchSpacer,
-                placeholderLabel("Ctrl + K", "shortcut-badge"));
+                shortcutBadge = placeholderLabel("Ctrl + K", "shortcut-badge"));
 
         Region topRowSpacer = new Region();
         HBox.setHgrow(topRowSpacer, Priority.ALWAYS);
@@ -502,10 +515,22 @@ public class AppShellController implements ScreenController {
         searchTriggerBar.setManaged(expanded);
         telemetryPill.setVisible(expanded);
         telemetryPill.setManaged(expanded);
-        topRow.setPadding(expanded ? new Insets(0, 16, 0, 380) : new Insets(0, 16, 0, 16));
+        // Q4: the motion switches widened the system cluster — the Ctrl+K badge only fits
+        // at large widths; below it the placeholder alone carries the affordance.
+        boolean large = widthClass == WindowSizeClass.EXPANDED && largeWindow;
+        shortcutBadge.setVisible(large);
+        shortcutBadge.setManaged(large);
+        // Q4: the title clearance now differs per class — 380px fits the long title at
+        // expanded; below it the compact title ('GYM-OS', ~174px with the menu button)
+        // needs 200px so the system cluster (two switches wider since Q1) never overlaps
+        // it at 600-840 widths.
+        topRow.setPadding(expanded ? new Insets(0, 16, 0, 380)
+                : new Insets(0, 16, 0, 200));
         // The full product title runs under the system cluster at narrow widths; short forms
         // keep the app bar readable instead of overlapping it.
-        topAppBar.setTitle(compact ? "GYM-OS" : "GYM-OS // ENTERPRISE 2026");
+        // Q4: the medium top bar is too tight for the long title once the motion
+        // switches share the system cluster — the short form reads better there too.
+        topAppBar.setTitle(compact || medium ? "GYM-OS" : "GYM-OS // ENTERPRISE 2026");
         contentArea.setPadding(largeWindow && !compact ? new Insets(0, 12, 0, 12) : Insets.EMPTY);
     }
 
