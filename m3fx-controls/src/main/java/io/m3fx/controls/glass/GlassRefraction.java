@@ -36,18 +36,32 @@ public final class GlassRefraction {
         public static final Interaction NONE = new Interaction(0.5, 0.5, 0.0, 0.0, 0.0);
     }
 
-    /** Shader uniform bundle for one render pass (all values in pane pixels unless noted). */
+    /**
+     * Shader uniform bundle for one render pass (all values in pane pixels unless noted).
+     * {@code veil} is a translucent color composited over the rendered glass after refraction
+     * and tint (a true over blend, unlike the multiplicative {@code tint}); light themes use
+     * it for the light-surface veil because it lives inside the rendered image and therefore
+     * survives CSS passes that reset layer backgrounds (Q7).
+     */
     public record ShaderParams(double boxW, double boxH, double radius, double refraction,
                                double bevelDepth, double bevelWidth, double frost,
                                double aberration, double magnify, Color tint,
                                double tiltX, double tiltY,
-                               Interaction interaction) {
+                               Interaction interaction, Color veil) {
+        public ShaderParams(double boxW, double boxH, double radius, double refraction,
+                            double bevelDepth, double bevelWidth, double frost,
+                            double aberration, double magnify, Color tint,
+                            double tiltX, double tiltY,
+                            Interaction interaction) {
+            this(boxW, boxH, radius, refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
+                    tint, tiltX, tiltY, interaction, null);
+        }
         public ShaderParams(double boxW, double boxH, double radius, double refraction,
                             double bevelDepth, double bevelWidth, double frost,
                             double aberration, double magnify, Color tint,
                             Interaction interaction) {
             this(boxW, boxH, radius, refraction, bevelDepth, bevelWidth, frost, aberration, magnify,
-                    tint, 0.0, 0.0, interaction);
+                    tint, 0.0, 0.0, interaction, null);
         }
     }
 
@@ -338,6 +352,8 @@ public final class GlassRefraction {
         double radius = Math.min(params.radius(), Math.min(halfW, halfH));
         Color tint = params.tint();
         double tintA = tint == null ? 0.0 : clamp01(tint.getOpacity());
+        Color veil = params.veil();
+        double veilA = veil == null ? 0.0 : clamp01(veil.getOpacity());
         double texelX = 1.0 / Math.max(1.0, backdrop.getWidth());
         double texelY = 1.0 / Math.max(1.0, backdrop.getHeight());
 
@@ -452,9 +468,18 @@ public final class GlassRefraction {
                     g = g + (g * tint.getGreen() - g) * tintA;
                     b = b + (b * tint.getBlue() - b) * tintA;
                 }
+                double a = refrCol.getOpacity();
+                if (veilA > 0.0) {
+                    // Over blend (unlike the multiplicative tint above): light themes wash
+                    // refracted neighbor content into a light-surface veil (Q7).
+                    r = r * (1.0 - veilA) + veil.getRed() * veilA;
+                    g = g * (1.0 - veilA) + veil.getGreen() * veilA;
+                    b = b * (1.0 - veilA) + veil.getBlue() * veilA;
+                    a = a * (1.0 - veilA) + veilA;
+                }
                 writer.setColor(px, py, Color.color(
                         clamp01(r) * inShape, clamp01(g) * inShape, clamp01(b) * inShape,
-                        clamp01(refrCol.getOpacity()) * inShape));
+                        clamp01(a) * inShape));
             }
         }
     }

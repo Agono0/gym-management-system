@@ -80,3 +80,22 @@ package `io.m3fx.controls.glass`:
   `io.m3fx.controls.glass.M3GlassPane` (stash design), preserving blurRadius/cornerRadius/
   glassOpacity/getContentBox/getContent/setContent.
 - `MotionTokens.fluidSpring()` / `SpringInterpolator.FLUID` (0.82/6.0) = the morph/flex spring.
+
+## Q7 light-mode veil (theme-driven tint)
+The dark glass was designed first; over light pages the refracted rim samples the capture pad
+(neighboring UI) and the ColorAdjust saturation boost amplified the residual chroma into opaque
+pink pills (the HUD visors). Three coordinated changes in `GlassPaneSkin` / `GlassRefraction`:
+
+1. **Baked veil**: `ShaderParams` gains a `veil` color composited OVER the rendered glass after
+   refraction and tint (a true over blend — the existing `tint` mix is multiplicative and cannot
+   wash). `imageVeil()` supplies it in light themes (no explicit app tint): button 0.85, clear
+   0.60, regular `min(0.92, max(0.85, glassOpacity))` of the scene's resolved SURFACE. It is
+   baked into the refracted image because the tint layer's programmatic background is reset by
+   the `.glass-tint { -fx-background-color: transparent }` CSS rule on every CSS pass (and the
+   layer is a `Pane` child, never resized, so it paints nothing regardless).
+2. **Refraction tint**: light themes pass SURFACE @ 0.88 through the multiplicative tint mix so
+   near-white samples land exactly on the surface color; dark keeps the control's tint.
+3. **Saturation bypass**: light glass renders with `ColorAdjust` saturation 0 (the boost turned
+   the veiled near-neutral back into pink); dark keeps `effectiveSaturation()`. A custom app
+   tint (`tint` with alpha > 0) always wins — no veil, no bypass.
+Dark mode is byte-identical: veil null, tint untouched, saturation untouched.

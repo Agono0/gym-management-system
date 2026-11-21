@@ -857,8 +857,8 @@ specularLight2.setVisible(false);
         GlassRefraction.ShaderParams params = new GlassRefraction.ShaderParams(
                 w, h, radius, effectiveRefraction, control.getBevelDepth(),
                 control.getBevelWidth(), control.getFrost(), control.getAberration(),
-                control.getMagnify(), control.getTint(), currentTiltX, currentTiltY,
-                interaction);
+                control.getMagnify(), refractionTint(), currentTiltX, currentTiltY,
+                interaction, imageVeil());
         int iw = Math.max(1, (int) Math.ceil(w));
         int ih = Math.max(1, (int) Math.ceil(h));
         if (refractedImage == null
@@ -881,12 +881,82 @@ specularLight2.setVisible(false);
         placeBackdropViews();
     }
 
+    /**
+     * True when the control's scene theme is light (surface luminance >= 0.5). The glass
+     * veil is dark-first by design; light themes need a light-surface veil instead (Q7).
+     */
+    private boolean isLightTheme() {
+        M3GlassPane control = getSkinnable();
+        if (control == null) {
+            return false;
+        }
+        Color surface = io.m3fx.controls.internal.ThemeColors.resolve(control, ColorRole.SURFACE);
+        if (surface == null) {
+            return false;
+        }
+        // WCAG-style relative luminance (0.2126 R + 0.7152 G + 0.0722 B).
+        return 0.2126 * surface.getRed() + 0.7152 * surface.getGreen()
+                + 0.0722 * surface.getBlue() >= 0.5;
+    }
+
+    /**
+     * The tint passed to the refraction render. Dark mode keeps the control's tint (null =
+     * untinted); light mode pulls the mix toward the scene's surface color so the glass reads
+     * as a light-surface veil instead of refracting adjacent UI into pink pills (Q7).
+     */
+    private Color refractionTint() {
+        Color custom = getSkinnable() == null ? null : getSkinnable().getTint();
+        if (custom != null || !isLightTheme()) {
+            return custom;
+        }
+        return themeSurfaceVeil(0.88);
+    }
+
+    /**
+     * The light-glass veil baked into the refracted image (light theme, no explicit app
+     * tint; null otherwise, so dark mode is untouched). Baked rather than painted on the
+     * tint layer because the {@code .glass-tint} CSS rule resets that layer's background to
+     * transparent on every CSS pass, while the refracted image is not CSS-styled (Q7).
+     */
+    private Color imageVeil() {
+        M3GlassPane control = getSkinnable();
+        if (control == null || !isLightTheme()) {
+            return null;
+        }
+        Color customTint = control.getTint();
+        if (customTint != null && customTint.getOpacity() > 0.0) {
+            return null;
+        }
+        if (control.isButtonMode()) {
+            return themeSurfaceVeil(0.85);
+        }
+        if (control.getVariant() == GlassVariant.CLEAR) {
+            return themeSurfaceVeil(0.60);
+        }
+        return themeSurfaceVeil(Math.min(0.92, Math.max(0.85, control.getGlassOpacity())));
+    }
+
+    /** The scene theme's surface color at the given alpha (the light-glass veil). */
+    private Color themeSurfaceVeil(double alpha) {
+        Color surface = io.m3fx.controls.internal.ThemeColors.resolve(
+                getSkinnable(), ColorRole.SURFACE);
+        return Color.color(surface.getRed(), surface.getGreen(), surface.getBlue(), alpha);
+    }
+
     private void paintTint(double radius) {
         M3GlassPane control = getSkinnable();
         Color customTint = control.getTint();
         Color fill;
         if (customTint != null && customTint.getOpacity() > 0.0) {
             fill = customTint;
+        } else if (isLightTheme()) {
+            // Q7: light glass = a light-surface veil (the iOS light-material frosted-white
+            // look). The white-veil fill below is dark-first: over light pages the
+            // refraction samples adjacent UI (capture pads reach neighboring content - the
+            // HUD's zone bar, pink buttons) and reads as opaque pink pills. The veil must
+            // dominate (>= 85%) for readability; it is also baked into the refracted image
+            // (imageVeil) because CSS resets this layer's background between passes.
+            fill = imageVeil();
         } else if (control.isButtonMode()) {
             fill = Color.color(1.0, 1.0, 1.0, 0.12);
         } else if (control.getVariant() == GlassVariant.CLEAR) {
@@ -926,7 +996,15 @@ specularLight2.setVisible(false);
 
     private void updateEffects() {
         M3GlassPane control = getSkinnable();
-        saturationAdjust.setSaturation(effectiveSaturation());
+        double saturation = effectiveSaturation();
+        Color customTint = control.getTint();
+        if (isLightTheme() && !(customTint != null && customTint.getOpacity() > 0.0)) {
+            // Q7: the light glass is a calm light-surface veil (baked in the refracted image);
+            // the ColorAdjust saturation boost amplifies the veil's residual chroma back into
+            // the pink pills, so light glass renders unsaturated. Dark keeps the boost.
+            saturation = 0.0;
+        }
+        saturationAdjust.setSaturation(saturation);
         if (control.isButtonMode()) {
             saturationAdjust.setBrightness(0.08);
         } else {
