@@ -402,7 +402,13 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   start<end) replacing the dead steppers with real slot editing; Workout builder persists
   WorkoutProgramDao programs/versions, exercises assignable, no empty handlers remain.
   done-when: assign trainer→availability slot→book slot→program build round-trips; screenshots.
-  claimed-by: — | status: BLOCKED (C0,C2)
+  claimed-by: C | status: DONE (round 15, commits 453ebe7+9f1d7b1+7742033 → main d76c2b4 —
+  trainer roster/profile on real snapshots with computed rule-8 capacity, real rule-8 slot
+  editor (dead steppers→discrete sliders whose values are consumed), Batch Publish really
+  inserts, Workout builder fully real via WorkoutProgramDao (version sequence, duplicate
+  version refused by the DAO, real reassign), combo listener id-bug fixed; sqlite round-trip
+  evidence. **LANE C COMPLETE (C0-C10).** Residual for Q4: trainer hero "ER" initials demo
+  remnant)
 
 - [ ] C9 | lane:C | deps:C0,C2 | files: src/main/java/com/gym/controller/{ProgressController,MedicalProfileController,LoginController}.java
   goal: Progress reads ProgressRecordDao (chart series from real records, target weight from
@@ -487,3 +493,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 11 | B16 (63942b6) | C7 (in flight) | C8 (in flight) | B16 merged locally b0616ac |
 | 12 | C9 (bcfb32f+769c98b+ce47801, pooled to A) | — | — | merged locally ce47801 |
 | 13 | C10 (53b1e67) | Q1 (0b8409f) | C8 (in flight) | identity+Q3 (da68830) merged; C10 merged locally 94f7582 — **lane C complete except C8** |
+| 14 | Q2 (in flight) | Q4 (in flight) | C8 (d76c2b4) | **LANE C COMPLETE (C0-C10)**; C8 merged after spec-note renumber resolution |
