@@ -470,7 +470,13 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   goal: Resize pass at 600/840/1200/1600 widths: no clipped text, no overflow, navigation swaps
   correctly, long strings ellipsize per spec.
   done-when: screenshot matrix reviewed at all widths.
-  claimed-by: — | status: BLOCKED (C3..C9)
+  claimed-by: B (pooled) | status: DONE (round 15, commits b867604+91a1f65 → main 4cde3b5 —
+  **major find: the shell min-width chain (~876px) meant compact chrome NEVER triggered**;
+  fixed (min-widths 0, per-class title clearance, Ctrl+K badge hidden below large), agenda
+  keeps column widths + horizontal scroll at compact, dashboard hero reflows in a FlowPane;
+  84-capture matrix reviewed. Residuals for Q6: dashboard KPI row overflows at exactly-600
+  (medium boundary); progress screen renders a sliver in the shooter (async-load/restore
+  interaction — fine in runGym); M3TextField 40dp icon hit target observation stands)
 - [ ] Q5 | lane:Q | deps:C3,C4,C5,C6,C7,C8,C9 | files: app-wide
   goal: Performance/memory pass: idle CPU ~0%, no jank while resizing/animating, 50× screen
   open/close without growth (watchdog clean).
