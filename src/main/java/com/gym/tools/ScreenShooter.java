@@ -41,7 +41,7 @@ import java.util.List;
  */
 public final class ScreenShooter extends Application {
 
-    private static final long SCREEN_SETTLE_MS = 400;
+    private static final long SCREEN_SETTLE_MS = 900;
     private static final long SHELL_SETTLE_MS = 1_000; // shell-with-dashboard runs an enter animation
 
     private static final String SHELL_DASHBOARD_KEY = "shell-dashboard";
@@ -143,7 +143,7 @@ public final class ScreenShooter extends Application {
             M3Stylesheets.applyTo(scene, theme);
             stage.setScene(scene);
             stage.setWidth(capture.width());
-            stage.setHeight(scene.getHeight());
+            stage.setHeight(Math.round(capture.width() * 0.625f));
         } catch (Exception ex) {
             failures.add(capture.shot() + " — build failed: " + ex);
             renderNext(stage, captures, index + 1);
@@ -154,6 +154,12 @@ public final class ScreenShooter extends Application {
         PauseTransition settle = new PauseTransition(Duration.millis(settleMs));
         settle.setOnFinished(e -> {
             try {
+                // Async screen loads (Data.loadAsync) can momentarily collapse the root's
+                // layout height (the loading state's pref is small), which produced sliver
+                // captures; force the root back to the capture size before snapping.
+                Parent root = stage.getScene().getRoot();
+                root.resize(capture.width(), Math.round(capture.width() * 0.625f));
+                root.applyCss();
                 writeSnapshot(stage, capture);
             } catch (Exception ex) {
                 failures.add(capture.shot() + " — snapshot failed: " + ex);
