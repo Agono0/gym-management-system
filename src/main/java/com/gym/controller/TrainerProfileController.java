@@ -167,6 +167,7 @@ public class TrainerProfileController implements ScreenController {
 
         installFeedbackLayer(topAppBar);
         wireCohortColumns();
+        populateOverviewChartAxes();
 
     // fx:id parity: every node the markup used to tag with fx:id keeps its JavaFX id, so
     // CSS #id selectors, Node.lookup("#..."), the cross-screen rail navigation
@@ -230,7 +231,7 @@ public class TrainerProfileController implements ScreenController {
         shell.setSpacing(0);
 
         // Top app bar with back navigation.
-        topAppBar = new M3TopAppBar("Trainer Dossier :: Elena Rostova",
+        topAppBar = new M3TopAppBar("Trainer Dossier",
                 io.m3fx.controls.appbar.TopAppBarVariant.SMALL);
         topAppBar.setNavigationIcon(M3Icon.symbol("arrow_back"));
 
@@ -255,21 +256,20 @@ public class TrainerProfileController implements ScreenController {
         HBox.setHgrow(identityBlock, Priority.ALWAYS);
         FlowPane nameFlow = new FlowPane(12, 4);
         nameFlow.setAlignment(Pos.CENTER_LEFT);
-        lblCoachName = new Label("Elena Rostova, CSCS, USAW-L2");
+        lblCoachName = new Label("No coach loaded");
         lblCoachName.getStyleClass().add("headline-medium");
         lblCoachName.setWrapText(true);
         nameFlow.getChildren().addAll(lblCoachName, styledLabel("ACTIVE STAFF", "status-badge-active"));
-        lblSpecialization = new Label(
-                "Specialization: Olympic Weightlifting, Power Development, Biomechanics");
+        lblSpecialization = new Label("Specialization: -");
         lblSpecialization.getStyleClass().add("body-large");
         lblSpecialization.setWrapText(true);
         FlowPane contactFlow = new FlowPane(16, 4);
         contactFlow.setAlignment(Pos.CENTER_LEFT);
-        lblEmail = new Label("e.rostova@cybercoregym.io");
+        lblEmail = new Label("Email: -");
         lblEmail.getStyleClass().add("body-medium");
-        lblPhone = new Label("01012345678");
+        lblPhone = new Label("Phone: -");
         lblPhone.getStyleClass().add("body-medium");
-        lblExperience = new Label("Experience: 8 Years");
+        lblExperience = new Label("Experience: -");
         lblExperience.getStyleClass().add("body-medium");
         contactFlow.getChildren().addAll(lblEmail, lblPhone, lblExperience);
         identityBlock.getChildren().addAll(nameFlow, lblSpecialization, contactFlow);
@@ -282,7 +282,7 @@ public class TrainerProfileController implements ScreenController {
         txtHourlyRate.setPrefWidth(120);
         gaugeCapacity = new M3GaugeChart();
         gaugeCapacity.setPrefSize(160, 160);
-        lblCapacityText = new Label("Saturation: 23 / 25 Athletes (92%)");
+        lblCapacityText = new Label("Open a coach from the roster to load their real dossier.");
         lblCapacityText.getStyleClass().add("label-small");
         metricsBlock.getChildren().addAll(txtHourlyRate, gaugeCapacity, lblCapacityText);
 
@@ -627,7 +627,9 @@ public class TrainerProfileController implements ScreenController {
                         trainer.getHourlyRate().doubleValue()));
         txtHourlyRate.setError(false);
         txtHourlyRate.setSupportingText("USD per session hour");
-        lblCoachName.setText(trainer.getFullName());
+        topAppBar.setTitle("Trainer Dossier :: " + trainer.getFullName());
+        lblCoachName.setText(trainer.getFullName() + ", "
+                + orEmpty(trainer.getCertifications()));
         lblSpecialization.setText("Specialization: "
                 + (trainer.getSpecialization() == null || trainer.getSpecialization().isBlank()
                         ? "General coaching" : trainer.getSpecialization()));
@@ -635,7 +637,8 @@ public class TrainerProfileController implements ScreenController {
                 ? "Email: not on file" : "Email: " + trainer.getEmail());
         lblPhone.setText(trainer.getPhone() == null || trainer.getPhone().isBlank()
                 ? "Phone: not on file" : "Phone: " + trainer.getPhone());
-        lblExperience.setText("Experience: " + trainer.getExperienceYears() + " Years");
+        lblExperience.setText("Experience: " + trainer.getExperienceYears() + " Years · "
+                + orEmpty(trainer.getCertifications()));
         lblValidationStatus.setText("Credentials verified for " + trainer.getFullName() + ".");
 
         // Rule-8 capacity: COMPUTED from the assigned athletes vs the slot-cap sum (rule 15
