@@ -18,6 +18,7 @@ import io.m3fx.controls.chip.M3Chip;
 import io.m3fx.controls.dialog.M3Dialog;
 import io.m3fx.controls.effect.M3GlassPane;
 import io.m3fx.controls.menu.M3Menu;
+import io.m3fx.controls.layout.WindowSizeClass;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.scene3d.M3AnatomyViewer3D;
 import io.m3fx.controls.textfield.M3TextField;
@@ -106,6 +107,18 @@ public class WorkoutController implements ScreenController {
     private StackPane contentHost;
     /** The arena node, restored after loading/error states. */
     private Node arenaView;
+
+    // ---- Responsive layout (width-class reflow, shared nodes — see applyWorkoutLayout) ----
+    /** Desktop arena split: catalog / staging pipeline / telemetry rails side by side. */
+    private SplitPane arenaSplit;
+    /** Compact counterpart of the arena: the SAME rails stacked full-width. Starts EMPTY. */
+    private VBox compactRails;
+    /** The shared rails, moved between the split and the compact stack. */
+    private VBox catalogRail;
+    private VBox stagingArena;
+    private VBox telemetryRail;
+    /** Current window width class driving the arena swap. */
+    private WindowSizeClass workoutWidthClass = WindowSizeClass.EXPANDED;
     /** The workout program currently loaded into the builder (source of the version badge). */
     private WorkoutProgram loadedProgram;
     /** The real customer roster for both selectors, refreshed with every snapshot. */
@@ -120,6 +133,23 @@ public class WorkoutController implements ScreenController {
      */
     public WorkoutController() {
         viewRoot = buildView();
+
+        // Width-class listener (library breakpoints, same pattern as the dashboard's
+        // applyDashboardLayout): swaps the arena between the desktop split and the compact
+        // full-width stack. Deferred with Platform.runLater so the children lists are never
+        // mutated re-entrantly mid-layout.
+        viewRoot.widthProperty().addListener((obs, oldWidth, width) -> {
+            double w = width.doubleValue();
+            if (w <= 0) {
+                return;
+            }
+            WindowSizeClass next = WindowSizeClass.forWidth(w);
+            if (next == workoutWidthClass) {
+                return;
+            }
+            workoutWidthClass = next;
+            javafx.application.Platform.runLater(this::applyWorkoutLayout);
+        });
 
         wireLibraryFiltering();
         installFeedbackLayer(viewRoot);
@@ -154,10 +184,13 @@ public class WorkoutController implements ScreenController {
         VBox topBarContainer = new VBox();
         topBarContainer.getStyleClass().add("top-bar-container");
 
-        HBox metadataHeader = new HBox(16);
-        metadataHeader.setAlignment(Pos.CENTER_LEFT);
-        metadataHeader.getStyleClass().add("app-header-box");
-        metadataHeader.setPadding(new Insets(12, 20, 12, 20));
+        // The metadata header is a FlowPane: at narrow widths the athlete selector and the
+        // creator signature reflow below the title instead of slivering it ("Workout
+        // Routin…" / "Creator: Coach Rami N…" in the 600px captures).
+        FlowPane metadataFlow = new FlowPane(16, 8);
+        metadataFlow.setAlignment(Pos.CENTER_LEFT);
+        metadataFlow.getStyleClass().add("app-header-box");
+        metadataFlow.setPadding(new Insets(12, 20, 12, 20));
         versionBadgeChip = new M3Chip("Draft", ChipVariant.ASSIST);
         versionBadgeChip.getStyleClass().add("version-chip");
         customerSelectorComboBox = new ComboBox<>();
@@ -170,14 +203,13 @@ public class WorkoutController implements ScreenController {
                 clearBuilder();
             }
         });
-        trainerSignatureLabel = new Label("Creator: first coach on the roster");
+        // The signature is the NAME only — the header already carries the "Creator:" meta
+        // label, so prefixing it again doubled the word ("Creator:   Creator: Coach ...").
+        trainerSignatureLabel = new Label("first coach on the roster");
         trainerSignatureLabel.getStyleClass().add("meta-value-bold");
-        Region headerSpacer = new Region();
-        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
-        metadataHeader.getChildren().addAll(
+        metadataFlow.getChildren().addAll(
                 styledLabel("Workout Routine Builder", "header-title-text"),
                 versionBadgeChip,
-                headerSpacer,
                 styledLabel("Customer:", "meta-label"),
                 customerSelectorComboBox,
                 styledLabel("Creator:", "meta-label"),
@@ -196,11 +228,11 @@ public class WorkoutController implements ScreenController {
         historyBtn.setOnAction(e -> onNewVersion());
         routineNameBar.getChildren().addAll(programNameField, historyBtn);
 
-        topBarContainer.getChildren().addAll(metadataHeader, routineNameBar);
+        topBarContainer.getChildren().addAll(metadataFlow, routineNameBar);
         layout.setTop(topBarContainer);
 
         // Column 1: exercise catalog & templates deck (the labeled UI catalog).
-        VBox catalogRail = new VBox(12);
+        catalogRail = new VBox(12);
         catalogRail.getStyleClass().add("catalog-rail");
         catalogRail.setPadding(new Insets(16));
         catalogRail.getChildren().add(styledLabel("Exercise Library (catalog)", "section-header-title"));
@@ -228,6 +260,9 @@ public class WorkoutController implements ScreenController {
         exerciseCatalogListView = new ListView<>();
         VBox.setVgrow(exerciseCatalogListView, Priority.ALWAYS);
         exerciseCatalogListView.getStyleClass().add("catalog-list-view");
+        // Pref-height floor: a ListView's own minimum is ~2px, so a height squeeze (compact
+        // stack in a short window) collapses the catalog to a sliver instead of scrolling.
+        exerciseCatalogListView.setMinHeight(Region.USE_PREF_SIZE);
         exerciseCatalogListView.getItems().setAll(EXERCISE_LIBRARY);
         exerciseCatalogListView.setOnMouseClicked(e -> {
             String selected = exerciseCatalogListView.getSelectionModel().getSelectedItem();
@@ -239,8 +274,10 @@ public class WorkoutController implements ScreenController {
         // Quick templates section: the buttons really insert preset programs.
         VBox templateBox = new VBox(6);
         templateBox.getStyleClass().add("template-preset-box");
-        templateBox.getChildren().add(styledLabel("Pre-Engineered Mesocycles (insert for the"
-                + " selected athlete)", "sub-header-title"));
+        Label templateCaption = styledLabel("Pre-Engineered Mesocycles (insert for the"
+                + " selected athlete)", "sub-header-title");
+        templateCaption.setWrapText(true); // wraps in the narrow catalog rail, never slivers
+        templateBox.getChildren().add(templateCaption);
         for (Preset preset : PRESETS) {
             M3Button presetBtn = new M3Button(preset.label(), ButtonVariant.FILLED);
             presetBtn.getStyleClass().add("text-button-compact");
@@ -252,7 +289,7 @@ public class WorkoutController implements ScreenController {
         catalogRail.getChildren().addAll(exerciseSearchField, filterChips, exerciseCatalogListView, templateBox);
 
         // Column 2: kinetic staging arena pipeline (center).
-        VBox stagingArena = new VBox(16);
+        stagingArena = new VBox(16);
         stagingArena.getStyleClass().add("staging-arena");
         stagingArena.setPadding(new Insets(16));
         HBox stagingHeader = new HBox(12);
@@ -277,11 +314,14 @@ public class WorkoutController implements ScreenController {
         ScrollPane pipelineScroll = new ScrollPane(pipelineContainer);
         pipelineScroll.setFitToWidth(true);
         pipelineScroll.getStyleClass().add("pipeline-scroll-pane");
+        // Pref-height floor (same rationale as the catalog list): a bare ScrollPane minimum
+        // is ~36px, which rendered the staged pipeline as a clipped sliver at compact widths.
+        pipelineScroll.setMinHeight(Region.USE_PREF_SIZE);
         VBox.setVgrow(pipelineScroll, Priority.ALWAYS);
         stagingArena.getChildren().addAll(stagingHeader, pipelineScroll);
 
         // Column 3: 3D biomechanics & volume telemetry (right).
-        VBox telemetryRail = new VBox(16);
+        telemetryRail = new VBox(16);
         telemetryRail.getStyleClass().add("telemetry-rail");
         telemetryRail.setPadding(new Insets(16));
         telemetryRail.getChildren().add(styledLabel("Musculoskeletal Impact", "section-header-title"));
@@ -326,9 +366,14 @@ public class WorkoutController implements ScreenController {
 
         telemetryRail.getChildren().addAll(anatomyViewport, telemetryCard, telemetrySpacer, reassignmentBox);
 
-        SplitPane arenaSplit = new SplitPane(catalogRail, stagingArena, telemetryRail);
+        // Desktop arena: the three rails in one split. Compact counterpart: the SAME rails
+        // stacked full-width (the 25/48/27 split cannot fit a 600dp window, and its squeezed
+        // rails slivered the telemetry captions). Starts EMPTY; applyWorkoutLayout moves the
+        // rails on the class swap.
+        arenaSplit = new SplitPane(catalogRail, stagingArena, telemetryRail);
         arenaSplit.setDividerPositions(0.25, 0.73);
         arenaSplit.getStyleClass().add("bento-split-pane");
+        compactRails = new VBox(16);
         layout.setCenter(arenaSplit);
         arenaView = arenaSplit;
 
@@ -357,7 +402,32 @@ public class WorkoutController implements ScreenController {
         contentHost = new StackPane(arenaView);
         layout.setCenter(contentHost);
         viewRoot.getChildren().add(layout);
+        // The arena's rails collapse to tiny minimums (ListView/ScrollPane skins), so without
+        // a pref-height floor the compact stack lays out in a sliver and clips the pipeline.
+        viewRoot.setMinHeight(Region.USE_PREF_SIZE);
         return viewRoot;
+    }
+
+    /**
+     * Applies the current width class to the arena by swapping the SAME three rails between
+     * the desktop 25/48/27 split and the compact full-width stack (a squeezed rail slivers
+     * its captions, so narrow windows stack instead). Idempotent fills, so repeated swaps
+     * are safe.
+     */
+    private void applyWorkoutLayout() {
+        boolean compact = workoutWidthClass == WindowSizeClass.COMPACT;
+        if (compact) {
+            if (compactRails.getChildren().isEmpty()) {
+                compactRails.getChildren().setAll(catalogRail, stagingArena, telemetryRail);
+            }
+            contentHost.getChildren().set(0, compactRails);
+            return;
+        }
+        if (arenaSplit.getItems().isEmpty()) {
+            arenaSplit.getItems().setAll(catalogRail, stagingArena, telemetryRail);
+            arenaSplit.setDividerPositions(0.25, 0.73);
+        }
+        contentHost.getChildren().set(0, arenaSplit);
     }
 
     /** One label/value telemetry row; returns the value label so the field keeps a handle. */
@@ -542,7 +612,8 @@ public class WorkoutController implements ScreenController {
                 return new Object[] {customers, creator, latest};
             },
             read -> {
-                contentHost.getChildren().set(0, arenaView);
+                contentHost.getChildren().set(0, workoutWidthClass
+                        == WindowSizeClass.COMPACT ? compactRails : arenaView);
                 @SuppressWarnings("unchecked")
                 List<Customer> customers = (List<Customer>) read[0];
                 customerRoster.clear();
@@ -555,8 +626,8 @@ public class WorkoutController implements ScreenController {
                 reassignCustomerComboBox.setItems(FXCollections.observableArrayList(labels));
                 Trainer creator = (Trainer) read[1];
                 trainerSignatureLabel.setText(creator == null
-                        ? "Creator: no coach on the roster"
-                        : "Creator: " + creator.getFullName() + " (#" + creator.getId() + ")");
+                        ? "no coach on the roster"
+                        : creator.getFullName() + " (#" + creator.getId() + ")");
                 WorkoutProgram latest = (WorkoutProgram) read[2];
                 if (latest != null) {
                     loadProgramIntoBuilder(latest);

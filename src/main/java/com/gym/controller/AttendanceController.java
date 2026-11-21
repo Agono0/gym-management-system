@@ -12,6 +12,7 @@ import com.gym.model.Membership;
 import com.gym.model.MembershipStatus;
 import com.gym.model.Trainer;
 import com.gym.ui.Data;
+import com.gym.ui.UiKit;
 import com.gym.util.PhoneUtil;
 import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
@@ -24,6 +25,7 @@ import io.m3fx.controls.data.M3StatCard;
 import io.m3fx.controls.dialog.M3Dialog;
 import io.m3fx.controls.effect.M3GlassPane;
 import io.m3fx.controls.effect.M3Scanline;
+import io.m3fx.controls.layout.WindowSizeClass;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.textfield.M3TextField;
 import io.m3fx.controls.textfield.TextFieldVariant;
@@ -36,6 +38,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -96,6 +99,33 @@ public class AttendanceController implements ScreenController {
     /** Content host around the bento grid for the Data.loadAsync loading/error states. */
     private StackPane contentHost;
 
+    // ---- Responsive layout (width-class reflow, shared nodes — see applyAttendanceLayout) ----
+    /** Desktop top row: title, spacer, date and the report action share one line. */
+    private HBox topRow;
+    /** Compact counterpart of the top row: the SAME nodes stacked (title above controls). */
+    private VBox topStack;
+    /** The date/report controls row of the compact top stack. */
+    private HBox topInfoRow;
+    /** The wrapping screen title, shared by both top-bar layouts. */
+    private Label topTitle;
+    /** The desktop top row's grow spacer (moved back in on the expanded swap). */
+    private Region topSpacer;
+    /** The top bar container (the row/stack swap target). */
+    private VBox topBarBox;
+    /** Desktop bento grid: the four sections in the 42/58 command grid. */
+    private GridPane bentoGrid;
+    /** Compact counterpart of the bento grid: the SAME sections stacked full-width. */
+    private VBox compactStack;
+    /** The bento's shared sections, moved between the grid and the compact stack. */
+    private HBox occupancyHud;
+    private VBox heatmapCard;
+    private VBox scannerColumn;
+    private VBox streamCard;
+    /** Shown inside the stream card when today has no check-in rows yet. */
+    private VBox emptyStreamState;
+    /** Current window width class driving the top-bar and bento swaps. */
+    private WindowSizeClass attendanceWidthClass = WindowSizeClass.EXPANDED;
+
     /** Hosts M3 snackbars and dialogs for this screen (attached to the scene root at runtime). */
     private final M3Overlay feedback = new M3Overlay();
 
@@ -151,10 +181,13 @@ public class AttendanceController implements ScreenController {
         BorderPane layout = new BorderPane();
         layout.getStyleClass().add("attendance-layout");
 
-        // Top app bar & turnstile status.
-        VBox topBarContainer = new VBox(8);
-        topBarContainer.getStyleClass().add("top-bar-container");
-        HBox topRow = new HBox(16);
+        // Top app bar & turnstile status. Two layouts share the same nodes: the side-by-side
+        // row at desktop widths and a stacked column at compact widths — swapped by the
+        // width-class listener at the bottom of buildView. The title wraps so it never clips
+        // mid-word at in-between widths.
+        topBarBox = new VBox(8);
+        topBarBox.getStyleClass().add("top-bar-container");
+        topRow = new HBox(16);
         topRow.setAlignment(Pos.CENTER_LEFT);
         topRow.setPadding(new Insets(14, 24, 12, 24));
         lblCurrentDate = new Label(LocalDate.now().toString());
@@ -162,17 +195,20 @@ public class AttendanceController implements ScreenController {
         btnDailyReportAction = new M3Button("Daily Report", ButtonVariant.TONAL);
         btnDailyReportAction.getStyleClass().add("m3-button-tonal");
         btnDailyReportAction.setOnAction(e -> onDailyReportClick());
-        Region topSpacer = new Region();
+        topSpacer = new Region();
         HBox.setHgrow(topSpacer, Priority.ALWAYS);
-        topRow.getChildren().addAll(
-                styledLabel("FAST-LANE ATTENDANCE & TURNSTILE GATEWAY", "title-large"),
-                topSpacer,
-                lblCurrentDate,
-                btnDailyReportAction);
-        topBarContainer.getChildren().add(topRow);
-        layout.setTop(topBarContainer);
+        topTitle = styledLabel("FAST-LANE ATTENDANCE & TURNSTILE GATEWAY", "title-large");
+        topTitle.setWrapText(true);
+        topRow.getChildren().addAll(topTitle, topSpacer, lblCurrentDate, btnDailyReportAction);
+        topStack = new VBox(12);
+        topInfoRow = new HBox(16);
+        topBarBox.getChildren().add(topRow);
+        layout.setTop(topBarBox);
 
-        // Center bento command grid.
+        // Center bento command grid. Row/column constraints carry no rigid percentages —
+        // rows size to their content's preference (percent heights squeezed the scanner
+        // dossier below its wrapped-text height and slivered its headline) and the shell's
+        // vertical scroll absorbs any shortfall.
         GridPane bentoGrid = new GridPane();
         bentoGrid.setHgap(16);
         bentoGrid.setVgap(16);
@@ -182,16 +218,14 @@ public class AttendanceController implements ScreenController {
         leftColumn.setPercentWidth(42);
         ColumnConstraints rightColumn = new ColumnConstraints();
         rightColumn.setPercentWidth(58);
-        RowConstraints topRowConstraint = new RowConstraints();
-        topRowConstraint.setPercentHeight(26);
         RowConstraints bottomRowConstraint = new RowConstraints();
-        bottomRowConstraint.setPercentHeight(74);
+        bottomRowConstraint.setVgrow(Priority.ALWAYS);
         bentoGrid.getColumnConstraints().addAll(leftColumn, rightColumn);
-        bentoGrid.getRowConstraints().addAll(topRowConstraint, bottomRowConstraint);
+        bentoGrid.getRowConstraints().addAll(new RowConstraints(), bottomRowConstraint);
         this.bentoGrid = bentoGrid;
 
         // Top left: occupancy gauge HUD.
-        HBox occupancyHud = new HBox(16);
+        occupancyHud = new HBox(16);
         occupancyHud.setAlignment(Pos.CENTER_LEFT);
         cardInsideCount = new M3StatCard("Currently Inside", "—", "Safety Cap: " + SAFETY_CAP);
         HBox.setHgrow(cardInsideCount, Priority.ALWAYS);
@@ -203,7 +237,7 @@ public class AttendanceController implements ScreenController {
         bentoGrid.add(occupancyHud, 0, 0);
 
         // Top right: peak hours density heatmap.
-        VBox heatmapCard = new VBox(8);
+        heatmapCard = new VBox(8);
         heatmapCard.getStyleClass().add("heatmap-container-card");
         heatmapCard.setPadding(new Insets(10, 14, 10, 14));
         peakHoursHeatmap = new M3Heatmap();
@@ -214,7 +248,7 @@ public class AttendanceController implements ScreenController {
         bentoGrid.add(heatmapCard, 1, 0);
 
         // Bottom left: fast-lane scanner & member dossier.
-        VBox scannerColumn = new VBox(14);
+        scannerColumn = new VBox(14);
 
         // Laser scanner viewport.
         StackPane scanViewport = new StackPane();
@@ -230,9 +264,12 @@ public class AttendanceController implements ScreenController {
                 styledLabel("Align barcode within illuminated sensor zone", "body-small"));
         scanViewport.getChildren().addAll(scannerGlass, turnstileScanline, scanPrompt);
 
-        // Last scanned member dossier (idle until a turnstile action fills it).
+        // Last scanned member dossier (idle until a turnstile action fills it). Its minimum
+        // height is its preference so the wrapped idle headline can never be squeezed down
+        // to a single truncated line by its siblings.
         memberDossierCard = new M3Card(CardVariant.ELEVATED);
         memberDossierCard.getStyleClass().add("dossier-pass-granted");
+        memberDossierCard.setMinHeight(Region.USE_PREF_SIZE);
         VBox.setVgrow(memberDossierCard, Priority.ALWAYS);
         VBox dossierContent = new VBox(10);
         dossierContent.setPadding(new Insets(16));
@@ -245,7 +282,10 @@ public class AttendanceController implements ScreenController {
         lblScanTimestamp = new Label(clockText());
         lblScanTimestamp.getStyleClass().add("body-small");
         dossierHeader.getChildren().addAll(lblScanResult, dossierSpacer, lblScanTimestamp);
-        lblScannedMemberName = new Label("Scan a member badge or use the manual lookup below");
+        // Idle headline sized for the narrowest dossier card: the card skin does not honor
+        // wrapped-content minimums, so the full-width phrasing ("...or use the manual lookup
+        // below") slivered mid-word ("…manua…") even at expanded widths.
+        lblScannedMemberName = new Label("Scan a badge or use manual lookup");
         lblScannedMemberName.getStyleClass().add("headline-small");
         lblScannedMemberName.setWrapText(true);
         lblScannedPlanInfo = new Label("The member's plan and validity appear here after a scan.");
@@ -257,11 +297,16 @@ public class AttendanceController implements ScreenController {
                 lblScannedMemberName, lblScannedPlanInfo, lblAssignedTrainer);
         memberDossierCard.setContent(dossierContent);
 
-        // Manual fast check-in row.
+        // Manual fast check-in row. The lookup copy is short enough for the narrowest column
+        // the row lives in — the library's supporting label does not wrap, so a wordy rule
+        // line slivered mid-word ("Rule 5: activ…") even at full width.
         HBox manualRow = new HBox(10);
         manualRow.setAlignment(Pos.CENTER_LEFT);
         txtMemberLookup = new M3TextField("Enter Member ID or Phone", TextFieldVariant.FILLED);
-        txtMemberLookup.setSupportingText("Rule 5: active members with an unexpired membership only.");
+        // Supporting copy sized for the narrowest manual-row field width (the library's
+        // support label does not wrap and slivered mid-word at every width before); the full
+        // rule copy still answers through the gate's refusal snackbars.
+        txtMemberLookup.setSupportingText("Rule 5: ACTIVE + unexpired plan.");
         HBox.setHgrow(txtMemberLookup, Priority.ALWAYS);
         btnManualCheckIn = new M3Button("Check-In", ButtonVariant.FILLED);
         btnManualCheckIn.getStyleClass().add("m3-button-filled");
@@ -274,24 +319,41 @@ public class AttendanceController implements ScreenController {
         scannerColumn.getChildren().addAll(scanViewport, memberDossierCard, manualRow);
         bentoGrid.add(scannerColumn, 0, 1);
 
-        // Bottom right: live check-in stream table (real today rows).
-        VBox streamCard = new VBox(10);
+        // Bottom right: live check-in stream table (real today rows). The header wraps so
+        // the filter field never squeezes the title at narrow widths, and the table carries
+        // its columns (the former column-less table rendered blank strips for its rows).
+        streamCard = new VBox(10);
         streamCard.getStyleClass().add("table-container-card");
-        HBox streamHeader = new HBox(12);
+        FlowPane streamHeader = new FlowPane(12, 8);
         streamHeader.setAlignment(Pos.CENTER_LEFT);
         txtTableSearch = new TextField();
         txtTableSearch.setPromptText("Filter attendees...");
         txtTableSearch.setPrefWidth(220);
-        Region streamSpacer = new Region();
-        HBox.setHgrow(streamSpacer, Priority.ALWAYS);
         streamHeader.getChildren().addAll(
                 styledLabel("TODAY'S ATTENDANCE STREAM", "title-medium"),
-                streamSpacer,
                 txtTableSearch);
         attendanceDataTable = new M3DataTable<>();
+        attendanceDataTable.getColumns().addAll(List.of(
+                new M3DataTable.Column<>("Time", AttendanceRow::time, 110),
+                new M3DataTable.Column<>("Member", AttendanceRow::member, 180),
+                new M3DataTable.Column<>("Plan", AttendanceRow::plan, 170),
+                new M3DataTable.Column<>("Status", AttendanceRow::status, 110)));
         VBox.setVgrow(attendanceDataTable, Priority.ALWAYS);
-        streamCard.getChildren().addAll(streamHeader, attendanceDataTable);
+        // Designed empty state: the seed data starts with no check-ins today, so the stream
+        // says so instead of showing a blank strip.
+        emptyStreamState = UiKit.emptyState("No check-ins yet today.",
+                "Manual Check-In", () -> txtMemberLookup.requestFocus());
+        emptyStreamState.setVisible(false);
+        emptyStreamState.setManaged(false);
+        StackPane streamHost = new StackPane(attendanceDataTable, emptyStreamState);
+        VBox.setVgrow(streamHost, Priority.ALWAYS);
+        streamCard.getChildren().addAll(streamHeader, streamHost);
         bentoGrid.add(streamCard, 1, 1);
+
+        // Compact counterpart of the bento grid: the SAME sections stacked full-width (the
+        // 42/58 split and its columns cannot fit a 600dp window). Starts EMPTY —
+        // applyAttendanceLayout moves the nodes on the first class swap.
+        compactStack = new VBox(16);
 
         // Content host around the bento grid: Data.loadAsync swaps it to a loading state
         // while the attendance snapshot is built (the dashboard's contract).
@@ -302,7 +364,56 @@ public class AttendanceController implements ScreenController {
         StackPane root = new StackPane();
         root.getStyleClass().add("attendance-root");
         root.getChildren().add(layout);
+
+        // Width-class listener (library breakpoints, same pattern as the dashboard's
+        // applyDashboardLayout): swaps the top bar and the bento grid between the desktop
+        // and compact layouts. Deferred with Platform.runLater so the children lists are
+        // never mutated re-entrantly mid-layout.
+        root.widthProperty().addListener((obs, oldWidth, width) -> {
+            double w = width.doubleValue();
+            if (w <= 0) {
+                return;
+            }
+            WindowSizeClass next = WindowSizeClass.forWidth(w);
+            if (next == attendanceWidthClass) {
+                return;
+            }
+            attendanceWidthClass = next;
+            javafx.application.Platform.runLater(this::applyAttendanceLayout);
+        });
         return root;
+    }
+
+    /**
+     * Applies the current width class to the top bar and the bento command grid by swapping
+     * between two layouts that SHARE the same nodes: desktop widths keep the side-by-side
+     * title row and the 42/58 command grid, compact widths stack the title above its controls
+     * and the four sections full-width, because neither fits a 600dp window without clipping.
+     * Idempotent fills, so repeated swaps are safe.
+     */
+    private void applyAttendanceLayout() {
+        boolean compact = attendanceWidthClass == WindowSizeClass.COMPACT;
+        if (compact) {
+            topInfoRow.getChildren().setAll(lblCurrentDate, btnDailyReportAction);
+            topStack.getChildren().setAll(topTitle, topInfoRow);
+            topBarBox.getChildren().set(0, topStack);
+            if (compactStack.getChildren().isEmpty()) {
+                compactStack.getChildren().setAll(
+                        occupancyHud, heatmapCard, scannerColumn, streamCard);
+            }
+            contentHost.getChildren().set(0, compactStack);
+            return;
+        }
+        topRow.getChildren().setAll(topTitle, topSpacer, lblCurrentDate, btnDailyReportAction);
+        HBox.setHgrow(topSpacer, Priority.ALWAYS);
+        topBarBox.getChildren().set(0, topRow);
+        if (bentoGrid.getChildren().isEmpty()) {
+            bentoGrid.add(occupancyHud, 0, 0);
+            bentoGrid.add(heatmapCard, 1, 0);
+            bentoGrid.add(scannerColumn, 0, 1);
+            bentoGrid.add(streamCard, 1, 1);
+        }
+        contentHost.getChildren().set(0, bentoGrid);
     }
 
     /** Small label with one style class. */
@@ -329,19 +440,15 @@ public class AttendanceController implements ScreenController {
                     return buildSnapshot();
                 },
                 snapshot -> {
-                    contentHost.getChildren().set(0, bentoGridReference());
+                    // Restore whichever workspace layout the width class currently selects
+                    // (the compact stack replaces the desktop grid after a class swap).
+                    contentHost.getChildren().set(0, attendanceWidthClass
+                            == WindowSizeClass.COMPACT ? compactStack : bentoGrid);
                     applySnapshot(snapshot);
                 },
                 error -> contentHost.getChildren().setAll(com.gym.ui.UiKit.errorState(
                         error.getMessage() == null ? error.toString() : error.getMessage(),
                         this::loadSnapshot)));
-    }
-
-    /** The bento grid kept out of the content host's child list during a load. */
-    private javafx.scene.layout.GridPane bentoGrid;
-
-    private javafx.scene.layout.GridPane bentoGridReference() {
-        return bentoGrid;
     }
 
     /**
@@ -410,8 +517,17 @@ public class AttendanceController implements ScreenController {
     /** The only FX-touching step of a load: fills the stream, KPIs, gauge and heatmap. */
     private void applySnapshot(AttendanceSnapshot snapshot) {
         attendanceDataTable.getItems().setAll(snapshot.rows());
+        // "No check-ins yet today" answers the empty SNAPSHOT; a filter that removes every
+        // row keeps the table's own "No matching items" answer instead.
+        showStreamEmptyState(snapshot.rows().isEmpty());
         cardInsideCount.setValue(String.valueOf(snapshot.inside()));
         occupancyGauge.setValue(snapshot.inside());
+    }
+
+    /** Shows/hides the stream's designed empty state (managed, so it claims layout space). */
+    private void showStreamEmptyState(boolean visible) {
+        emptyStreamState.setVisible(visible);
+        emptyStreamState.setManaged(visible);
     }
 
     // ------------------------------------------------------------------
@@ -791,6 +907,7 @@ public class AttendanceController implements ScreenController {
             }
         }
         attendanceDataTable.getItems().setAll(filtered);
+        showStreamEmptyState(false);
     }
 
     private int parseInside() {

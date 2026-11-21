@@ -306,9 +306,15 @@
 .m3-text-field-input {
   -fx-background-color: transparent;
   -fx-text-fill: -md-sys-color-on-surface;
-  -fx-prompt-text-fill: -md-sys-color-on-surface-variant;
+  /* At rest the floating label IS the placeholder (centered inside the container), so the
+     prompt text must hide — otherwise label and prompt overlay each other. */
+  -fx-prompt-text-fill: transparent;
   -fx-font-size: 16px;
   -fx-padding: 12px 0 12px 0;
+}
+/* Once the label floats up, the prompt may show in the lower half. */
+.m3-text-field:floated .m3-text-field-input {
+  -fx-prompt-text-fill: -md-sys-color-on-surface-variant;
 }
 .m3-text-field-support { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface-variant; }
 .m3-text-field-counter { -fx-font-size: 12px; -fx-text-fill: -md-sys-color-on-surface-variant; }
@@ -466,7 +472,14 @@
   -fx-text-fill: -md-sys-color-on-surface-a38;
   -fx-effect: null;
   -fx-cursor: default;
+  /* M3 disabled state = the a38 token alone. Modena's user-agent rules stack an extra
+     -fx-opacity on disabled toggle buttons and labels (0.4 each), which multiplies the
+     38% alpha down to ~6% effective and washes the chip out entirely (visual QA: the
+     disabled layer chips on the floor map were near-invisible). Hold both at 1 so the
+     a38 token is the only dimming, exactly as the M3 state spec defines it. */
+  -fx-opacity: 1;
 }
+.m3-chip:disabled .m3-chip-text { -fx-opacity: 1; }
 .m3-chip:disabled .m3-icon-svg { -fx-fill: -md-sys-color-on-surface-a38; }
 .m3-chip:focused { -fx-border-color: -md-sys-color-primary; -fx-border-width: 2px; }
 .m3-chip:selected:focused { -fx-border-color: -md-sys-color-primary; }
@@ -1568,6 +1581,13 @@
 }
 
 /* ============ M3DataTable ============ */
+/* The horizontal squeeze scroller must disappear into the table: no modena chrome. */
+.m3-data-table-scroller,
+.m3-data-table-scroller > .viewport {
+  -fx-background-color: transparent;
+  -fx-background-insets: 0;
+  -fx-padding: 0;
+}
 .m3-data-table-header {
   -fx-background-color: -md-sys-color-surface-container;
   -fx-background-radius: 8px;

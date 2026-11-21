@@ -130,6 +130,8 @@ public class AvailabilityController implements ScreenController {
     private StackPane contentHost;
     /** The workspace node, restored after loading/error states. */
     private Node workspaceView;
+    /** Shown between the banner and the calendar when the week has no published slots. */
+    private VBox emptyWeekState;
 
     /** Runtime replacement for the wizard {@code M3Stepper}: the daily cap picker. */
     private M3Slider dailyCapSlider;
@@ -247,7 +249,10 @@ public class AvailabilityController implements ScreenController {
                 btnBatchPublish);
         controlStrip.getGlassChildren().add(controlFlow);
 
-        // Main workspace.
+        // Main workspace. The scroll wraps the CONTENT HOST (not the workspace itself): the
+        // load/empty/error swap in Data.loadAsync drains and refills the host's child list, so
+        // the host — not the workspace — is the node that must sit in the scene (wrapping the
+        // workspace directly left the visible pane empty while loads ran).
         VBox workspace = new VBox(16);
         workspace.setPadding(new Insets(20, 20, 64, 20));
         workspaceView = workspace;
@@ -283,8 +288,17 @@ public class AvailabilityController implements ScreenController {
         VBox.setVgrow(calendarGrid, Priority.ALWAYS);
         calendarSection.getChildren().addAll(calendarHeader, calendarGrid);
 
-        workspace.getChildren().addAll(cardDensityBanner, calendarSection);
-        ScrollPane workspaceScroll = new ScrollPane(workspace);
+        // Week slot empty state (shown between the banner and the calendar when the selected
+        // coach has no published slots for the rendered week; the batch publisher is the
+        // designed answer, so the action opens it prefilled).
+        emptyWeekState = UiKit.emptyState("No slots published for this week.",
+                "+ Batch Publish Slots", this::onBatchPublish);
+        emptyWeekState.getStyleClass().add("week-empty-state");
+        emptyWeekState.setVisible(false);
+        emptyWeekState.setManaged(false);
+
+        workspace.getChildren().addAll(cardDensityBanner, emptyWeekState, calendarSection);
+        ScrollPane workspaceScroll = new ScrollPane(contentHost);
         workspaceScroll.setFitToWidth(true);
         workspaceScroll.setFitToHeight(false);
         workspaceScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
@@ -634,6 +648,8 @@ public class AvailabilityController implements ScreenController {
         lblDensityStats.setText(String.format(
                 "Confirmed Sessions: %d / %d Capacity (%.1f%% Saturation) | Peak: %s",
                 confirmed, capacity, saturation, peak));
+        emptyWeekState.setVisible(weekSlots.isEmpty());
+        emptyWeekState.setManaged(weekSlots.isEmpty());
         refreshSlotBar();
     }
 

@@ -383,6 +383,9 @@ public class LaunchGateController {
         passwordMasked = new PasswordField();
         passwordMasked.getStyleClass().addAll(passwordPlain.getStyleClass());
         passwordMasked.setPromptText("Your password");
+        // The masked input replaces the field's own input in the row, so it must participate
+        // in the float state — otherwise the resting label overlays the typed mask dots.
+        passwordField.trackAlternateInput(passwordMasked);
 
         // Plain (hidden) ↔ masked (shown): both mirror realPassword so either can be swapped
         // into view at any time without losing typed text.

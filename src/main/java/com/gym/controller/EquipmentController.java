@@ -12,6 +12,7 @@ import io.m3fx.controls.card.CardVariant;
 import io.m3fx.controls.card.M3Card;
 import io.m3fx.controls.chip.ChipVariant;
 import io.m3fx.controls.chip.M3Chip;
+import io.m3fx.controls.common.M3Tooltip;
 import io.m3fx.controls.data.M3DataTable;
 import io.m3fx.controls.dialog.M3Dialog;
 import io.m3fx.controls.icon.M3Icon;
@@ -30,6 +31,7 @@ import javafx.scene.Parent;
 import javafx.scene.control.Label;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.ToggleGroup;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -81,6 +83,8 @@ public class EquipmentController implements ScreenController {
     private M3Chip statusMaintChip;
     private M3Chip statusRetireChip;
     private Label assetCountLabel;
+    private M3Button logMaintenanceBtn;
+    private M3Button deleteBtn;
     private M3SideSheet maintenanceSideSheet;
     private M3DataTable<String> maintenanceHistoryTable;
     /** Overlay host for snackbars and dialogs, installed on the screen root (no fx:id). */
@@ -246,22 +250,41 @@ public class EquipmentController implements ScreenController {
                 styledLabel("Status:", "dock-label"),
                 statusAvailChip, statusMaintChip, statusRetireChip);
 
-        // Quick maintenance logger CTA.
+        // Honest disabled state: every inspector control acts on the selected ledger row, so
+        // without a selection they start disabled (library disabled styling + a tooltip
+        // explaining why) instead of promising a write they cannot route.
+        for (M3Chip inspectorChip : List.of(conditionNewChip, conditionGoodChip,
+                conditionFairChip, conditionPoorChip, statusAvailChip, statusMaintChip,
+                statusRetireChip)) {
+            inspectorChip.setDisable(true);
+            Tooltip.install(inspectorChip, M3Tooltip.plain(
+                    "Select an equipment row first — the change writes to that row."));
+        }
+
+        // Quick maintenance logger CTA. Both dock actions (and the condition/status chips
+        // above) act on the SELECTED ledger row, so they start disabled and carry a tooltip
+        // explaining why — the enabled styling with nothing selected read as broken.
         HBox dockActions = new HBox(12);
         dockActions.setAlignment(Pos.CENTER_LEFT);
         M3Button logMaintenanceBtn = new M3Button("Log Today's Maintenance", ButtonVariant.TONAL);
         logMaintenanceBtn.setGraphic(M3Icon.symbol("edit"));
         logMaintenanceBtn.getStyleClass().add("tonal-button");
+        logMaintenanceBtn.setDisable(true);
         logMaintenanceBtn.setOnAction(e -> handleLogMaintenanceToday());
         M3Button deleteBtn = new M3Button("Delete Item", ButtonVariant.TEXT);
         deleteBtn.setGraphic(M3Icon.symbol("delete"));
         deleteBtn.getStyleClass().add("danger-text-btn");
+        deleteBtn.setDisable(true);
         deleteBtn.setOnAction(e -> handleDeleteSelected());
         Region dockSpacer = new Region();
         HBox.setHgrow(dockSpacer, Priority.ALWAYS);
         dockActions.getChildren().addAll(logMaintenanceBtn, dockSpacer, deleteBtn);
+        Tooltip.install(logMaintenanceBtn, M3Tooltip.plain("Select an equipment row first."));
+        Tooltip.install(deleteBtn, M3Tooltip.plain("Select an equipment row first."));
 
         detailsInner.getChildren().addAll(conditionRow, statusRow, dockActions);
+        this.logMaintenanceBtn = logMaintenanceBtn;
+        this.deleteBtn = deleteBtn;
         inspectorCard.setContent(detailsInner);
         inspectorPane.getChildren().addAll(viewportBox, inspectorCard);
 
@@ -502,6 +525,16 @@ public class EquipmentController implements ScreenController {
         } finally {
             applyingSelection = false;
         }
+        // The inspector only acts on a selected row: controls enable with a selection and
+        // return to their honest disabled state (with the why-tooltip) when it clears.
+        boolean hasSelection = item != null;
+        for (M3Chip inspectorChip : List.of(conditionNewChip, conditionGoodChip,
+                conditionFairChip, conditionPoorChip, statusAvailChip, statusMaintChip,
+                statusRetireChip)) {
+            inspectorChip.setDisable(!hasSelection);
+        }
+        logMaintenanceBtn.setDisable(!hasSelection);
+        deleteBtn.setDisable(!hasSelection);
         if (item == null) {
             selectedModelTitleLabel.setText("Select an asset in the ledger");
             modelViewer3D.setCurrentModel(ModelType.WORKOUT_BENCH);

@@ -265,16 +265,20 @@ public class CustomerListController implements ScreenController {
         VBox topBlock = new VBox(appBarRow, loadingBar);
         mainLayout.setTop(topBlock);
 
-        // Main bento workspace.
+        // Main bento workspace. The bottom inset reserves the floating speed dial's full
+        // footprint (56px FAB + 32px edge margins + clearance), so the dial never covers the
+        // table's pagination or the last row's action icons.
         VBox workspace = new VBox(16);
-        workspace.setPadding(new Insets(16, 24, 64, 24));
+        workspace.setPadding(new Insets(16, 24, 112, 24));
 
         // Bento KPI summary cards (filled from the loaded roster in applyKpis()).
         HBox kpiRow = new HBox(16);
         kpiRow.setFillHeight(true);
         cardTotalActive = new M3StatCard("TOTAL ACTIVE", "-", "of the loaded roster");
-        cardExpiringSoon = new M3StatCard("EXPIRING (< 7 DAYS)", "-", "Requires Follow-Up");
-        cardSuspended = new M3StatCard("SUSPENDED / HOLD", "-", "Memberships Frozen");
+        // Short delta copy: the badge rides beside the title on these narrow cards, so a
+        // wordy badge squeezed the title into mid-word slivers ("EXPIRING (< …" at 1280).
+        cardExpiringSoon = new M3StatCard("EXPIRING (< 7 DAYS)", "-", "Follow-Up");
+        cardSuspended = new M3StatCard("SUSPENDED / HOLD", "-", "Frozen");
         cardNewThisMonth = new M3StatCard("NEW THIS MONTH", "-", "Joined this month");
         for (M3StatCard card : List.of(cardTotalActive, cardExpiringSoon, cardSuspended, cardNewThisMonth)) {
             HBox.setHgrow(card, Priority.ALWAYS);
@@ -315,7 +319,6 @@ public class CustomerListController implements ScreenController {
 
         workspace.getChildren().addAll(kpiRow, searchRow, chipFlow, contentHost);
         VBox.setVgrow(contentHost, Priority.ALWAYS);
-        mainLayout.setCenter(workspace);
 
         // Contextual quick-peek side sheet (collapsible drawer).
         sideSheetQuickPeek = new M3SideSheet();
@@ -358,16 +361,24 @@ public class CustomerListController implements ScreenController {
         sheetContent.getChildren().addAll(sheetHeader, holographicPassCard, biometricHudBox, sheetActions);
         sideSheetQuickPeek.setContent(sheetContent);
 
-        // Floating action speed dial.
+        // Floating action speed dial. It pins to the workspace host's bottom edge — the host
+        // is exactly the scroll content's height, so the FAB always sits in the reserved
+        // band below the roster (a root-pinned FAB would land mid-table wherever the scene
+        // clips the root).
         speedDial = new M3SpeedDial();
         speedDial.setMaxSize(56, 56);
         speedDial.setPickOnBounds(false);
         StackPane.setAlignment(speedDial, Pos.BOTTOM_RIGHT);
         StackPane.setMargin(speedDial, new Insets(0, 32, 32, 0));
 
+        // The workspace rides in a host pane so the speed dial can pin to the scroll
+        // content's bottom edge (below the last row + the reserved bottom inset).
+        StackPane workspaceHost = new StackPane(workspace, speedDial);
+        mainLayout.setCenter(workspaceHost);
+
         rootContainer = new StackPane();
         rootContainer.getStyleClass().add("customer-list-root");
-        rootContainer.getChildren().addAll(mainLayout, sideSheetQuickPeek, speedDial);
+        rootContainer.getChildren().addAll(mainLayout, sideSheetQuickPeek);
 
         overlay = new M3Overlay();
         return rootContainer;
@@ -695,8 +706,8 @@ public class CustomerListController implements ScreenController {
         cardExpiringSoon.setValue(String.valueOf(expiring));
         cardSuspended.setValue(String.valueOf(suspended));
         cardNewThisMonth.setValue(String.valueOf(newThisMonth));
-        cardNewThisMonth.setDeltaText("Joined in "
-                + today.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH));
+        cardNewThisMonth.setDeltaText("Joined "
+                + today.getMonth().getDisplayName(TextStyle.SHORT, Locale.ENGLISH));
     }
 
     /**

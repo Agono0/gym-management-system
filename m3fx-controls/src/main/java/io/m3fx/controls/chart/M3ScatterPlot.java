@@ -347,6 +347,17 @@ public class M3ScatterPlot extends Region {
         if (spanY <= 1e-6) { minY -= 5; maxY += 5; spanY = 10; }
         else { minY -= spanY * 0.08; maxY += spanY * 0.08; spanY = maxY - minY; }
 
+        // Snap both axes to nice tick bounds so the labels are distinct and evenly spaced
+        // (a fixed format per division degenerates into duplicate labels on tight ranges).
+        double[] xTicks = ChartTicks.compute(minX, maxX, 5);
+        double[] yTicks = ChartTicks.compute(minY, maxY, 5);
+        minX = xTicks[0];
+        maxX = xTicks[xTicks.length - 1];
+        spanX = maxX - minX;
+        minY = yTicks[0];
+        maxY = yTicks[yTicks.length - 1];
+        spanY = maxY - minY;
+
         Color gridColor = ThemeColors.resolve(this, ColorRole.OUTLINE_VARIANT);
         Color textColor = ThemeColors.resolve(this, ColorRole.ON_SURFACE_VARIANT);
 
@@ -358,22 +369,20 @@ public class M3ScatterPlot extends Region {
             gc.setFill(textColor);
             gc.setFont(Font.font(10));
 
-            int ySteps = 5;
-            for (int i = 0; i <= ySteps; i++) {
-                double frac = i / (double) ySteps;
-                double val = minY + spanY * (1.0 - frac);
-                double y = padTop + frac * plotH;
+            int lastYTick = yTicks.length - 1;
+            for (int i = 0; i <= lastYTick; i++) {
+                double val = yTicks[lastYTick - i]; // top of the plot carries the largest tick
+                double y = padTop + i / (double) lastYTick * plotH;
                 gc.strokeLine(padLeft, y, padLeft + plotW, y);
-                gc.fillText(String.format("%.2f", val), 10, y + 4);
+                gc.fillText(ChartTicks.label(val), 10, y + 4);
             }
 
-            int xSteps = 5;
-            for (int i = 0; i <= xSteps; i++) {
-                double frac = i / (double) xSteps;
-                double val = minX + spanX * frac;
-                double x = padLeft + frac * plotW;
+            int lastXTick = xTicks.length - 1;
+            for (int i = 0; i <= lastXTick; i++) {
+                double val = xTicks[i]; // left to right
+                double x = padLeft + i / (double) lastXTick * plotW;
                 gc.strokeLine(x, padTop, x, padTop + plotH);
-                gc.fillText(String.format("%.1f", val), x - 12, padTop + plotH + 16);
+                gc.fillText(ChartTicks.label(val), x - 12, padTop + plotH + 16);
             }
             gc.setLineDashes(null);
         }

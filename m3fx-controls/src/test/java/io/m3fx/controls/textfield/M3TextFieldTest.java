@@ -197,8 +197,8 @@ class M3TextFieldTest {
         javafx.scene.Node trailingHit = inputRow.getChildren().get(2);
         assertEquals("m3-text-field-leading", leadingHit.getId());
         assertEquals("m3-text-field-trailing", trailingHit.getId());
-        assertEquals(40, leadingHit.prefWidth(-1), 1e-9, "icon hit target stays 40px square");
-        assertEquals(40, leadingHit.prefHeight(-1), 1e-9);
+        assertEquals(48, leadingHit.prefWidth(-1), 1e-9, "icon hit target stays 48px square");
+        assertEquals(48, leadingHit.prefHeight(-1), 1e-9);
         assertTrue(((javafx.scene.layout.Pane) leadingHit).getChildren().contains(leading),
                 "the icon sits inside its hit target");
 

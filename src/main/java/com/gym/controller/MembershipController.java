@@ -28,6 +28,7 @@ import io.m3fx.controls.glass.M3GlassPane;
 import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.iconbutton.IconButtonVariant;
 import io.m3fx.controls.iconbutton.M3IconButton;
+import io.m3fx.controls.layout.WindowSizeClass;
 import io.m3fx.controls.menu.M3Menu;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.sheet.M3SideSheet;
@@ -41,11 +42,13 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
@@ -115,6 +118,28 @@ public class MembershipController implements ScreenController {
     /** The workspace node, restored after loading/error states. */
     private Node workspaceView;
 
+    // ---- Responsive layout (width-class reflow, shared nodes — see applyMembershipLayout) ----
+    /** Desktop split: agreement funnel and roster side by side (38/62 percent columns). */
+    private GridPane splitGrid;
+    /** Compact counterpart of the split: the SAME panes stacked full-width. Starts EMPTY. */
+    private VBox splitStack;
+    /** Desktop top row: title, spacer, search and the sell action share one line. */
+    private HBox topRow;
+    /** Compact counterpart of the top row: the SAME nodes stacked (title above controls). */
+    private VBox topStack;
+    /** The search/sell controls row of the compact top stack. */
+    private HBox controlsRow;
+    /** The wrapping title label, shared by both top-bar layouts. */
+    private Label screenTitle;
+    /** The desktop top row's grow spacer (moved back in on the expanded swap). */
+    private Region topSpacer;
+    /** The top app bar container (the row/stack swap target). */
+    private VBox topBarBox;
+    /** The scrollable workspace (the split grid/stack swap target). */
+    private VBox workspace;
+    /** Current window width class driving the top-bar and split swaps. */
+    private WindowSizeClass membershipWidthClass = WindowSizeClass.EXPANDED;
+
     /** Hosts M3 snackbars and dialogs for this screen (attached to the scene root at runtime). */
     private final M3Overlay feedback = new M3Overlay();
 
@@ -166,62 +191,71 @@ public class MembershipController implements ScreenController {
         BorderPane layout = new BorderPane();
         layout.getStyleClass().add("membership-base-pane");
 
-        // Top app bar / command strip.
-        VBox topBarContainer = new VBox(8);
-        topBarContainer.getStyleClass().add("top-bar-container");
-        HBox topRow = new HBox(16);
+        // Top app bar / command strip. Two layouts share the same nodes: the side-by-side row
+        // at desktop widths and a stacked column at compact widths — swapped by the
+        // width-class listener at the bottom of buildView. The title wraps so it never clips
+        // mid-word at in-between widths (same pattern as the shell's per-class title).
+        topBarBox = new VBox(8);
+        topBarBox.getStyleClass().add("top-bar-container");
+        topRow = new HBox(16);
         topRow.setAlignment(Pos.CENTER_LEFT);
         topRow.setPadding(new Insets(16, 24, 16, 24));
+        screenTitle = styledLabel("MEMBERSHIP PLANS & SUBSCRIPTION TIERS", "title-large");
+        screenTitle.setWrapText(true);
         searchMemberField = new M3TextField("Search member agreements...",
                 TextFieldVariant.FILLED);
         searchMemberField.setPrefWidth(280);
+        searchMemberField.setMaxWidth(Double.MAX_VALUE);
         btnTopSell = new M3Button("Sell Membership", ButtonVariant.FILLED);
         btnTopSell.getStyleClass().add("m3-button-filled");
         btnTopSell.setOnAction(e -> onSell());
-        Region topSpacer = new Region();
+        topSpacer = new Region();
         HBox.setHgrow(topSpacer, Priority.ALWAYS);
-        topRow.getChildren().addAll(
-                styledLabel("MEMBERSHIP PLANS & SUBSCRIPTION TIERS", "title-large"),
-                topSpacer,
-                searchMemberField,
-                btnTopSell);
-        topBarContainer.getChildren().add(topRow);
-        layout.setTop(topBarContainer);
+        topRow.getChildren().addAll(screenTitle, topSpacer, searchMemberField, btnTopSell);
+        topStack = new VBox(12);
+        controlsRow = new HBox(16);
+        topBarBox.getChildren().add(topRow);
+        layout.setTop(topBarBox);
 
         // Main workspace.
-        VBox workspace = new VBox(16);
+        workspace = new VBox(16);
         workspace.setPadding(new Insets(16, 20, 64, 20));
 
         // Tier cards carousel (rebuilt from the snapshot in applyTierCards).
         VBox tierSection = new VBox(8);
         tierSection.getChildren().add(styledLabel("MEMBERSHIP TIERS & PACKAGES", "label-small"));
         tierCarousel = new M3Carousel();
-        tierCarousel.setPrefHeight(270);
+        // No explicit height cap: the carousel computes its height from the tier cards, and a
+        // fixed 270 squeezed the 285px cards, which compressed the wrapped metric headline
+        // back down to a single ellipsized line.
+        tierCarousel.setPrefHeight(Region.USE_COMPUTED_SIZE);
         tierCarousel.getItems().addAll(
                 monthlyCard(), yearlyVipCard(), quarterlyCard());
         tierSection.getChildren().add(tierCarousel);
 
-        // Split section: agreement funnel & roster table.
-        GridPane splitGrid = new GridPane(16, 16);
+        // Split section: agreement funnel & roster table. Row/column constraints carry no
+        // rigid minimums — the roster table's own content height (its rows paint without a
+        // viewport, so squeezing the table makes rows spill over the lifecycle bar below it)
+        // decides the row height, and the workspace ScrollPane scrolls the rest.
+        splitGrid = new GridPane(16, 16);
         VBox.setVgrow(splitGrid, Priority.ALWAYS);
-        splitGrid.setMinHeight(450);
         ColumnConstraints funnelColumn = new ColumnConstraints();
         funnelColumn.setPercentWidth(38);
-        funnelColumn.setMinWidth(320);
         ColumnConstraints rosterColumn = new ColumnConstraints();
         rosterColumn.setPercentWidth(62);
-        rosterColumn.setMinWidth(480);
         RowConstraints rowConstraint = new RowConstraints();
         rowConstraint.setVgrow(Priority.ALWAYS);
-        rowConstraint.setMinHeight(430);
-        rowConstraint.setPrefHeight(480);
         splitGrid.getColumnConstraints().addAll(funnelColumn, rosterColumn);
         splitGrid.getRowConstraints().add(rowConstraint);
+
+        // Compact counterpart of the split: the SAME panes stacked full-width. Starts EMPTY —
+        // filling it here would steal the panes out of the desktop grid; applyMembershipLayout
+        // moves the nodes on the first class swap.
+        splitStack = new VBox(16);
 
         // Left column: agreement funnel.
         VBox funnelPane = new VBox(12);
         funnelPane.getStyleClass().add("card-surface");
-        funnelPane.setMinHeight(430);
         funnelPane.setPadding(new Insets(16));
         HBox funnelHeader = new HBox(8);
         funnelHeader.setAlignment(Pos.CENTER_LEFT);
@@ -239,10 +273,12 @@ public class MembershipController implements ScreenController {
         conversionFunnelChart.setPrefHeight(390);
         funnelPane.getChildren().addAll(funnelHeader, conversionFunnelChart);
 
-        // Right column: active memberships table & action toolbar.
+        // Right column: active memberships table & action toolbar. The lifecycle bar below
+        // the table is RESERVED layout space — it never floats over the rows — so the table
+        // is never squeezed below its content height (the workspace ScrollPane absorbs any
+        // shortfall).
         VBox rosterPane = new VBox(12);
         rosterPane.getStyleClass().add("card-surface");
-        rosterPane.setMinHeight(430);
         rosterPane.setPadding(new Insets(16));
         HBox rosterHeader = new HBox(12);
         rosterHeader.setAlignment(Pos.CENTER_LEFT);
@@ -256,9 +292,9 @@ public class MembershipController implements ScreenController {
                 chipExpiringFilter);
         membershipDataTable = new M3DataTable<>();
         VBox.setVgrow(membershipDataTable, Priority.ALWAYS);
-        membershipDataTable.setMinHeight(310);
-        membershipDataTable.setPrefHeight(350);
-        HBox lifecycleBar = new HBox(10);
+        // The lifecycle bar wraps instead of clipping: four buttons in one HBox pinned the
+        // screen's minimum width past 600dp, and a squeezed HBox would clip the actions.
+        FlowPane lifecycleBar = new FlowPane(10, 8);
         lifecycleBar.setAlignment(Pos.CENTER_RIGHT);
         btnRenewAction = new M3Button("Renew Agreement", ButtonVariant.TONAL);
         btnRenewAction.getStyleClass().add("m3-button-tonal");
@@ -321,22 +357,87 @@ public class MembershipController implements ScreenController {
                 lifecycleSummary);
         membershipDetailSheet.setContent(sheetContent);
 
-        // Content host so the real-data load can swap the workspace for loading/error states.
+        // The workspace lives in its own smooth vertical ScrollPane so the roster table is
+        // never compressed below its content height (compressed rows spill past the table's
+        // bounds and paint over the lifecycle bar) — the scroll absorbs any shortfall and the
+        // action bar keeps its reserved space below the table.
         workspaceView = workspace;
-        contentHost = new StackPane(workspace);
+        ScrollPane workspaceScroll = new ScrollPane(workspace);
+        workspaceScroll.setFitToWidth(true);
+        workspaceScroll.setFitToHeight(false);
+        workspaceScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        workspaceScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        AppShellController.enableSmoothScrolling(workspaceScroll);
+        contentHost = new StackPane(workspaceScroll);
         layout.setCenter(contentHost);
 
         viewRoot = new StackPane();
         viewRoot.getStyleClass().add("membership-root");
         viewRoot.getChildren().addAll(layout, membershipDetailSheet);
+
+        // Width-class listener (library breakpoints, same pattern as the shell's
+        // applyResponsiveChrome and the dashboard's applyDashboardLayout): swaps the top bar
+        // and the funnel/roster split between the desktop and compact layouts. Deferred with
+        // Platform.runLater so the children lists are never mutated re-entrantly mid-layout.
+        viewRoot.widthProperty().addListener((obs, oldWidth, width) -> {
+            double w = width.doubleValue();
+            if (w <= 0) {
+                return;
+            }
+            WindowSizeClass next = WindowSizeClass.forWidth(w);
+            if (next == membershipWidthClass) {
+                return;
+            }
+            membershipWidthClass = next;
+            Platform.runLater(this::applyMembershipLayout);
+        });
         return viewRoot;
+    }
+
+    /**
+     * Applies the current width class to the top bar and the funnel/roster split by swapping
+     * between two layouts that SHARE the same nodes: desktop widths keep the side-by-side
+     * split and one-line top bar, compact widths stack the panes full-width and move the
+     * title above the controls, because neither the 38/62 split nor the one-line bar can fit
+     * a 600dp window without clipping. Idempotent fills, so repeated swaps are safe.
+     */
+    private void applyMembershipLayout() {
+        boolean compact = membershipWidthClass == WindowSizeClass.COMPACT;
+        if (compact) {
+            if (topRow.getChildren().contains(screenTitle)) {
+                topRow.getChildren().remove(screenTitle);
+                controlsRow.getChildren().setAll(searchMemberField, btnTopSell);
+                HBox.setHgrow(searchMemberField, Priority.ALWAYS);
+                topStack.getChildren().setAll(screenTitle, controlsRow);
+                topBarBox.getChildren().set(0, topStack);
+            }
+            if (splitGrid.getChildren().size() == 2) {
+                splitStack.getChildren().setAll(splitGrid.getChildren().get(0),
+                        splitGrid.getChildren().get(1));
+                workspace.getChildren().set(1, splitStack);
+            }
+            return;
+        }
+        if (!topRow.getChildren().contains(screenTitle)) {
+            topStack.getChildren().clear();
+            controlsRow.getChildren().clear();
+            topRow.getChildren().setAll(screenTitle, topSpacer, searchMemberField, btnTopSell);
+            HBox.setHgrow(topSpacer, Priority.ALWAYS);
+            HBox.setHgrow(searchMemberField, Priority.NEVER);
+            topBarBox.getChildren().set(0, topRow);
+        }
+        if (splitStack.getChildren().size() == 2) {
+            splitGrid.getChildren().setAll(splitStack.getChildren().get(0),
+                    splitStack.getChildren().get(1));
+            workspace.getChildren().set(1, splitGrid);
+        }
     }
 
     /** The Monthly tier card (values applied from the snapshot in applyTierCards). */
     private M3Card monthlyCard() {
         cardMonthly = new M3Card(CardVariant.OUTLINED);
         cardMonthly.getStyleClass().add("tier-card-standard");
-        cardMonthly.setPrefSize(310, 250);
+        cardMonthly.setPrefSize(310, 285);
         cardMonthly.setMaxHeight(Double.MAX_VALUE);
         cardMonthly.setPadding(new Insets(16));
         cardMonthly.setContent(new VBox(10));
@@ -347,7 +448,7 @@ public class MembershipController implements ScreenController {
     private M3Card yearlyVipCard() {
         cardYearlyVip = new M3Card(CardVariant.ELEVATED);
         cardYearlyVip.getStyleClass().add("tier-card-vip");
-        cardYearlyVip.setPrefSize(350, 250);
+        cardYearlyVip.setPrefSize(350, 285);
         cardYearlyVip.setMaxHeight(Double.MAX_VALUE);
         cardYearlyVip.setPadding(new Insets(16));
         cardYearlyVip.setContent(new VBox(10));
@@ -358,7 +459,7 @@ public class MembershipController implements ScreenController {
     private M3Card quarterlyCard() {
         cardQuarterly = new M3Card(CardVariant.OUTLINED);
         cardQuarterly.getStyleClass().add("tier-card-standard");
-        cardQuarterly.setPrefSize(310, 250);
+        cardQuarterly.setPrefSize(310, 285);
         cardQuarterly.setMaxHeight(Double.MAX_VALUE);
         cardQuarterly.setPadding(new Insets(16));
         cardQuarterly.setContent(new VBox(10));
@@ -632,8 +733,12 @@ public class MembershipController implements ScreenController {
         int active = snapshot.activePlans().getOrDefault(plan, 0);
         int sold = snapshot.soldPlans().getOrDefault(plan, 0);
         double avgPrice = snapshot.avgPriceByPlan().getOrDefault(plan, 0.0);
+        // The metric is a value + caption pair: one long headline-medium string slivered
+        // mid-amount on every tier card ("$60.00 average sold …" — the card skin does not
+        // honor wrapped-content minimums), so the amount renders alone and the caption
+        // carries the unit on its own line.
         Label headline = styledLabel(sold == 0 ? "No agreements sold yet"
-                : String.format(Locale.ROOT, "$%,.2f average sold price", avgPrice),
+                : String.format(Locale.ROOT, "$%,.2f", avgPrice),
                 "headline-medium");
         Region bodySpacer = new Region();
         VBox.setVgrow(bodySpacer, Priority.ALWAYS);
@@ -644,6 +749,9 @@ public class MembershipController implements ScreenController {
         return new VBox(10,
                 styledLabel(title, "title-medium"),
                 headline,
+                styledLabel(sold == 0 ? "no agreements sold on this plan yet"
+                        : "average sold price",
+                        "body-small"),
                 styledLabel(active + " active now · " + sold + " sold in total", "body-small"),
                 bodySpacer,
                 sell);

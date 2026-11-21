@@ -12,6 +12,7 @@ import io.m3fx.controls.chart.M3SplineChart;
 import io.m3fx.controls.effect.M3GlassPane;
 import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.iconbutton.M3IconButton;
+import io.m3fx.controls.layout.WindowSizeClass;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.workout.M3HeartRateZones;
 import io.m3fx.controls.workout.M3IntervalTimer;
@@ -35,6 +36,7 @@ import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -69,6 +71,12 @@ import java.time.LocalTime;
  */
 public class LiveWorkoutController implements ScreenController {
 
+    /**
+     * The single simulated heart-rate source value: the zone bar readout and the cardiac
+     * stream both render THIS value, so the HUD can never show two different BPMs.
+     */
+    private static final int SIMULATED_BPM = 184;
+
     // ---- View fields (the former fx:id injections, now built by buildView) ----
     private StackPane viewRoot;
     private M3HeartRateZones heartRateZonesBar;
@@ -101,6 +109,32 @@ public class LiveWorkoutController implements ScreenController {
     private Session activeSession;
     /** True once the session reaches a terminal status (COMPLETED/CANCELLED) in the database. */
     private boolean sessionFinished;
+
+    // ---- Responsive layout (width-class reflow, shared nodes — see applyHudLayout) ----
+    /** Desktop telemetry grid: VBT / impulse / rest in 25/50/25 percent columns. */
+    private GridPane bentoGrid;
+    /** Compact counterpart of the grid: the SAME sections stacked full-width. Starts EMPTY. */
+    private VBox compactColumns;
+    /** The shared telemetry sections, moved between the grid and the compact stack. */
+    private VBox leftColumnBox;
+    private VBox centerColumnBox;
+    private VBox rightColumnBox;
+    /** Desktop meta header (one line) and its compact FlowPane counterpart. */
+    private HBox metaHeader;
+    private FlowPane metaHeaderFlow;
+    /** Desktop action dock (one line) and its compact FlowPane counterpart. */
+    private HBox actionDock;
+    private FlowPane actionDockFlow;
+    /** Canonical content of the meta header — the swap source of truth (never drained). */
+    private final java.util.List<Node> metaHeaderNodes = new java.util.ArrayList<>();
+    /** Canonical content of the action dock — the swap source of truth (never drained). */
+    private final java.util.List<Node> actionDockNodes = new java.util.ArrayList<>();
+    /** The meta header's grow spacer (re-constrained on the expanded swap). */
+    private Region metaSpacer;
+    /** The action dock's grow spacer (re-constrained on the expanded swap). */
+    private Region dockSpacer;
+    /** Current window width class driving the HUD swaps. */
+    private WindowSizeClass hudWidthClass = WindowSizeClass.EXPANDED;
 
     /**
      * Builds the complete Live Workout HUD and initializes all behavior. Same ordering
@@ -175,8 +209,15 @@ public class LiveWorkoutController implements ScreenController {
         heartRateZonesBar = new M3HeartRateZones();
         heartRateZonesBar.setPrefHeight(28);
         heartRateZonesBar.setMaxWidth(Double.MAX_VALUE);
+        // The zone bar's canvas freezes its minimum at the first drawn width (the desktop
+        // pulse), which pinned the whole HUD's minimum near 1600px and kept the compact
+        // layout from ever engaging — let the bar shrink with the window.
+        heartRateZonesBar.setMinWidth(0);
+        // One simulated BPM everywhere: the control defaults to 142 while the cardiac stream
+        // below shows its own value — both now read SIMULATED_BPM.
+        heartRateZonesBar.setCurrentBpm(SIMULATED_BPM);
 
-        HBox metaHeader = new HBox(20);
+        metaHeader = new HBox(20);
         metaHeader.setAlignment(Pos.CENTER_LEFT);
         metaHeader.getStyleClass().add("hud-meta-header");
         metaHeader.setPadding(new Insets(8, 20, 8, 20));
@@ -190,7 +231,7 @@ public class LiveWorkoutController implements ScreenController {
         targetLoadLabel.getStyleClass().add("hud-meta-value-bold");
         elapsedSessionTimerLabel = new Label("00:00:00");
         elapsedSessionTimerLabel.getStyleClass().add("hud-clock-label");
-        Region metaSpacer = new Region();
+        metaSpacer = new Region();
         HBox.setHgrow(metaSpacer, Priority.ALWAYS);
         // Honest telemetry: the velocities/BPM/cadence below are simulated instruments — the
         // badge says so, and everything that touches the session record is real.
@@ -214,26 +255,32 @@ public class LiveWorkoutController implements ScreenController {
                 simulatedBadge,
                 metaSpacer,
                 elapsedSessionTimerLabel);
+        metaHeaderFlow = new FlowPane(20, 8);
+        metaHeaderFlow.getStyleClass().add("hud-meta-header");
+        metaHeaderFlow.setPadding(new Insets(8, 20, 8, 20));
         topContainer.getChildren().addAll(heartRateZonesBar, metaHeader);
         layout.setTop(topContainer);
 
         // Center: bento cockpit telemetry grid.
-        GridPane bentoGrid = new GridPane(16, 16);
+        bentoGrid = new GridPane(16, 16);
         bentoGrid.getStyleClass().add("hud-bento-grid");
         bentoGrid.setPadding(new Insets(16));
+        // Grow-based columns (not percent widths): a percent column pins the grid's minimum
+        // to its content preference (the 25% rest column's 384px pref forced a ~1568px grid
+        // minimum), while grow columns shrink to content and share the extra space.
         ColumnConstraints leftColumn = new ColumnConstraints();
-        leftColumn.setPercentWidth(25);
+        leftColumn.setHgrow(Priority.ALWAYS);
         ColumnConstraints centerColumn = new ColumnConstraints();
-        centerColumn.setPercentWidth(50);
+        centerColumn.setHgrow(Priority.ALWAYS);
         ColumnConstraints rightColumn = new ColumnConstraints();
-        rightColumn.setPercentWidth(25);
+        rightColumn.setHgrow(Priority.ALWAYS);
         RowConstraints fullRow = new RowConstraints();
         fullRow.setPercentHeight(100);
         bentoGrid.getColumnConstraints().addAll(leftColumn, centerColumn, rightColumn);
         bentoGrid.getRowConstraints().add(fullRow);
 
         // Column 0: VBT & muscular power telemetry.
-        VBox leftColumnBox = new VBox(12);
+        leftColumnBox = new VBox(12);
         leftColumnBox.getStyleClass().add("telemetry-column");
 
         M3GlassPane vbtVisor = new M3GlassPane();
@@ -261,7 +308,7 @@ public class LiveWorkoutController implements ScreenController {
         cardiacContent.getChildren().add(styledLabel("Live Cardiac Stream", "hud-card-header"));
         HBox bpmRow = new HBox();
         bpmRow.setAlignment(Pos.CENTER);
-        currentBpmLabel = new Label("184");
+        currentBpmLabel = new Label(String.valueOf(SIMULATED_BPM));
         currentBpmLabel.getStyleClass().add("hud-bpm-large");
         bpmRow.getChildren().addAll(currentBpmLabel, styledLabel(" BPM", "hud-bpm-unit"));
         cardiacZoneLabel = new Label("Zone 5: VO2 Max Strain");
@@ -274,7 +321,7 @@ public class LiveWorkoutController implements ScreenController {
         leftColumnBox.getChildren().addAll(vbtVisor, cardiacVisor);
 
         // Column 1: center kinetic rep counter & cadence visor.
-        VBox centerColumnBox = new VBox(12);
+        centerColumnBox = new VBox(12);
         centerColumnBox.setAlignment(Pos.CENTER);
         centerColumnBox.getStyleClass().add("center-cockpit-column");
         M3GlassPane cockpitVisor = new M3GlassPane();
@@ -297,6 +344,9 @@ public class LiveWorkoutController implements ScreenController {
         decrementBtn.setOnAction(e -> onManualRepDecrement());
         repCounterDisplay = new M3RepCounter();
         repCounterDisplay.setPrefSize(240, 180);
+        // Canvas-based instruments freeze their minimum at the drawn size; without a floor
+        // override the compact stack cannot shrink below the instrument's first width.
+        repCounterDisplay.setMinWidth(0);
         M3IconButton incrementBtn = new M3IconButton();
         incrementBtn.getStyleClass().add("hud-rep-pill-btn");
         incrementBtn.setGraphic(M3Icon.symbol("add"));
@@ -308,12 +358,13 @@ public class LiveWorkoutController implements ScreenController {
         cadenceSplineChart = new M3SplineChart();
         cadenceSplineChart.setPrefHeight(100);
         cadenceSplineChart.getStyleClass().add("hud-cadence-chart");
+        cadenceSplineChart.setMinWidth(0); // chart minimums must not pin the compact stack
         cockpitContent.getChildren().addAll(repControlsRow, cadenceDisplayLabel, cadenceSplineChart);
         cockpitVisor.getGlassChildren().add(cockpitContent);
         centerColumnBox.getChildren().add(cockpitVisor);
 
         // Column 2: concentric interval timer & quick RPE logging.
-        VBox rightColumnBox = new VBox(12);
+        rightColumnBox = new VBox(12);
         rightColumnBox.getStyleClass().add("telemetry-column");
         M3GlassPane restVisor = new M3GlassPane();
         restVisor.getStyleClass().add("hud-glass-visor");
@@ -325,6 +376,7 @@ public class LiveWorkoutController implements ScreenController {
         restContent.getChildren().add(styledLabel("Rest Interval Countdown", "hud-card-header"));
         intervalCountdownTimer = new M3IntervalTimer();
         intervalCountdownTimer.setPrefSize(180, 180);
+        intervalCountdownTimer.setMinWidth(0); // same canvas minimum freeze as the rep counter
         timerStateLabel = new Label("Target Rest: 180s");
         timerStateLabel.getStyleClass().add("hud-metric-subtext");
         M3Button skipRestBtn = new M3Button("Skip Rest Window", ButtonVariant.FILLED);
@@ -356,11 +408,15 @@ public class LiveWorkoutController implements ScreenController {
         bentoGrid.add(leftColumnBox, 0, 0);
         bentoGrid.add(centerColumnBox, 1, 0);
         bentoGrid.add(rightColumnBox, 2, 0);
+        // Compact counterpart of the grid: the SAME sections stacked full-width (the 25/50/25
+        // columns cannot fit a 600dp window, which pinned the HUD's minimum near 1600px).
+        // Starts EMPTY; applyHudLayout moves the sections on the class swap.
+        compactColumns = new VBox(16);
         layout.setCenter(bentoGrid);
 
         // Bottom: high-visibility contextual cockpit controls. The leading status label carries
         // the real session state; the telemetry buttons stay simulated per the badge above.
-        HBox actionDock = new HBox(20);
+        actionDock = new HBox(20);
         actionDock.setAlignment(Pos.CENTER_RIGHT);
         actionDock.getStyleClass().add("hud-bottom-action-dock");
         actionDock.setPadding(new Insets(14, 20, 14, 20));
@@ -383,16 +439,79 @@ public class LiveWorkoutController implements ScreenController {
         completeSetButton.setGraphic(M3Icon.symbol("check"));
         completeSetButton.getStyleClass().add("hud-complete-set-btn");
         completeSetButton.setOnAction(e -> onCompleteSession());
-        Region dockSpacer = new Region();
+        dockSpacer = new Region();
         HBox.setHgrow(dockSpacer, Priority.ALWAYS);
         actionDock.getChildren().addAll(
                 sessionStatusLabel, dockSpacer, abortBtn, pauseBtn, recalibrateBtn, completeSetButton);
+        // Canonical lists: the desktop HBox and the compact FlowPane both fill from THESE, so
+        // a repeated class flip can never drain the source container and strand the header or
+        // the dock empty (a compact -> compact re-fill from the drained HBox did exactly that).
+        metaHeaderNodes.addAll(metaHeader.getChildren());
+        actionDockNodes.addAll(actionDock.getChildren());
+        actionDockFlow = new FlowPane(20, 8);
+        actionDockFlow.getStyleClass().add("hud-bottom-action-dock");
+        actionDockFlow.setPadding(new Insets(14, 20, 14, 20));
         layout.setBottom(actionDock);
 
         viewRoot = new StackPane();
         viewRoot.getStyleClass().add("live-hud-root");
         viewRoot.getChildren().add(layout);
+
+        // Width-class listener (library breakpoints, same pattern as the dashboard's
+        // applyDashboardLayout): swaps the meta header, the telemetry grid and the action
+        // dock between the desktop and compact layouts. Deferred with Platform.runLater so
+        // the children lists are never mutated re-entrantly mid-layout.
+        viewRoot.widthProperty().addListener((obs, oldWidth, width) -> {
+            double w = width.doubleValue();
+            if (w <= 0) {
+                return;
+            }
+            WindowSizeClass next = WindowSizeClass.forWidth(w);
+            if (next == hudWidthClass) {
+                return;
+            }
+            hudWidthClass = next;
+            Platform.runLater(this::applyHudLayout);
+        });
         return viewRoot;
+    }
+
+    /**
+     * Applies the current width class to the HUD by swapping between two layouts that SHARE
+     * the same nodes: desktop widths keep the one-line meta header, the 25/50/25 telemetry
+     * columns and the one-line action dock; compact widths wrap the meta header, stack the
+     * VBT / impulse / rest sections full-width and wrap the lifecycle buttons across the
+     * dock's full width, because none of the desktop rows fit a 600dp window. Idempotent
+     * fills, so repeated swaps are safe.
+     */
+    private void applyHudLayout() {
+        boolean compact = hudWidthClass == WindowSizeClass.COMPACT;
+        BorderPane shell = (BorderPane) viewRoot.getChildren().get(0);
+        if (compact) {
+            // Fill from the CANONICAL lists (never from the sibling container, which a
+            // previous swap may already have drained).
+            metaHeaderFlow.getChildren().setAll(metaHeaderNodes);
+            ((VBox) shell.getTop()).getChildren().set(1, metaHeaderFlow);
+            if (compactColumns.getChildren().isEmpty()) {
+                compactColumns.getChildren().setAll(leftColumnBox, centerColumnBox, rightColumnBox);
+            }
+            shell.setCenter(compactColumns);
+            actionDockFlow.getChildren().setAll(actionDockNodes);
+            shell.setBottom(actionDockFlow);
+            return;
+        }
+        metaHeader.getChildren().setAll(metaHeaderNodes);
+        HBox.setHgrow(metaSpacer, Priority.ALWAYS);
+        ((VBox) shell.getTop()).getChildren().set(1, metaHeader);
+        if (bentoGrid.getChildren().isEmpty()) {
+            bentoGrid.add(leftColumnBox, 0, 0);
+            bentoGrid.add(centerColumnBox, 1, 0);
+            bentoGrid.add(rightColumnBox, 2, 0);
+        }
+        shell.setCenter(bentoGrid);
+        actionDock.getChildren().setAll(actionDockNodes);
+        HBox.setHgrow(dockSpacer, Priority.ALWAYS);
+        shell.setBottom(actionDock);
     }
 
     /** One RPE quick-log button (the active one carries {@code rpe-btn-active}). */
@@ -687,8 +806,9 @@ public class LiveWorkoutController implements ScreenController {
         exerciseTitleLabel.setText(session.getSessionNotes() == null
                 || session.getSessionNotes().isBlank()
                 ? "Session #" + session.getId() : session.getSessionNotes());
-        targetLoadLabel.setText(session.getPrice() == null
-                ? "—" : "$" + session.getPrice().toPlainString());
+        // Training load is a weight, not a price — the simulated instrument starts at its
+        // 0 kg baseline (the session's price was never a load).
+        targetLoadLabel.setText("0 kg");
         setTrackerLabel.setText("Set 1 · " + session.getDurationMin() + " min block");
         sessionStatusLabel.setText("Session #" + session.getId() + " · "
                 + session.getDate() + " at " + session.getStartTime() + " · "

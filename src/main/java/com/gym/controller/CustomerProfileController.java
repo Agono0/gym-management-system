@@ -32,6 +32,7 @@ import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.iconbutton.IconButtonVariant;
 import io.m3fx.controls.iconbutton.M3IconButton;
 import io.m3fx.controls.list.M3ListItem;
+import io.m3fx.controls.layout.WindowSizeClass;
 import io.m3fx.controls.menu.M3Menu;
 import io.m3fx.controls.overlay.M3Overlay;
 import io.m3fx.controls.scene3d.M3TiltCard3D;
@@ -132,6 +133,12 @@ public class CustomerProfileController implements ScreenController {
     private BorderPane contentHost;
     /** The scrollable dossier node, restored after loading/error states. */
     private javafx.scene.Node cockpitDossier;
+    /** Desktop cockpit grid: the three zones in 28/44/28 percent columns. */
+    private GridPane cockpitGrid;
+    /** Compact counterpart of the cockpit: the SAME zones stacked full-width. Starts EMPTY. */
+    private VBox cockpitStack;
+    /** Current window width class driving the cockpit swap. */
+    private WindowSizeClass cockpitWidthClass = WindowSizeClass.EXPANDED;
     /** The customer currently loaded from the database, or null before the first handoff. */
     private Customer loadedCustomer;
     /** The member's latest membership, or null when none is on file. */
@@ -176,14 +183,24 @@ public class CustomerProfileController implements ScreenController {
         appBarRow.getChildren().addAll(topAppBar, appActions);
         mainLayout.setTop(appBarRow);
 
-        // Center scrollable cockpit.
-        HBox cockpitRow = new HBox(20);
-        cockpitRow.setPadding(new Insets(20, 24, 64, 24));
+        // Center scrollable cockpit. The three zones share ONE GridPane at desktop widths
+        // (28/44/28 percent columns) and stack full-width at compact widths — shared nodes
+        // swapped by the width-class listener at the bottom of the constructor. Percent
+        // columns (not fixed widths) make the columns share the viewport honestly, so no
+        // card can paint over its neighbour the way the former 360/480/440 fixed zones did.
+        cockpitGrid = new GridPane(20, 0);
+        cockpitGrid.setPadding(new Insets(20, 24, 64, 24));
+        ColumnConstraints identityCol = new ColumnConstraints();
+        identityCol.setPercentWidth(28);
+        ColumnConstraints performanceCol = new ColumnConstraints();
+        performanceCol.setPercentWidth(44);
+        ColumnConstraints lifecycleCol = new ColumnConstraints();
+        lifecycleCol.setPercentWidth(28);
+        cockpitGrid.getColumnConstraints().addAll(identityCol, performanceCol, lifecycleCol);
 
         // Zone A: identity & biometrics.
         VBox identityZone = new VBox(16);
-        identityZone.setPrefWidth(360);
-        identityZone.setMinWidth(300);
+        identityZone.setMaxWidth(Double.MAX_VALUE);
 
         // 3D holographic membership pass.
         holographicPass = new M3TiltCard3D();
@@ -236,11 +253,11 @@ public class CustomerProfileController implements ScreenController {
 
         // Zone B: performance & program.
         VBox performanceZone = new VBox(16);
-        performanceZone.setPrefWidth(480);
-        HBox.setHgrow(performanceZone, Priority.ALWAYS);
+        performanceZone.setMaxWidth(Double.MAX_VALUE);
 
         // Athlete capacity polygon.
         M3Card radarCard = new M3Card(CardVariant.ELEVATED);
+        radarCard.setMaxWidth(Double.MAX_VALUE);
         VBox radarContent = new VBox(12);
         radarContent.setAlignment(Pos.CENTER);
         radarContent.setPadding(new Insets(16));
@@ -256,11 +273,13 @@ public class CustomerProfileController implements ScreenController {
                 axisBadge);
         radarAthleteCapacity = new M3RadarChart();
         radarAthleteCapacity.setPrefSize(420, 300);
+        radarAthleteCapacity.setMaxWidth(Double.MAX_VALUE); // scales with the column width
         radarContent.getChildren().addAll(radarHeader, radarAthleteCapacity);
         radarCard.setContent(radarContent);
 
         // Active workout program.
         M3Card programCard = new M3Card(CardVariant.OUTLINED);
+        programCard.setMaxWidth(Double.MAX_VALUE);
         VBox programContent = new VBox(12);
         programContent.setPadding(new Insets(16));
         HBox programHeader = new HBox();
@@ -290,11 +309,11 @@ public class CustomerProfileController implements ScreenController {
 
         // Zone C: lifecycle, coach & demographics.
         VBox lifecycleZone = new VBox(16);
-        lifecycleZone.setPrefWidth(440);
-        lifecycleZone.setMinWidth(320);
+        lifecycleZone.setMaxWidth(Double.MAX_VALUE);
 
         // Membership plan lifecycle card.
         M3Card planCard = new M3Card(CardVariant.ELEVATED);
+        planCard.setMaxWidth(Double.MAX_VALUE);
         VBox planContent = new VBox(12);
         planContent.setPadding(new Insets(16));
         HBox planHeader = new HBox();
@@ -324,6 +343,7 @@ public class CustomerProfileController implements ScreenController {
 
         // Assigned coach card.
         M3Card coachCard = new M3Card(CardVariant.OUTLINED);
+        coachCard.setMaxWidth(Double.MAX_VALUE);
         VBox coachContent = new VBox(10);
         coachContent.setPadding(new Insets(14));
         coachContent.getChildren().add(styledLabel("ASSIGNED COACH", "title-small"));
@@ -345,6 +365,7 @@ public class CustomerProfileController implements ScreenController {
 
         // Biographical & emergency form card.
         M3Card dossierCard = new M3Card(CardVariant.OUTLINED);
+        dossierCard.setMaxWidth(Double.MAX_VALUE);
         VBox dossierContent = new VBox(12);
         dossierContent.setPadding(new Insets(16));
         dossierContent.getChildren().add(styledLabel("BIOGRAPHICAL DOSSIER", "title-small"));
@@ -363,9 +384,18 @@ public class CustomerProfileController implements ScreenController {
         dossierCard.setContent(dossierContent);
 
         lifecycleZone.getChildren().addAll(planCard, coachCard, dossierCard);
+        GridPane.setConstraints(identityZone, 0, 0);
+        GridPane.setConstraints(performanceZone, 1, 0);
+        GridPane.setConstraints(lifecycleZone, 2, 0);
+        cockpitGrid.getChildren().addAll(identityZone, performanceZone, lifecycleZone);
 
-        cockpitRow.getChildren().addAll(identityZone, performanceZone, lifecycleZone);
-        ScrollPane cockpitScroll = new ScrollPane(cockpitRow);
+        // Compact counterpart of the cockpit: the SAME three zones stacked full-width
+        // (a 28% column cannot fit a 600dp window). Starts EMPTY — filling it here would
+        // steal the zones out of the desktop grid; applyCockpitLayout moves the nodes on
+        // the first class swap.
+        cockpitStack = new VBox(16);
+
+        ScrollPane cockpitScroll = new ScrollPane(cockpitGrid);
         cockpitScroll.setFitToWidth(true);
         cockpitScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         cockpitScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
@@ -425,6 +455,53 @@ public class CustomerProfileController implements ScreenController {
         // The plan starts ACTIVE, so Unfreeze has nothing to do yet (Hick's law: only the
         // meaningful half of the pair is offered).
         btnUnfreezePlan.setDisable(true);
+
+        // Width-class listener (library breakpoints, same pattern as the dashboard's
+        // applyDashboardLayout): swaps the cockpit between the desktop percent-column grid
+        // and the full-width stack. Deferred with Platform.runLater so the children lists
+        // are never mutated re-entrantly mid-layout.
+        rootPane.widthProperty().addListener((obs, oldWidth, width) -> {
+            double w = width.doubleValue();
+            if (w <= 0) {
+                return;
+            }
+            WindowSizeClass next = WindowSizeClass.forWidth(w);
+            if (next == cockpitWidthClass) {
+                return;
+            }
+            cockpitWidthClass = next;
+            javafx.application.Platform.runLater(this::applyCockpitLayout);
+        });
+    }
+
+    /**
+     * Applies the current width class to the cockpit by swapping the SAME three zones between
+     * the desktop 28/44/28 percent-column grid and the compact full-width stack: the percent
+     * columns cannot fit a 600dp window (three cards would overlap the way the former fixed
+     * 360/480/440 widths did). Idempotent fills, so repeated swaps are safe.
+     */
+    private void applyCockpitLayout() {
+        boolean compact = cockpitWidthClass == WindowSizeClass.COMPACT;
+        javafx.scene.Node dossier = cockpitDossier;
+        if (dossier instanceof ScrollPane scroll) {
+            if (compact) {
+                if (cockpitStack.getChildren().isEmpty()) {
+                    cockpitStack.getChildren().setAll(
+                            cockpitGrid.getChildren().get(0),
+                            cockpitGrid.getChildren().get(1),
+                            cockpitGrid.getChildren().get(2));
+                }
+                scroll.setContent(cockpitStack);
+            } else {
+                if (cockpitGrid.getChildren().isEmpty()) {
+                    GridPane.setConstraints(cockpitStack.getChildren().get(0), 0, 0);
+                    GridPane.setConstraints(cockpitStack.getChildren().get(1), 1, 0);
+                    GridPane.setConstraints(cockpitStack.getChildren().get(2), 2, 0);
+                    cockpitGrid.getChildren().setAll(cockpitStack.getChildren());
+                }
+                scroll.setContent(cockpitGrid);
+            }
+        }
     }
 
     /** One M3TextField with an outlined variant, label and optional supporting text. */

@@ -15,6 +15,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.HBox;
@@ -42,12 +43,26 @@ import java.util.function.Function;
 @SuppressWarnings("this-escape")
 public class M3DataTable<T> extends VBox {
 
+    /**
+     * Minimum readable column width when a column does not declare one (default for every
+     * {@link Column}): below roughly this width a cell renders as a bare ellipsis, which the
+     * squeezed-table evidence (every cell "…") showed is unreadable.
+     */
+    public static final double DEFAULT_MIN_COLUMN_WIDTH = 72.0;
+
+    /** Vertical room the horizontal scrollbar claims inside the squeeze scroller (px). */
+    private static final double H_SCROLLBAR_HEADROOM_PX = 18;
+
+    /** Gap between the header row and the rows container inside the squeeze scroller (px). */
+    private static final double SCROLL_BODY_SPACING_PX = 8;
+
     /** Model for a table column. */
     public static class Column<T> {
         private final String header;
         private final Function<T, String> valueExtractor;
         private BiFunction<T, String, Node> cellFactory;
         private double prefWidth = 120.0;
+        private double minWidth = DEFAULT_MIN_COLUMN_WIDTH;
 
         /**
          * Creates a column with the default 120px preferred width.
@@ -83,6 +98,19 @@ public class M3DataTable<T> extends VBox {
             return this;
         }
 
+        /**
+         * Builder-style hook for the column's minimum readable width. When the viewport is too
+         * narrow for every column's preferred width, columns shrink only down to this width and
+         * the table scrolls horizontally instead of collapsing into ellipsis slivers.
+         *
+         * @param minWidth minimum column width in px
+         * @return this column, for chaining
+         */
+        public Column<T> withMinWidth(double minWidth) {
+            this.minWidth = minWidth;
+            return this;
+        }
+
         /** @return the column header text */
         public String getHeader() { return header; }
 
@@ -94,6 +122,9 @@ public class M3DataTable<T> extends VBox {
 
         /** @return the preferred column width in px */
         public double getPrefWidth() { return prefWidth; }
+
+        /** @return the minimum readable column width in px */
+        public double getMinWidth() { return minWidth; }
     }
 
     private final ObservableList<Column<T>> columns = FXCollections.observableArrayList();
@@ -111,6 +142,8 @@ public class M3DataTable<T> extends VBox {
     private final M3SearchBar searchBar = new M3SearchBar("Search table data...");
     private final HBox headerRow = new HBox(8);
     private final VBox rowsContainer = new VBox(2);
+    /** Scroll body holding header + rows so squeezed tables scroll instead of collapsing. */
+    private final ScrollPane tableScroller = new ScrollPane();
     private final HBox paginationBar = new HBox(12);
     private final Label pageInfoLabel = new Label();
     private final M3IconButton prevBtn = new M3IconButton(M3Icon.symbol("arrow_back"), IconButtonVariant.STANDARD);
@@ -155,7 +188,31 @@ public class M3DataTable<T> extends VBox {
         HBox.setHgrow(spacer, Priority.ALWAYS);
         paginationBar.getChildren().addAll(pageInfoLabel, spacer, prevBtn, nextBtn);
 
-        getChildren().addAll(searchBar, headerRow, rowsContainer, paginationBar);
+        // Squeeze behavior: when every column's minimum no longer fits the viewport, the header
+        // and rows keep their readable minimum widths and the table scrolls horizontally
+        // instead of squeezing every column into ellipsis slivers (visual QA evidence).
+        tableScroller.getStyleClass().add("m3-data-table-scroller");
+        tableScroller.setFitToWidth(true);
+        tableScroller.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        tableScroller.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        VBox scrollBody = new VBox(SCROLL_BODY_SPACING_PX, headerRow, rowsContainer);
+        scrollBody.getStyleClass().add("m3-data-table-body");
+        tableScroller.setContent(scrollBody);
+        // The scroller must not become a vertical squeeze point either: a ScrollPane's own skin
+        // minimum is tiny (and USE_PREF_SIZE falls back to that skin minimum on a Control), so
+        // a VGrow parent could shrink the whole table to a header sliver. Min height tracks the
+        // body's content minimum (+ h-scrollbar room), restoring the content-driven height the
+        // bare rows container used to guarantee. Computed from the real parts because the
+        // minHeight *property* of a region reads the USE_COMPUTED_SIZE sentinel, not the layout
+        // minimum.
+        Runnable updateScrollerMinHeight = () -> tableScroller.setMinHeight(
+                headerRow.getMinHeight() + SCROLL_BODY_SPACING_PX
+                        + rowsContainer.minHeight(-1) + H_SCROLLBAR_HEADROOM_PX);
+        rowsContainer.getChildren().addListener(
+                (javafx.collections.ListChangeListener<Node>) c -> updateScrollerMinHeight.run());
+        updateScrollerMinHeight.run();
+
+        getChildren().addAll(searchBar, tableScroller, paginationBar);
 
         searchBar.queryProperty().addListener((obs, o, text) -> scheduleSearch(text));
         // Enter applies the pending query immediately, cancelling the debounce.
@@ -338,6 +395,9 @@ public class M3DataTable<T> extends VBox {
             Label lbl = new Label();
             lbl.getStyleClass().add("m3-data-table-header-label");
             lbl.setPrefWidth(col.getPrefWidth());
+            // Header text never collapses to an ellipsis: the label's minimum is its own text
+            // width, so a squeezed table scrolls instead of clipping the header.
+            lbl.setMinWidth(Region.USE_PREF_SIZE);
 
             boolean sortable = col.getValueExtractor() != null;
             if (sortable) {
@@ -472,6 +532,9 @@ public class M3DataTable<T> extends VBox {
                 }
                 if (cellNode instanceof Region r) {
                     r.setPrefWidth(col.getPrefWidth());
+                    // Cells keep the column's readable minimum; below it the row scrolls
+                    // horizontally instead of shrinking into ellipsis slivers.
+                    r.setMinWidth(col.getMinWidth());
                 }
                 row.getChildren().add(cellNode);
             }

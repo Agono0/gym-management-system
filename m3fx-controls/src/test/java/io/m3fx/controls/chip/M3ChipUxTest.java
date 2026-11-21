@@ -2,11 +2,18 @@ package io.m3fx.controls.chip;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.m3fx.controls.M3Stylesheets;
+import io.m3fx.core.theme.ColorRole;
+import io.m3fx.core.theme.M3Theme;
 import javafx.application.Platform;
+import javafx.scene.Scene;
+import javafx.scene.control.Label;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.StackPane;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -137,5 +144,35 @@ class M3ChipUxTest {
         M3Chip chip = M3Chip.assist("Before");
         chip.setText("After");
         assertEquals("After", chip.getAccessibleText());
+    }
+
+    @Test
+    void disabledChipContrastIsTheM3StateTokenWithoutStackedOpacity() throws Throwable {
+        // Visual QA: disabled layer chips on the floor map rendered ~6% effective alpha. The
+        // a38 token was correct, but modena's user-agent rules stack -fx-opacity 0.4 on the
+        // disabled toggle button AND on the disabled inner label (0.4 * 0.4 * 0.38). The chip
+        // stylesheet must neutralize both so the 38% token is the only dimming.
+        runOnFx(() -> {
+            M3Chip chip = M3Chip.filter("IoT Sensors");
+            chip.setDisable(true);
+            Scene scene = new Scene(new StackPane(chip), 300, 80);
+            M3Stylesheets.applyTo(scene, M3Theme.baseline(false)); // light theme, as evidenced
+            chip.applyCss();
+            chip.layout();
+
+            assertEquals(1.0, chip.getOpacity(), 1e-9,
+                    "modena's disabled node opacity is neutralized on the chip");
+            Label label = (Label) chip.lookup(".m3-chip-text");
+            assertNotNull(label, "the skin label carries the text");
+            assertEquals(1.0, label.getOpacity(), 1e-9,
+                    "modena's disabled label opacity is neutralized too");
+
+            double onSurfaceRed = M3Stylesheets.getLatestTheme().get(ColorRole.ON_SURFACE).getRed();
+            javafx.scene.paint.Color textFill = (javafx.scene.paint.Color) chip.getTextFill();
+            assertEquals(onSurfaceRed, textFill.getRed(), 1e-6,
+                    "disabled content uses the on-surface family");
+            assertEquals(0.38, textFill.getOpacity(), 0.01,
+                    "disabled content alpha is exactly the M3 38% state token");
+        });
     }
 }

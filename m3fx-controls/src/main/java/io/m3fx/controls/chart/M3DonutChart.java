@@ -101,6 +101,9 @@ public class M3DonutChart extends StackPane {
 
         widthProperty().addListener((obs, o, n) -> render());
         heightProperty().addListener((obs, o, n) -> render());
+        // The center text must re-fit when its content changes ("—" -> "84.8 kg").
+        centerHeadlineProperty().addListener((obs, o, n) -> render());
+        centerSubtitleProperty().addListener((obs, o, n) -> render());
         ChartThemeSupport.attach(this, this::render);
 
         rings.addListener((ListChangeListener<Ring>) c -> {
@@ -175,6 +178,12 @@ public class M3DonutChart extends StackPane {
     /** Render invocations, counted by the B6 theme-repaint tests (package-private). */
     int renderCountForTesting;
 
+    /**
+     * Radius of the innermost hole from the last render (package-private): the visual-QA tests
+     * pin the center text to fit inside it.
+     */
+    double innerHoleRadiusForTesting;
+
     private void render() {
         renderCountForTesting++;
         double w = getWidth() > 0 ? getWidth() : getPrefWidth();
@@ -191,17 +200,30 @@ public class M3DonutChart extends StackPane {
         double cy = h / 2.0;
         double maxOuterRadius = Math.min(w, h) / 2.0 - 12.0;
 
-        double ringThickness = Math.max(8.0, Math.min(18.0, maxOuterRadius / (count * 1.6)));
+        // Reserve a center hub so the rings never encroach on the hole the headline lives in,
+        // then fit all the ring bands into the radial space between hub and outer edge
+        // (thickness + 0.35 spacing per ring, last band ending exactly at the hub).
+        double hubRadius = Math.max(24.0, maxOuterRadius * 0.42);
+        double radialSpan = maxOuterRadius - hubRadius;
+        double ringThickness = Math.max(6.0, Math.min(18.0,
+                radialSpan / (count + (count - 1) * 0.35)));
         double ringSpacing = Math.max(3.0, ringThickness * 0.35);
 
         Color trackColor = ThemeColors.resolve(this, ColorRole.SURFACE_CONTAINER_HIGHEST);
         gc.setLineCap(StrokeLineCap.ROUND);
 
+        double innermostInnerEdge = maxOuterRadius;
         for (int i = 0; i < count; i++) {
-            Ring ring = rings.get(i);
-            double currentRadius = maxOuterRadius - i * (ringThickness + ringSpacing);
-            if (currentRadius <= ringThickness) break;
+            // Band [innerEdge, outerEdge]; outer edges stack inward from maxOuterRadius so
+            // every band stays between the hub and the reserved outer margin, and a thick
+            // segment can no longer cross the inner radius.
+            double outerEdge = maxOuterRadius - i * (ringThickness + ringSpacing);
+            double innerEdge = outerEdge - ringThickness;
+            if (innerEdge <= 1.0) break;
+            innermostInnerEdge = innerEdge;
+            double currentRadius = (outerEdge + innerEdge) / 2.0;
 
+            Ring ring = rings.get(i);
             double arcX = cx - currentRadius;
             double arcY = cy - currentRadius;
             double arcDiam = currentRadius * 2.0;
@@ -224,6 +246,40 @@ public class M3DonutChart extends StackPane {
                 gc.strokeArc(arcX, arcY, arcDiam, arcDiam, 90, -sweep, ArcType.OPEN);
             }
         }
+
+        innerHoleRadiusForTesting = Math.max(0.0, innermostInnerEdge);
+        fitCenterTextToHub();
+    }
+
+    /**
+     * Clamps the center headline/subtitle to the hub hole: the labels' CSS sizes are the
+     * maximum, and each label shrinks (via inline style) until its rendered width fits inside
+     * the hole, so "84.8 kg" can no longer collide with the ring on a small donut.
+     */
+    private void fitCenterTextToHub() {
+        double holeDiameter = innerHoleRadiusForTesting * 2.0;
+        fitLabel(headlineLabel, holeDiameter);
+        fitLabel(subtitleLabel, holeDiameter);
+    }
+
+    /** Fits one center label inside the hub hole using its own (CSS-resolved) font. */
+    private static void fitLabel(Label label, double holeDiameter) {
+        String text = label.getText();
+        if (text == null || text.isBlank() || holeDiameter <= 0) {
+            return;
+        }
+        double currentSize = label.getFont().getSize();
+        double available = Math.max(20.0, holeDiameter * 0.92 - 8.0);
+        javafx.scene.text.Text measure = new javafx.scene.text.Text(text);
+        measure.setFont(label.getFont());
+        double measuredWidth = measure.getLayoutBounds().getWidth();
+        if (currentSize <= 0 || measuredWidth <= 0 || measuredWidth <= available) {
+            return;
+        }
+        // Text width scales ~linearly with font size, so the fitted size is independent of
+        // which size the measurement ran at, and re-runs of render() are stable (no drift).
+        double fitted = Math.max(10.0, currentSize * available / measuredWidth);
+        label.setStyle(String.format(java.util.Locale.ROOT, "-fx-font-size: %.1fpx;", fitted));
     }
 }
 

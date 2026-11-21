@@ -142,7 +142,7 @@ class M3TextFieldRestingLabelTest {
         });
         runOnFx(() -> {
             javafx.scene.Node label = holder[0].lookup(".m3-text-field-label");
-            assertEquals(40, label.getTranslateX(),
+            assertEquals(48, label.getTranslateX(),
                     "the resting label aligns with the input text after a leading icon");
             holder[0].setLeadingIcon(null);
             assertEquals(0, holder[0].lookup(".m3-text-field-label").getTranslateX(),

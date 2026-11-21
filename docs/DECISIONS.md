@@ -679,3 +679,19 @@
     shows a single explicit "No audit trail recorded yet" entry instead of invented history;
     empty states across the app follow the same policy (real states or explicit empties, never
     seeded fiction).
+
+90. **Squeeze tables scroll, never collapse (visual QA, Nov 2026).** When a data table is
+    narrower than its columns want, columns keep a readable minimum (`Column.withMinWidth`,
+    default 72px) and the header+rows body scrolls horizontally instead of squeezing every
+    column into "…" slivers. The scroller's minimum height is recomputed from the row content
+    on every rebuild: a ScrollPane's skin minimum is tiny (and `USE_PREF_SIZE` falls back to
+    that skin minimum on a Control, while the minHeight *property* reads the
+    `USE_COMPUTED_SIZE` sentinel rather than the layout minimum), so a plain min-height would
+    let a VGrow parent shrink the whole table to a header sliver.
+
+91. **Disabled chips = the M3 a38 token alone (visual QA, Nov 2026).** Modena's user-agent
+    stylesheet stacks `-fx-opacity: 0.4` on disabled toggle buttons AND on disabled labels
+    inside the skin; multiplied with the spec's 38% alpha token that measured ~6% effective
+    contrast (near-invisible floor-map layer chips). The chip stylesheet pins the disabled
+    chip and its text label to opacity 1 so the a38 token is the only dimming, per the M3
+    state spec.

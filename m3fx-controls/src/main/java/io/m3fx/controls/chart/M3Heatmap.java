@@ -164,6 +164,12 @@ public class M3Heatmap extends Region {
     /** Render invocations, counted by the B6 theme-repaint tests (package-private). */
     int renderCountForTesting;
 
+    /**
+     * The fill color last used for the column labels (package-private): lets the visual-QA
+     * tests pin the labels to the on-surface-variant token instead of a stale cell color.
+     */
+    Color columnLabelFillForTesting;
+
     private void render() {
         renderCountForTesting++;
         double w = getWidth() > 0 ? getWidth() : getPrefWidth();
@@ -239,7 +245,11 @@ public class M3Heatmap extends Region {
             }
         }
 
-        // Draw Col Labels (bottom), thinned so labels never overlap
+        // Draw Col Labels (bottom), thinned so labels never overlap. The cell loop above left
+        // the context fill on the last cell color, so the text color must be re-applied or the
+        // labels render in SURFACE_CONTAINER_HIGH (nearly invisible on the surface background).
+        gc.setFill(textColor);
+        columnLabelFillForTesting = textColor;
         int step = Math.max(1, cols / 6);
         gc.setTextAlign(TextAlignment.CENTER);
         for (int c = 0; c < cols; c += step) {

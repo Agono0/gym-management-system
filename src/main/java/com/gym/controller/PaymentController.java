@@ -31,6 +31,7 @@ import io.m3fx.controls.glass.GlassEffectParams;
 import io.m3fx.controls.glass.GlassShape;
 import io.m3fx.controls.glass.M3GlassPane;
 import io.m3fx.controls.overlay.M3Overlay;
+import io.m3fx.controls.layout.WindowSizeClass;
 import io.m3fx.controls.sheet.M3BottomSheet;
 import io.m3fx.controls.textfield.M3TextField;
 import io.m3fx.controls.textfield.TextFieldVariant;
@@ -89,7 +90,7 @@ public class PaymentController implements ScreenController {
 
     // ---- View fields (the former fx:id injections, now built by buildView) ----
     private StackPane viewRoot;
-    private TextField txtSearchReceipt;
+    private M3TextField txtSearchReceipt;
     private M3TextField txtCustomerLookup;
     private Label lblCustomerName;
     private Label lblCustomerBalance;
@@ -121,6 +122,38 @@ public class PaymentController implements ScreenController {
     private StackPane contentHost;
     /** The workspace node, restored after loading/error states. */
     private Node workspaceView;
+
+    // ---- Responsive layout (width-class reflow, shared nodes — see applyBillingLayout) ----
+    /** Desktop top row: title, spacer, receipt search and the lookup action share one line. */
+    private HBox topRow;
+    /** Compact counterpart of the top row: the SAME nodes stacked (title above controls). */
+    private VBox topStack;
+    /** The receipt search/lookup controls row of the compact top stack. */
+    private HBox topControlsRow;
+    /** The wrapping screen title, shared by both top-bar layouts. */
+    private Label topTitle;
+    /** The desktop top row's grow spacer (moved back in on the expanded swap). */
+    private Region topSpacer;
+    /** The top app bar container (the row/stack swap target). */
+    private VBox topBarBox;
+    /** The receipt lookup action, shared by both top-bar layouts. */
+    private M3Button lookupReceiptBtn;
+    /** The customer name / unpaid balance pair, side by side at desktop widths. */
+    private HBox balanceRow;
+    /** Compact counterpart of the balance pair: the SAME labels stacked. Starts EMPTY. */
+    private VBox balanceStack;
+    /** The desktop balance pair's grow spacer (moved back in on the expanded swap). */
+    private Region balanceSpacer;
+    /** The register pane (left of the desktop split; full-width first at compact). */
+    private VBox registerPane;
+    /** The ledger pane (right of the desktop split; full-width second at compact). */
+    private VBox ledgerPane;
+    /** Compact counterpart of the workspace: the SAME panes stacked full-width. */
+    private VBox compactWorkspace;
+    /** Desktop workspace split: register left (44%), ledger right. */
+    private SplitPane workspaceSplit;
+    /** Current window width class driving the top-bar, balance and workspace swaps. */
+    private WindowSizeClass billingWidthClass = WindowSizeClass.EXPANDED;
 
     /** Rows of the current snapshot in table order; the payment id travels in column 5. */
     private final Map<String, Integer> rowPaymentIds = new HashMap<>();
@@ -187,37 +220,40 @@ public class PaymentController implements ScreenController {
         BorderPane layout = new BorderPane();
         layout.getStyleClass().add("billing-base-pane");
 
-        // Top app bar.
-        VBox topBarContainer = new VBox(8);
-        topBarContainer.getStyleClass().add("top-bar-container");
-        HBox topRow = new HBox(16);
+        // Top app bar. Two layouts share the same nodes: the side-by-side row at desktop
+        // widths and a stacked column at compact widths — swapped by the width-class listener
+        // at the bottom of buildView. The title wraps so it never clips mid-word.
+        topBarBox = new VBox(8);
+        topBarBox.getStyleClass().add("top-bar-container");
+        topRow = new HBox(16);
         topRow.setAlignment(Pos.CENTER_LEFT);
         topRow.setPadding(new Insets(16, 24, 16, 24));
-        txtSearchReceipt = new TextField();
-        txtSearchReceipt.setPromptText("Search receipt # (e.g. REC-1002)");
+        txtSearchReceipt = new M3TextField("Search receipt # (e.g. REC-1002)",
+                TextFieldVariant.FILLED);
         txtSearchReceipt.setPrefWidth(250);
-        // Raw TextField: adopt the library's token-styled input rule so the prompt text uses
-        // -md-sys-color-on-surface-variant (visible in dark mode — Q2 finding).
-        txtSearchReceipt.getStyleClass().add("m3-text-field-input");
-        M3Button lookupBtn = new M3Button("Lookup Receipt", ButtonVariant.TONAL);
-        lookupBtn.getStyleClass().add("m3-button-tonal");
-        lookupBtn.setOnAction(e -> onReceiptLookupClick());
-        Region topSpacer = new Region();
+        txtSearchReceipt.setMaxWidth(Double.MAX_VALUE);
+        lookupReceiptBtn = new M3Button("Lookup Receipt", ButtonVariant.TONAL);
+        lookupReceiptBtn.getStyleClass().add("m3-button-tonal");
+        lookupReceiptBtn.setOnAction(e -> onReceiptLookupClick());
+        topSpacer = new Region();
         HBox.setHgrow(topSpacer, Priority.ALWAYS);
-        topRow.getChildren().addAll(
-                styledLabel("CASHLESS POS REGISTER & BILLING", "title-large"),
-                topSpacer,
-                txtSearchReceipt,
-                lookupBtn);
-        topBarContainer.getChildren().add(topRow);
-        layout.setTop(topBarContainer);
+        topTitle = styledLabel("CASHLESS POS REGISTER & BILLING", "title-large");
+        topTitle.setWrapText(true);
+        topRow.getChildren().addAll(topTitle, topSpacer, txtSearchReceipt, lookupReceiptBtn);
+        topStack = new VBox(12);
+        topControlsRow = new HBox(16);
+        balanceStack = new VBox(4);
+        topBarBox.getChildren().add(topRow);
+        layout.setTop(topBarBox);
 
         // Left half: cash register & tender engine.
-        VBox registerPane = new VBox(16);
+        registerPane = new VBox(16);
         registerPane.getStyleClass().add("register-pane");
         registerPane.setPadding(new Insets(16, 16, 64, 16));
 
-        // Member lookup & balance card.
+        // Member lookup & balance card. The name/balance pair shares one row at desktop
+        // widths and stacks at compact widths (in the 44% register pane the pair abutted and
+        // slivered each other) — swapped with the rest of the responsive layout.
         M3Card balanceCard = new M3Card(CardVariant.OUTLINED);
         balanceCard.getStyleClass().add("customer-balance-card");
         balanceCard.setPadding(new Insets(12));
@@ -231,13 +267,13 @@ public class PaymentController implements ScreenController {
         balanceBtn.getStyleClass().add("m3-button-outlined");
         balanceBtn.setOnAction(e -> onCheckBalanceClick());
         lookupRow.getChildren().addAll(txtCustomerLookup, balanceBtn);
-        HBox balanceRow = new HBox();
+        balanceRow = new HBox();
         balanceRow.setAlignment(Pos.CENTER_LEFT);
         lblCustomerName = new Label("Athlete: Not Selected");
         lblCustomerName.getStyleClass().add("title-medium");
         lblCustomerBalance = new Label("Unpaid Balance: $0.00");
         lblCustomerBalance.getStyleClass().add("headline-small");
-        Region balanceSpacer = new Region();
+        balanceSpacer = new Region();
         HBox.setHgrow(balanceSpacer, Priority.ALWAYS);
         balanceRow.getChildren().addAll(lblCustomerName, balanceSpacer, lblCustomerBalance);
         balanceContent.getChildren().addAll(lookupRow, balanceRow);
@@ -299,7 +335,7 @@ public class PaymentController implements ScreenController {
                 amountSection, registerSpacer, actionSplitButton);
 
         // Right half: financial ledger table.
-        VBox ledgerPane = new VBox(16);
+        ledgerPane = new VBox(16);
         ledgerPane.setPadding(new Insets(16, 16, 64, 16));
 
         // Telemetry row.
@@ -327,8 +363,13 @@ public class PaymentController implements ScreenController {
 
         ledgerPane.getChildren().addAll(telemetryRow, paymentDataTable, ledgerToolbar);
 
-        SplitPane workspaceSplit = new SplitPane(registerPane, ledgerPane);
+        // Desktop workspace: register and ledger side by side (the 44% register keeps the
+        // tender pads honest). Compact counterpart: the SAME panes stacked full-width —
+        // a 44/56 split cannot fit a 600dp window, and a squeezed register slivers its
+        // lookup copy. Starts EMPTY; applyBillingLayout moves the panes on the class swap.
+        workspaceSplit = new SplitPane(registerPane, ledgerPane);
         workspaceSplit.setDividerPositions(0.44);
+        compactWorkspace = new VBox(16);
         layout.setCenter(workspaceSplit);
 
         // Bottom digital receipt drawer (M3BottomSheet).
@@ -363,7 +404,57 @@ public class PaymentController implements ScreenController {
         viewRoot = new StackPane();
         viewRoot.getStyleClass().add("billing-root");
         viewRoot.getChildren().addAll(layout, receiptBottomSheet);
+
+        // Width-class listener (library breakpoints, same pattern as the dashboard's
+        // applyDashboardLayout): swaps the top bar, the balance pair and the register/ledger
+        // split between the desktop and compact layouts. Deferred with Platform.runLater so
+        // the children lists are never mutated re-entrantly mid-layout.
+        viewRoot.widthProperty().addListener((obs, oldWidth, width) -> {
+            double w = width.doubleValue();
+            if (w <= 0) {
+                return;
+            }
+            WindowSizeClass next = WindowSizeClass.forWidth(w);
+            if (next == billingWidthClass) {
+                return;
+            }
+            billingWidthClass = next;
+            javafx.application.Platform.runLater(this::applyBillingLayout);
+        });
         return viewRoot;
+    }
+
+    /**
+     * Applies the current width class to the top bar, the balance pair and the register/
+     * ledger workspace by swapping between two layouts that SHARE the same nodes: desktop
+     * widths keep the one-line bar, the side-by-side balance pair and the 44/56 split;
+     * compact widths stack the title above its controls, the balance lines above each other
+     * and the register above the ledger, because none of the desktop arrangements fit a
+     * 600dp window without clipping. Idempotent fills, so repeated swaps are safe.
+     */
+    private void applyBillingLayout() {
+        boolean compact = billingWidthClass == WindowSizeClass.COMPACT;
+        if (compact) {
+            topControlsRow.getChildren().setAll(txtSearchReceipt, lookupReceiptBtn);
+            HBox.setHgrow(txtSearchReceipt, Priority.ALWAYS);
+            topStack.getChildren().setAll(topTitle, topControlsRow);
+            topBarBox.getChildren().set(0, topStack);
+            balanceStack.getChildren().setAll(lblCustomerName, lblCustomerBalance);
+            balanceRow.getChildren().setAll(balanceStack);
+            compactWorkspace.getChildren().setAll(registerPane, ledgerPane);
+            contentHost.getChildren().set(0, compactWorkspace);
+            return;
+        }
+        topRow.getChildren().setAll(topTitle, topSpacer, txtSearchReceipt, lookupReceiptBtn);
+        HBox.setHgrow(topSpacer, Priority.ALWAYS);
+        HBox.setHgrow(txtSearchReceipt, Priority.NEVER);
+        topBarBox.getChildren().set(0, topRow);
+        balanceRow.getChildren().setAll(lblCustomerName, balanceSpacer, lblCustomerBalance);
+        if (workspaceSplit.getItems().isEmpty()) {
+            workspaceSplit.getItems().setAll(registerPane, ledgerPane);
+            workspaceSplit.setDividerPositions(0.44);
+        }
+        contentHost.getChildren().set(0, workspaceSplit);
     }
 
     /** Builds one radio button inside the given group. */
@@ -472,7 +563,10 @@ public class PaymentController implements ScreenController {
                 return buildSnapshot();
             },
             snapshot -> {
-                contentHost.getChildren().set(0, workspaceView);
+                // Restore whichever workspace layout the width class currently selects (the
+                // compact stack replaces the desktop split after a class swap).
+                contentHost.getChildren().set(0, billingWidthClass == WindowSizeClass.COMPACT
+                        ? compactWorkspace : workspaceView);
                 applySnapshot(snapshot);
             },
             error -> contentHost.getChildren().setAll(UiKit.errorState(

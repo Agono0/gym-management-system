@@ -165,7 +165,12 @@ public class M3BarChart extends Region {
         } else {
             maxVal = maxVal * 1.15; // headroom above the tallest positive bar
         }
-        double range = maxVal - minVal; // strictly positive in every branch above
+        // Snap the axis to nice tick bounds so the labels are distinct and evenly spaced
+        // (rounding each division separately degenerated into "9, 7, 5, 2, 0" runs).
+        double[] ticks = ChartTicks.compute(minVal, maxVal, 4);
+        minVal = ticks[0];
+        maxVal = ticks[ticks.length - 1];
+        double range = maxVal - minVal; // strictly positive: ticks always cover the data span
 
         Color gridColor = ThemeColors.resolve(this, ColorRole.OUTLINE_VARIANT);
         Color textColor = ThemeColors.resolve(this, ColorRole.ON_SURFACE_VARIANT);
@@ -180,14 +185,13 @@ public class M3BarChart extends Region {
             // Axis tick labels: M3 label-small (11sp) — exact match for the previous 11px font.
             gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
 
-            int ySteps = 4;
-            for (int i = 0; i <= ySteps; i++) {
-                double frac = i / (double) ySteps;
-                double val = maxVal + (minVal - maxVal) * frac;
-                double y = padTop + frac * plotH;
+            int lastTick = ticks.length - 1;
+            for (int i = 0; i <= lastTick; i++) {
+                double val = ticks[lastTick - i]; // top of the plot carries the largest tick
+                double y = padTop + i / (double) lastTick * plotH;
 
                 gc.strokeLine(padLeft, y, padLeft + plotW, y);
-                gc.fillText(String.format("%.0f", val), 6, y + 4);
+                gc.fillText(ChartTicks.label(val), 6, y + 4);
             }
             gc.setLineDashes(null);
         }

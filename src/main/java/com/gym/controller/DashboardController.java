@@ -143,6 +143,8 @@ public class DashboardController implements ScreenController {
     private StackPane contentHost;
     /** Customers eligible for a rule-5 check-in at the last successful load. */
     private List<Customer> checkableCustomers = new ArrayList<>();
+    /** Maintenance unit count of the last snapshot, re-applied on width-class swaps. */
+    private int lastMaintenanceUnits;
 
     /** Overlay host for snackbars and dialogs, added to the screen root in code (no fx:id). */
     private final M3Overlay overlay = new M3Overlay();
@@ -369,9 +371,12 @@ public class DashboardController implements ScreenController {
         dashboardRoot = new StackPane();
         dashboardRoot.getStyleClass().add("dashboard-root");
         // The bento grid lives in a content host so the real-data load can swap it for
-        // loading/error states without touching the floating chrome around it.
-        contentHost = new StackPane(bentoGrid);
-        dashboardRoot.getChildren().addAll(contentHost, quickActionSpeedDial, dashboardSnackbar, overlay);
+        // loading/error states without touching the floating chrome around it. The speed
+        // dial pins to THIS host's bottom edge — the host is exactly the scroll content's
+        // height, so the FAB always sits in the reserved band below the last bento row (a
+        // root-pinned FAB would land mid-content wherever the scene clips the root).
+        contentHost = new StackPane(bentoGrid, quickActionSpeedDial);
+        dashboardRoot.getChildren().addAll(contentHost, dashboardSnackbar, overlay);
 
         // Width-class listener (library breakpoints, same pattern as the shell's
         // applyResponsiveChrome): swaps the hero and bento rows between the desktop and compact
@@ -754,8 +759,8 @@ public class DashboardController implements ScreenController {
         double operational = snapshot.equipmentTotal() == 0 ? 0
                 : snapshot.equipmentAvailable() * 100.0 / snapshot.equipmentTotal();
         statEquipmentHealth.setValue(String.format("%.1f%%", operational));
-        statEquipmentHealth.setDeltaText(snapshot.equipmentInMaintenance()
-                + " Units in Maintenance");
+        lastMaintenanceUnits = snapshot.equipmentInMaintenance();
+        applyEquipmentKpi(dashboardWidthClass == WindowSizeClass.COMPACT);
 
         refreshGreetingAndClock();
         capacityStatusLabel.setText("Floor Occupancy: " + snapshot.insideNow() + " of "
@@ -840,6 +845,25 @@ public class DashboardController implements ScreenController {
                 error -> overlay.showSnackbar("Could not confirm session: " + error.getMessage()));
     }
 
+    /** Singular/plural maintenance delta copy ("1 Unit in Maintenance"). */
+    private static String maintenanceUnitsLabel(int units) {
+        return units + (units == 1 ? " Unit in Maintenance" : " Units in Maintenance");
+    }
+
+    /**
+     * Applies the equipment KPI's title and delta for the current width class: the compact
+     * cards carry the short pair ("EQUIPMENT HEALTH" / "1 Unit") because the full pair
+     * slivers the title mid-word on a narrow card — the full delta copy stays reachable
+     * through the stat card's own tooltips.
+     */
+    private void applyEquipmentKpi(boolean compact) {
+        statEquipmentHealth.setTitle(compact ? "EQUIPMENT HEALTH" : "EQUIPMENT OPERATIONAL");
+        int units = lastMaintenanceUnits;
+        statEquipmentHealth.setDeltaText(compact
+                ? units + (units == 1 ? " Unit" : " Units")
+                : maintenanceUnitsLabel(units));
+    }
+
     /**
      * Applies the current width class to the hero and bento rows by swapping between two
      * layouts that SHARE the same nodes (the M3AdaptiveScaffold swap pattern): desktop widths
@@ -849,6 +873,7 @@ public class DashboardController implements ScreenController {
      */
     private void applyDashboardLayout() {
         boolean compact = dashboardWidthClass == WindowSizeClass.COMPACT;
+        applyEquipmentKpi(compact);
         if (compact) {
             heroColumn.getChildren().setAll(greetingBlock, actionsBar);
             heroBannerCard.setContent(heroColumn);

@@ -72,7 +72,9 @@ public class LoginController implements ScreenController {
     private Label feedbackLabel;
     private M3TextField usernameField;
     private Label usernameHelper;
-    private PasswordField passwordField;
+    /** Password input: M3 wrapper whose inner input swaps masked (PasswordField) ↔ plain. */
+    private M3TextField passwordField;
+    private PasswordField passwordMasked;
     private M3IconButton passwordToggleBtn;
     private Label capsLockAlert;
     private M3CheckBox rememberMeCheckBox;
@@ -84,8 +86,6 @@ public class LoginController implements ScreenController {
     /** Hosts M3 snackbars and dialogs for this screen (attached to the scene root at runtime). */
     private final M3Overlay feedback = new M3Overlay();
 
-    /** Revealed (plain) input swapped in for the masked {@code PasswordField} on demand. */
-    private TextField revealedPasswordField;
     /** Whether the plain input is currently on screen (masked PasswordField by default). */
     private boolean passwordRevealed;
     /** Re-entrancy guard for the masked ↔ revealed text sync. */
@@ -183,27 +183,27 @@ public class LoginController implements ScreenController {
         feedbackBox.getChildren().addAll(feedbackIcon, feedbackLabel);
         feedbackContainer.getChildren().add(feedbackBox);
 
-        // Staff ID field.
+        // Staff ID field — the M3TextField's floating label is the identifier label; the old
+        // static label above it duplicated the text (the login overlay bug).
         VBox staffIdGroup = new VBox(6);
-        staffIdGroup.getChildren().add(styledLabel("Staff Identifier", "field-label"));
         usernameField = new M3TextField("Staff Identifier", TextFieldVariant.OUTLINED);
         usernameField.setPrefHeight(56);
         usernameHelper = styledLabel("Case-sensitive unique employee ID", "helper-label");
         staffIdGroup.getChildren().addAll(usernameField, usernameHelper);
 
-        // Password field & reveal toggle.
+        // Password field & reveal toggle — the M3 floating label replaces the old static
+        // label above the field (the two texts overlayed).
         VBox passwordGroup = new VBox(6);
-        passwordGroup.getChildren().add(styledLabel("Master Password", "field-label"));
         HBox passwordRow = new HBox(8);
         passwordRow.setAlignment(Pos.CENTER_LEFT);
-        passwordField = new PasswordField();
-        passwordField.setPromptText("Enter secure passphrase");
-        passwordField.getStyleClass().add("app-password-field");
+        passwordField = new M3TextField("Master Password", TextFieldVariant.FILLED);
         passwordField.setPrefHeight(56);
+        passwordField.getInput().setPromptText("Enter secure passphrase");
         HBox.setHgrow(passwordField, Priority.ALWAYS);
-        passwordToggleBtn = new M3IconButton(M3Icon.symbol("search"), IconButtonVariant.STANDARD);
+        passwordToggleBtn = new M3IconButton(M3Icon.symbol("visibility"), IconButtonVariant.STANDARD);
         passwordToggleBtn.setOnAction(e -> onTogglePasswordVisibility());
         passwordRow.getChildren().addAll(passwordField, passwordToggleBtn);
+        buildMaskedInput();
         capsLockAlert = new Label("[!] Caps Lock is ON");
         capsLockAlert.setManaged(false);
         capsLockAlert.getStyleClass().add("caps-alert-label");
@@ -297,7 +297,7 @@ public class LoginController implements ScreenController {
         loginSpinner.setId("loginSpinner");
         forgotPasswordButton.setId("forgotPasswordButton");
         authSnackbar.setId("authSnackbar");
-        passwordField.textProperty().addListener((obs, ov, nv) -> clearErrors());
+        passwordField.getInput().textProperty().addListener((obs, ov, nv) -> clearErrors());
     }
 
     /** Small label with one style class. */
@@ -319,7 +319,8 @@ public class LoginController implements ScreenController {
      */
     public void onLogin() {
         String identifier = usernameField.getText() == null ? "" : usernameField.getText().trim();
-        String password = passwordField.getText() == null ? "" : passwordField.getText();
+        String password = passwordField.getInput().getText() == null
+                ? "" : passwordField.getInput().getText();
         clearErrors();
 
         boolean identifierOk = !identifier.isEmpty();
@@ -353,14 +354,18 @@ public class LoginController implements ScreenController {
         feedback.showDialog(dialog);
     }
 
-    /** Show/hide (eye) toggle: swaps the masked and plain inputs and flips its own glyph. */
+    /**
+     * Show/hide (eye) toggle: swaps the M3 field's own plain input with the masked
+     * {@link PasswordField} alternate and flips its own glyph. The float state tracks both
+     * inputs through {@link M3TextField#trackAlternateInput(TextField)}, so the label never
+     * overlays the typed text in either mode.
+     */
     public void onTogglePasswordVisibility() {
-        if (!(passwordField.getParent() instanceof HBox row)) {
+        if (!(passwordField.getInput().getParent() instanceof HBox row)) {
             return;
         }
-        ensureRevealedField();
-        Node visibleNow = passwordRevealed ? revealedPasswordField : passwordField;
-        Node visibleNext = passwordRevealed ? passwordField : revealedPasswordField;
+        Node visibleNow = passwordRevealed ? passwordField.getInput() : passwordMasked;
+        Node visibleNext = passwordRevealed ? passwordMasked : passwordField.getInput();
         int index = row.getChildren().indexOf(visibleNow);
         if (index < 0) {
             return;
@@ -402,33 +407,35 @@ public class LoginController implements ScreenController {
     }
 
     /**
-     * Creates the revealed (plain) input once and keeps it mirrored with the masked
-     * {@link PasswordField} in both directions, so the typed password survives the swap.
+     * Builds the masked {@link PasswordField} alternate (shown by default), styles it with the
+     * M3 input classes, registers it as the float-state alternate, and mirrors text both ways
+     * so the typed password survives the reveal swap.
      */
-    private void ensureRevealedField() {
-        if (revealedPasswordField != null) {
-            return;
+    private void buildMaskedInput() {
+        passwordMasked = new PasswordField();
+        passwordMasked.getStyleClass().addAll(passwordField.getInput().getStyleClass());
+        passwordMasked.setPromptText("Enter secure passphrase");
+        passwordField.getInput().textProperty().addListener((obs, ov, nv) -> {
+            if (syncingPasswordText) {
+                return;
+            }
+            syncingPasswordText = true;
+            passwordMasked.setText(nv);
+            syncingPasswordText = false;
+        });
+        passwordMasked.textProperty().addListener((obs, ov, nv) -> {
+            if (syncingPasswordText) {
+                return;
+            }
+            syncingPasswordText = true;
+            passwordField.getInput().setText(nv);
+            syncingPasswordText = false;
+        });
+        passwordField.trackAlternateInput(passwordMasked);
+        if (passwordField.getInput().getParent() instanceof HBox row) {
+            row.getChildren().set(row.getChildren().indexOf(passwordField.getInput()), passwordMasked);
+            HBox.setHgrow(passwordMasked, Priority.ALWAYS);
         }
-        revealedPasswordField = new TextField();
-        revealedPasswordField.getStyleClass().addAll(passwordField.getStyleClass());
-        revealedPasswordField.setPromptText(passwordField.getPromptText());
-        revealedPasswordField.setPrefHeight(passwordField.getPrefHeight());
-        passwordField.textProperty().addListener((obs, ov, nv) -> {
-            if (syncingPasswordText) {
-                return;
-            }
-            syncingPasswordText = true;
-            revealedPasswordField.setText(nv);
-            syncingPasswordText = false;
-        });
-        revealedPasswordField.textProperty().addListener((obs, ov, nv) -> {
-            if (syncingPasswordText) {
-                return;
-            }
-            syncingPasswordText = true;
-            passwordField.setText(nv);
-            syncingPasswordText = false;
-        });
     }
 
     /** Inline tray for the masked password field (it has no per-field error API). */

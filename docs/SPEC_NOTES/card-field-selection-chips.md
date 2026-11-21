@@ -24,6 +24,8 @@ Sources:
   (12px... spec: floating label 12px) — implemented label 12px resting/floated.
 - Supporting text body-small (12px); error recolors indicator+label+support to error.
 - Leading/trailing icons on-surface-variant; counter body-small right-aligned.
+- Icon hit targets 48px squares (M3 minimum touch target; grew from 40px in the visual-QA
+  pass — the floating label's icon offset uses the same constant).
 
 ## Selection (M3CheckBox / M3RadioButton / M3Switch)
 - Checkbox container 18px, 2px radius... checkmark on-primary on primary container when selected;
@@ -37,6 +39,10 @@ Sources:
 - Height 32px, small shape (8px), label-large.
 - Assist: elevated (level1), surface-container-low... spec assist = elevated flat? assist container
   surface-container-low with level1. Suggestion: outlined, transparent.
+- Disabled: content alpha = the 38% state token alone (`-md-sys-color-on-surface-a38`), with
+  the chip and its skin label pinned to `-fx-opacity: 1` — modena's user-agent disabled
+  opacity (0.4 on the toggle button and the label each) would otherwise stack on the token
+  and wash the chip out to ~6% effective contrast.
 - Filter/input: 1px outline (unselected) → secondary-container flat (selected, no border),
   checkmark leading when selected (handled by selected pseudo-class + CSS).
 - Input chips: avatar leading + close trailing (closable flag; close icon rendering is caller-side).

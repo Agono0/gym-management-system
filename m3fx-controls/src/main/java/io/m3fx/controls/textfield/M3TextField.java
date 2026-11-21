@@ -39,8 +39,11 @@ public class M3TextField extends VBox {
     /** Container height in px (spec: 56dp). */
     public static final double CONTAINER_HEIGHT = 56;
 
-    /** Square hit target for leading/trailing icons (matches the library's 40px icon targets). */
-    private static final double ICON_HIT_SIZE = 40;
+    /**
+     * Square hit target for leading/trailing icons. 48dp so an icon-only affordance meets the
+     * M3 48dp minimum touch target guide on its own (40dp fell short of the guide).
+     */
+    private static final double ICON_HIT_SIZE = 48;
 
     private static final javafx.css.PseudoClass OVER_PC = javafx.css.PseudoClass.getPseudoClass("over");
 
@@ -54,6 +57,10 @@ public class M3TextField extends VBox {
 
     private final Label floatingLabel = new Label();
     private final TextField input = new TextField();
+    /** Alternate input (password-reveal swap) participating in the float state, may be null. */
+    private TextField alternateInput;
+    private javafx.beans.value.ChangeListener<String> alternateTextListener;
+    private javafx.beans.value.ChangeListener<Boolean> alternateFocusListener;
     private final Label supportLabel = new Label();
     private final Label counterLabel = new Label();
     /** The 56dp container: input content with the floating label overlaid inside it. */
@@ -241,8 +248,8 @@ public class M3TextField extends VBox {
     }
 
     /**
-     * Sets the leading icon, wrapped in a 40px square hit target so it stays comfortably
-     * touchable inside the 56px container.
+     * Sets the leading icon, wrapped in a 48px square hit target (the M3 minimum touch target)
+     * so it stays comfortably touchable inside the 56px container.
      *
      * @param icon icon node, may be {@code null} to remove
      */
@@ -252,13 +259,13 @@ public class M3TextField extends VBox {
             inputRow.getChildren().add(0, iconHitArea(icon, "m3-text-field-leading"));
         }
         // The resting/floated label aligns with the input text, which starts after a leading
-        // icon (40px hit target).
+        // icon (48px hit target).
         floatingLabel.setTranslateX(icon == null ? 0 : ICON_HIT_SIZE);
     }
 
     /**
-     * Sets the trailing icon, wrapped in a 40px square hit target so attached handlers (clear
-     * button, password toggle...) stay comfortably touchable.
+     * Sets the trailing icon, wrapped in a 48px square hit target (the M3 minimum touch target)
+     * so attached handlers (clear button, password toggle...) stay comfortably touchable.
      *
      * @param icon icon node, may be {@code null} to remove
      */
@@ -282,14 +289,16 @@ public class M3TextField extends VBox {
     }
 
     private void refreshStates() {
-        boolean floated = input.isFocused() || (input.getText() != null && !input.getText().isEmpty());
+        // The password-reveal swap pattern mirrors text between the primary input and an
+        // alternate TextField; the float state must consider whichever input is live.
+        boolean floated = isInputFocused() || isAnyInputNonEmpty();
         pseudoClassStateChanged(javafx.css.PseudoClass.getPseudoClass("floated"), floated);
         // B11: the label moves between the resting center and the container top in code -
         // Node.translateY is not CSS-styleable and StackPane child constraints conflict
         // with Label's own -fx-alignment, so the CSS drives color/size only.
         floatingLabel.setTranslateY(floated ? -13 : 0);
         pseudoClassStateChanged(
-                javafx.css.PseudoClass.getPseudoClass("input-focused"), input.isFocused());
+                javafx.css.PseudoClass.getPseudoClass("input-focused"), isInputFocused());
         if (getMaxLength() > 0) {
             int length = input.getText() == null ? 0 : input.getText().length();
             counterLabel.setText(length + " / " + getMaxLength());
@@ -317,5 +326,41 @@ public class M3TextField extends VBox {
         if (newV != null && !getStyleClass().contains("m3-text-field-" + newV.name().toLowerCase())) {
             getStyleClass().add("m3-text-field-" + newV.name().toLowerCase());
         }
+    }
+
+    /**
+     * Registers an alternate text input (e.g. the revealed side of a password show/hide swap)
+     * whose focus and text participate in the float state alongside the primary input. Style
+     * the alternate with the {@code m3-text-field-input} style class so it inherits the token
+     * styling, and call {@code getInput().setText(...)} through the normal text mirroring to
+     * keep both sides in sync.
+     *
+     * @param alternate the swapped-in input; {@code null} clears the tracking
+     */
+    public void trackAlternateInput(TextField alternate) {
+        if (alternateInput != null) {
+            alternateInput.textProperty().removeListener(alternateTextListener);
+            alternateInput.focusedProperty().removeListener(alternateFocusListener);
+        }
+        alternateInput = alternate;
+        if (alternate != null) {
+            alternateTextListener = (obs, ov, nv) -> refreshStates();
+            alternateFocusListener = (obs, ov, nv) -> refreshStates();
+            alternate.textProperty().addListener(alternateTextListener);
+            alternate.focusedProperty().addListener(alternateFocusListener);
+        }
+        refreshStates();
+    }
+
+    private boolean isInputFocused() {
+        return input.isFocused() || (alternateInput != null && alternateInput.isFocused());
+    }
+
+    private boolean isAnyInputNonEmpty() {
+        return nonEmpty(input) || (alternateInput != null && nonEmpty(alternateInput));
+    }
+
+    private static boolean nonEmpty(TextField field) {
+        return field.getText() != null && !field.getText().isEmpty();
     }
 }

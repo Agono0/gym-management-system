@@ -186,8 +186,8 @@ class M3DataComponentsTest {
                     new Member("Bob", "Standard")
             );
 
-            javafx.scene.layout.HBox headerRow = (javafx.scene.layout.HBox) table.getChildren().get(1);
-            javafx.scene.layout.VBox rows = (javafx.scene.layout.VBox) table.getChildren().get(2);
+            javafx.scene.layout.HBox headerRow = headerRowOf(table);
+            javafx.scene.layout.VBox rows = rowsOf(table);
 
             // Click the "Name" header -> ascending
             javafx.scene.control.Label header = (javafx.scene.control.Label) headerRow.getChildren().get(0);
@@ -220,7 +220,7 @@ class M3DataComponentsTest {
                 table.getItems().add(new Member("M" + i));
             }
 
-            javafx.scene.layout.VBox rows = (javafx.scene.layout.VBox) table.getChildren().get(2);
+            javafx.scene.layout.VBox rows = rowsOf(table);
             // Page 1: rows at positions 0..4 -> second and fourth rows striped
             // (StyleClassList prints space-separated, so assert membership instead of toString)
             assertTrue(rows.getChildren().get(1).getStyleClass().contains("alt"),
@@ -231,7 +231,7 @@ class M3DataComponentsTest {
 
             // Page 2 (single row): striping restarts at unstriped regardless of absolute index
             table.nextPage();
-            rows = (javafx.scene.layout.VBox) table.getChildren().get(2);
+            rows = rowsOf(table);
             assertFalse(rows.getChildren().get(0).getStyleClass().contains("alt"));
         });
     }
@@ -240,6 +240,23 @@ class M3DataComponentsTest {
         return new javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_CLICKED,
                 0, 0, 0, 0, javafx.scene.input.MouseButton.PRIMARY, 1,
                 false, false, false, false, false, true, false, false, false, false, null);
+    }
+
+    /** The header row (it lives inside the horizontal scroller's content body). */
+    private static HBox headerRowOf(M3DataTable<?> table) {
+        return (HBox) scrollBodyOf(table).getChildren().get(0);
+    }
+
+    /** The rows container (it lives inside the horizontal scroller's content body). */
+    private static VBox rowsOf(M3DataTable<?> table) {
+        return (VBox) scrollBodyOf(table).getChildren().get(1);
+    }
+
+    /** The scroll body VBox: header + rows (kept deterministic without a CSS pulse). */
+    private static VBox scrollBodyOf(M3DataTable<?> table) {
+        javafx.scene.control.ScrollPane scroller =
+                (javafx.scene.control.ScrollPane) table.getChildren().get(1);
+        return (VBox) scroller.getContent();
     }
 
     private static String firstCellText(javafx.scene.layout.VBox rows) {
@@ -349,7 +366,7 @@ class M3DataComponentsTest {
             M3DataTable<String> table = new M3DataTable<>();
             table.getColumns().add(new M3DataTable.Column<>("Name", String::toString, 140));
 
-            VBox rows = (VBox) table.getChildren().get(2);
+            VBox rows = rowsOf(table);
             assertEquals(1, rows.getChildren().size(), "Empty table shows one placeholder row");
             Node empty = rows.getChildren().get(0);
             assertTrue(empty.getStyleClass().contains("m3-data-table-empty"),
@@ -358,9 +375,73 @@ class M3DataComponentsTest {
 
             table.getItems().addAll("Alice", "Bob");
 
-            rows = (VBox) table.getChildren().get(2);
+            rows = rowsOf(table);
             assertEquals(2, rows.getChildren().size(), "Placeholder is replaced by real rows");
             assertEquals("Alice", cellText(rows, 0));
+        });
+    }
+
+    @Test
+    void dataTableColumnsExposeTheirMinWidths() throws Throwable {
+        runOnFx(() -> {
+            M3DataTable.Column<String> narrow = new M3DataTable.Column<>("ID", String::toString, 60);
+            assertEquals(M3DataTable.DEFAULT_MIN_COLUMN_WIDTH, narrow.getMinWidth(),
+                    "Columns default to the readable minimum width");
+            M3DataTable.Column<String> tuned = new M3DataTable.Column<>("ID", String::toString, 60)
+                    .withMinWidth(96);
+            assertEquals(96, tuned.getMinWidth(), "withMinWidth builder sets the minimum");
+        });
+    }
+
+    @Test
+    void squeezedTableKeepsReadableColumnsAndScrollsHorizontally() throws Throwable {
+        runOnFx(() -> {
+            M3DataTable<String> table = new M3DataTable<>();
+            table.getColumns().add(new M3DataTable.Column<>("ID", String::toString, 60));
+            table.getColumns().add(new M3DataTable.Column<>("Name", String::toString, 140));
+            table.getColumns().add(new M3DataTable.Column<>("Phone", String::toString, 110));
+            table.getColumns().add(new M3DataTable.Column<>("Email", String::toString, 130));
+            table.getColumns().add(new M3DataTable.Column<>("Status", String::toString, 90));
+            table.getItems().addAll("R-0001", "Omar Hassan", "0121110001",
+                    "omar.h@mail.com", "Active");
+            // A scene carries CSS; one pulse laid out at 240px (far narrower than the ~590px
+            // the columns want) is enough to observe the squeeze behavior.
+            javafx.scene.Scene scene =
+                    new javafx.scene.Scene(new StackPane(table), 240, 300);
+            io.m3fx.controls.M3Stylesheets.applyTo(scene,
+                    io.m3fx.core.theme.M3Theme.baseline(false));
+            table.resize(240, 300);
+            table.applyCss();
+            table.layout();
+
+            javafx.scene.control.ScrollPane scroller =
+                    (javafx.scene.control.ScrollPane) table.getChildren().get(1);
+            assertNotNull(scroller, "the squeeze wrapper exists");
+            // The squeeze wrapper keeps the body at its minimum width, which exceeds the
+            // viewport: the body scrolls horizontally (whether the platform paints a visible
+            // scrollbar is touch-dependent JavaFX behavior, so we pin the widths instead).
+            double viewport = scroller.getViewportBounds().getWidth();
+            double bodyWidth = scroller.getContent().getBoundsInParent().getWidth();
+            assertTrue(bodyWidth > viewport,
+                    "table body stays wider than the viewport instead of being squeezed, body="
+                            + bodyWidth + " viewport=" + viewport);
+
+            HBox headerRow = headerRowOf(table);
+            double headerTotal = headerRow.getChildren().stream()
+                    .mapToDouble(node -> node.getBoundsInParent().getWidth()).sum();
+            assertTrue(headerTotal > viewport,
+                    "content is wider than the viewport (scrollable), header total=" + headerTotal);
+            for (javafx.scene.Node node : headerRow.getChildren()) {
+                // Header text never collapses: every header keeps at least its own text width
+                // (its min is USE_PREF_SIZE; a bare "…" sliver is what the evidence showed).
+                assertTrue(node.getBoundsInParent().getWidth() >= node.minWidth(-1) - 0.01,
+                        "header label never shrinks below its full text width");
+            }
+            HBox firstRow = (HBox) rowsOf(table).getChildren().get(0);
+            for (javafx.scene.Node node : firstRow.getChildren()) {
+                assertTrue(node.getBoundsInParent().getWidth() >= M3DataTable.DEFAULT_MIN_COLUMN_WIDTH - 0.01,
+                        "cells keep the readable minimum width instead of collapsing to ellipsis");
+            }
         });
     }
 
@@ -381,14 +462,14 @@ class M3DataComponentsTest {
         });
         Thread.sleep(M3DataTable.SEARCH_DEBOUNCE_MILLIS + 250);
         runOnFx(() -> {
-            VBox rows = (VBox) tableRef.get().getChildren().get(2);
+            VBox rows = rowsOf(tableRef.get());
             assertEquals(1, rows.getChildren().size());
             assertEquals("No matching items", ((Label) rows.getChildren().get(0)).getText());
             searchRef.get().setQuery("");
         });
         Thread.sleep(M3DataTable.SEARCH_DEBOUNCE_MILLIS + 250);
         runOnFx(() -> {
-            VBox rows = (VBox) tableRef.get().getChildren().get(2);
+            VBox rows = rowsOf(tableRef.get());
             assertEquals(2, rows.getChildren().size(), "Rows return when the filter clears");
         });
     }
@@ -425,7 +506,7 @@ class M3DataComponentsTest {
             table.getItems().addAll("Alice", "Bob");
 
             // Without a handler rows are presentational: default cursor, no Tab focus.
-            VBox rows = (VBox) table.getChildren().get(2);
+            VBox rows = rowsOf(table);
             HBox passiveRow = (HBox) rows.getChildren().get(0);
             assertEquals(Cursor.DEFAULT, passiveRow.getCursor(),
                     "No hand cursor without a row action");
@@ -434,7 +515,7 @@ class M3DataComponentsTest {
             AtomicReference<String> activated = new AtomicReference<>();
             table.setOnRowAction(activated::set);
 
-            rows = (VBox) table.getChildren().get(2);
+            rows = rowsOf(table);
             HBox secondRow = (HBox) rows.getChildren().get(1);
             assertEquals(Cursor.HAND, secondRow.getCursor(), "Hand cursor signals interactivity");
             assertTrue(secondRow.isFocusTraversable(), "Row is Tab-reachable");
@@ -456,7 +537,7 @@ class M3DataComponentsTest {
             table.getColumns().add(new M3DataTable.Column<>("Name", String::toString, 140));
             table.getItems().addAll("Cara", "Alice", "Bob");
 
-            HBox headerRow = (HBox) table.getChildren().get(1);
+            HBox headerRow = headerRowOf(table);
             Label header = (Label) headerRow.getChildren().get(0);
             assertTrue(header.isFocusTraversable(), "Sortable header is Tab-reachable");
 

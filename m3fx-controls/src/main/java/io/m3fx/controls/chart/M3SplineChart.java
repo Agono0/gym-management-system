@@ -260,6 +260,12 @@ public class M3SplineChart extends Region {
             maxVal = maxVal + range * 0.1;
         }
 
+        // Snap the axis to nice tick bounds so the labels are distinct and evenly spaced
+        // (rounding each division separately degenerated into "1, 1, 0, 0, 0" runs).
+        double[] yTicks = ChartTicks.compute(minVal, maxVal, 4);
+        minVal = yTicks[0];
+        maxVal = yTicks[yTicks.length - 1];
+
         Color gridColor = ThemeColors.resolve(this, ColorRole.OUTLINE_VARIANT);
         Color textColor = ThemeColors.resolve(this, ColorRole.ON_SURFACE_VARIANT);
 
@@ -273,15 +279,13 @@ public class M3SplineChart extends Region {
             // Axis tick labels: M3 label-small (11sp) — exact match for the previous 11px font.
             gc.setFont(Font.font(TypeScale.DEFAULT_FAMILY, FontWeight.NORMAL, TypeScale.LABEL_SMALL.size()));
 
-            int ySteps = 4;
-            for (int i = 0; i <= ySteps; i++) {
-                double frac = i / (double) ySteps;
-                double val = minVal + (maxVal - minVal) * (1.0 - frac);
-                double y = padTop + frac * plotH;
+            int lastTick = yTicks.length - 1;
+            for (int i = 0; i <= lastTick; i++) {
+                double val = yTicks[lastTick - i]; // top of the plot carries the largest tick
+                double y = padTop + i / (double) lastTick * plotH;
 
                 gc.strokeLine(padLeft, y, padLeft + plotW, y);
-                String valStr = String.format("%.0f", val);
-                gc.fillText(valStr, 6, y + 4);
+                gc.fillText(ChartTicks.label(val), 6, y + 4);
             }
             gc.setLineDashes(null);
         }

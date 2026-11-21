@@ -52,6 +52,9 @@ public class M3PulseBeacon extends HBox {
     private final Label label = new Label();
 
     private double wavePhase = 0.0;
+    /** Sonar redraw budget: ~15 fps is smooth for a 28px canvas and stops per-pulse dirtying. */
+    private static final long REDRAW_MIN_INTERVAL_NANOS = 66_000_000L;
+    private long lastRedraw;
     private Color cachedColor;
     private AnimationTimer loop;
 
@@ -131,6 +134,7 @@ public class M3PulseBeacon extends HBox {
                     public void handle(long now) {
                         if (last == 0) {
                             last = now;
+                            lastRedraw = now;
                             return;
                         }
                         // Clamp dt so a long frame stall cannot skip the pulse phase.
@@ -139,7 +143,12 @@ public class M3PulseBeacon extends HBox {
 
                         // Wave cycle period ~ 1.4 seconds
                         wavePhase = (wavePhase + dt * 0.72) % 1.0;
-                        redraw();
+                        // Redraw budget: a 28px sonar is smooth at ~15fps; repainting every
+                        // pulse dirtied the scene graph 60x/s per beacon (the Q-lag finding).
+                        if (now - lastRedraw >= REDRAW_MIN_INTERVAL_NANOS) {
+                            lastRedraw = now;
+                            redraw();
+                        }
                     }
                 };
             }

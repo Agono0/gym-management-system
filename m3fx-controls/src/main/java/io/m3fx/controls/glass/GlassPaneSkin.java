@@ -145,9 +145,21 @@ class GlassPaneSkin extends SkinBase<M3GlassPane> {
     private javafx.stage.Window currentWindow;
     private long lastStepNanos;
     private long animationStartNanos;
+    /** Frozen specular-orbit time while the pane is idle (hover stopped the orbit). */
+    private double lastSpecularTime;
+    private boolean specularLightsIdle;
+    /** Per-pane re-render budget: ~30 fps for the CPU refraction pipeline. */
+    private long lastRenderNanos;
+    private boolean renderPending;
+    /** Specular gradient cache, rebuilt only when the intensity changes. */
+    private double cachedLightIntensity = Double.NaN;
+    private Background cachedLight1Background;
+    private Background cachedLight2Background;
 
     /** Guard against starving the backdrop capture in ever-dirty scenes. */
     private static final int MAX_CAPTURE_DEFERALS = 60;
+    /** Minimum spacing between CPU refraction renders (~30 fps budget). */
+    private static final long RENDER_MIN_INTERVAL_NANOS = 33_000_000L;
     private boolean captureScheduled;
     private int deferredCaptureAttempts;
 
@@ -243,6 +255,9 @@ specularLight2.setVisible(false);
                 lastStepNanos = now;
                 double tSec = (now - animationStartNanos) / 1_000_000_000.0;
 
+                if (renderPending) {
+                    renderDirty = true;
+                }
                 stepPhysics(dt, tSec);
             }
         };
@@ -542,9 +557,19 @@ specularLight2.setVisible(false);
             rotateY.setAngle(0);
         }
 
-        // 3. Animated Specular Lights
+        // 3. Animated Specular Lights — orbit only while the pointer is on the pane. The
+        // ambient per-pulse orbit allocated gradients + relocated nodes every frame, which
+        // dirtied the scene graph 60x/s per pane and starved the render loop (the Q-lag
+        // finding); an idle pane freezes its highlight in place instead.
         if (control.getSpecular() > 0.0) {
-            placeSpecularLights(tSec);
+            if (control.isHover()) {
+                placeSpecularLights(tSec);
+                lastSpecularTime = tSec;
+                specularLightsIdle = false;
+            } else if (!specularLightsIdle) {
+                placeSpecularLights(lastSpecularTime);
+                specularLightsIdle = true;
+            }
         }
 
         if (needUpdate) {
@@ -595,6 +620,9 @@ specularLight2.setVisible(false);
         if (control != null) {
             if (backdropDirty) {
                 scheduleCapture();
+            }
+            if (renderPending) {
+                renderDirty = true;
             }
             renderRefractedIfNeeded();
             if (layersDirty) {
@@ -841,6 +869,16 @@ specularLight2.setVisible(false);
         if (!renderDirty && refractedImage != null) {
             return;
         }
+        // CPU refraction budget: during interaction the physics loop marks this dirty every
+        // pulse; a snapshot + full-image displacement render per frame starves the FX render
+        // loop, so cap the pipeline at ~30 fps and defer the overflow to a later pulse.
+        long now = System.nanoTime();
+        if (now - lastRenderNanos < RENDER_MIN_INTERVAL_NANOS) {
+            renderPending = true;
+            return;
+        }
+        lastRenderNanos = now;
+        renderPending = false;
         renderDirty = false;
         double flatten = bevelFlatten.get();
         double w = control.getWidth();
@@ -1048,18 +1086,25 @@ specularLight2.setVisible(false);
         double r1 = 0.4 * Math.min(w, h);
         double r2 = 0.5 * Math.min(w, h);
 
-        specularLight1.setBackground(new Background(new BackgroundFill(
-                new RadialGradient(0, 0, 0.5, 0.5, 0.5, true,
-                        CycleMethod.NO_CYCLE,
-                        new Stop(0.0, Color.color(1, 1, 1, 0.10 * intensity)),
-                        new Stop(1.0, Color.TRANSPARENT)),
-                new CornerRadii(9999), null)));
-        specularLight2.setBackground(new Background(new BackgroundFill(
-                new RadialGradient(0, 0, 0.5, 0.5, 0.5, true,
-                        CycleMethod.NO_CYCLE,
-                        new Stop(0.0, Color.color(1, 1, 1, 0.08 * intensity)),
-                        new Stop(1.0, Color.TRANSPARENT)),
-                new CornerRadii(9999), null)));
+        // The gradients are hoisted: rebuilding two RadialGradients + Backgrounds per frame
+        // per pane churned allocations while the orbit moved (hover-time jank).
+        if (cachedLightIntensity != intensity || cachedLight1Background == null) {
+            cachedLightIntensity = intensity;
+            cachedLight1Background = new Background(new BackgroundFill(
+                    new RadialGradient(0, 0, 0.5, 0.5, 0.5, true,
+                            CycleMethod.NO_CYCLE,
+                            new Stop(0.0, Color.color(1, 1, 1, 0.10 * intensity)),
+                            new Stop(1.0, Color.TRANSPARENT)),
+                    new CornerRadii(9999), null));
+            cachedLight2Background = new Background(new BackgroundFill(
+                    new RadialGradient(0, 0, 0.5, 0.5, 0.5, true,
+                            CycleMethod.NO_CYCLE,
+                            new Stop(0.0, Color.color(1, 1, 1, 0.08 * intensity)),
+                            new Stop(1.0, Color.TRANSPARENT)),
+                    new CornerRadii(9999), null));
+        }
+        specularLight1.setBackground(cachedLight1Background);
+        specularLight2.setBackground(cachedLight2Background);
         specularLight1.resizeRelocate(l1x - r1, l1y - r1, r1 * 2, r1 * 2);
         specularLight2.resizeRelocate(l2x - r2, l2y - r2, r2 * 2, r2 * 2);
     }

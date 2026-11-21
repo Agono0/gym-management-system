@@ -10,6 +10,7 @@ import io.m3fx.controls.button.ButtonVariant;
 import io.m3fx.controls.button.M3Button;
 import io.m3fx.controls.data.M3DataTable;
 import io.m3fx.controls.data.M3Timeline;
+import io.m3fx.controls.common.M3Tooltip;
 import io.m3fx.controls.dialog.M3Dialog;
 import io.m3fx.controls.icon.M3Icon;
 import io.m3fx.controls.overlay.M3Overlay;
@@ -23,6 +24,7 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.control.Label;
 import javafx.scene.control.SplitPane;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -209,6 +211,15 @@ public class StaffController implements ScreenController {
         btnDeleteStaffAction = new M3Button("Delete Staff", ButtonVariant.TEXT);
         btnDeleteStaffAction.getStyleClass().add("m3-button-text-danger");
         btnDeleteStaffAction.setOnAction(e -> onDeleteStaffClick());
+        // Honest disabled state: without a selected row the toolbar cannot act on anything,
+        // so the buttons start disabled (the library's disabled styling makes the hint above
+        // true) and every button carries a tooltip explaining why.
+        for (M3Button action : List.of(btnEditStaffAction, btnResetPasswordAction,
+                btnToggleActiveAction, btnDeleteStaffAction)) {
+            action.setDisable(true);
+            Tooltip.install(action, M3Tooltip.plain("Select a staff row first — the action"
+                    + " targets the selected row."));
+        }
         rosterToolbar.getChildren().addAll(
                 btnEditStaffAction, btnResetPasswordAction, btnToggleActiveAction, btnDeleteStaffAction);
         rosterPane.getChildren().addAll(searchRow, rosterHost, lblSelectedStaff, rosterToolbar);
@@ -355,6 +366,7 @@ public class StaffController implements ScreenController {
         refreshRoster();
         updateSelectionHint();
         refreshToggleLabel();
+        refreshToolbarEnabled();
     }
 
     /** Row activation: selects the administrator the toolbar acts on. */
@@ -362,6 +374,7 @@ public class StaffController implements ScreenController {
         selectedAdmin = admin;
         updateSelectionHint();
         refreshToggleLabel();
+        refreshToolbarEnabled();
     }
 
     /** The selection hint under the roster, so the acting target is never a guess. */
@@ -382,6 +395,15 @@ public class StaffController implements ScreenController {
         } else {
             btnToggleActiveAction.setText("Disable");
         }
+    }
+
+    /** The roster toolbar only acts on a selected row: disabled when none is selected. */
+    private void refreshToolbarEnabled() {
+        boolean hasSelection = selectedAdmin != null;
+        btnEditStaffAction.setDisable(!hasSelection);
+        btnResetPasswordAction.setDisable(!hasSelection);
+        btnToggleActiveAction.setDisable(!hasSelection);
+        btnDeleteStaffAction.setDisable(!hasSelection);
     }
 
     private static String roleName(Administrator admin) {

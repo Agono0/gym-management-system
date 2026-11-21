@@ -57,6 +57,27 @@ gym app dashboard on this version is rendered entirely from these components.
 
 ### Fixed
 
+- **Data tables squeeze into readable minimums instead of ellipsis slivers.** Columns carry a
+  minimum readable width (`Column.withMinWidth`, default 72px) and the header+rows body sits
+  in a horizontal scroller: a table narrower than its columns wants scrolls sideways with
+  full headers (header text can never collapse to "…") instead of rendering every cell as a
+  bare ellipsis.
+- **Chart y-axis ticks no longer degenerate to duplicates or uneven steps** ("1, 1, 0, 0, 0"
+  / "9, 7, 5, 2, 0"): a shared nice-number tick generator (`ChartTicks`) snaps the bar,
+  spline and scatter axes to 1/2/2.5/5 × 10ⁿ steps, and labels trim trailing zeros so
+  distinct values always format distinctly.
+- **Donut charts keep a real center hub.** Ring bands now fill the space between a reserved
+  hub radius and the outer edge, so thick segments can never cross the inner radius, and the
+  center headline/subtitle shrink (inline font-size) to fit inside the hole instead of
+  colliding with the ring on small donuts.
+- **Heatmap column labels use the text token again**: the cell-draw loop left the canvas
+  fill on the last cell color, so the bottom hour labels (06:00–20:00) painted in
+  SURFACE_CONTAINER_HIGH and were near-invisible in dark themes.
+- **Disabled chips keep the M3 38% contrast**: modena's user-agent disabled-opacity rules
+  stacked a 0.4 factor on the chip and its inner label, multiplying the a38 token down to
+  ~6% effective alpha (near-invisible layer chips); the chip stylesheet pins both at opacity 1.
+- **Text-field icon hit targets meet the 48dp guide**: leading/trailing icon hit areas grew
+  from 40px to 48px (the floating label offset follows the same constant).
 - **Glass panes no longer paint ghost text.** The backdrop capture photographed the whole
   ancestor flat, baking sibling UI above the pane (app-bar titles, overlay labels,
   scanline overlays) into the refracted image; the capture now hides content that paints
