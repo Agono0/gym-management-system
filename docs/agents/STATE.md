@@ -1,5 +1,13 @@
 # docs/agents/STATE.md — run state
 
+**RUN COMPLETE (2026-11-21).** All 38 tasks DONE (lanes A/B/C + Q1-Q7). The final acceptance
+matrix (80 captures, all screens x dark/light) passed with zero failures; final gates green.
+Everything merged locally in linear history and shipped in a single push per the user's
+directive. Parked candidates for any future run: idle-cost budgets (pulse beacon / glass
+idle pause), M3FunnelChart monotonic guard, M3TextField 40dp icon hit target, availability
+heatmap faint zero cells in light, membership floating bar overlap at 600dp, glass
+tintLayer/specularRing 0x0 legacy children.
+
 **Phase: P0 done → P1/P2/P3/P4 running as queued rounds.** Queue: `QUEUE.md` (authoritative
 task list + round log). Audit details: `M3FX_AUDIT.md`, `APP_MAP.md`. Open items:
 `OPEN_QUESTIONS.md`.

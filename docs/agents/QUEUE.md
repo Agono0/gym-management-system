@@ -497,7 +497,10 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   goal: Final visual acceptance: full screenshot matrix vs spec notes + anti-slop list; update
   COVERAGE.md, DECISIONS.md, layer READMEs; CHANGELOG.
   done-when: all docs updated, everything green and pushed.
-  claimed-by: — | status: BLOCKED (Q1..Q5)
+  claimed-by: C | status: DONE (part 1: coverage/decisions 80-89/layer READMEs + ui-README fix
+  (be7a129+c025bae); part 2: 80/80 final matrix zero failures, all screens PASS with two
+  honest parked residuals — light-mode zero-intensity heatmap cells faint, membership floating
+  bar overlap at 600dp. **RUN COMPLETE — all lanes A/B/C + Q1-Q7 DONE, everything green.**)
 
 ---
 
@@ -527,3 +530,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 17 | dashboard-collapse (in flight) | Q7 (in flight) | Q5 (710543d) | Q5 merged locally 814a5d8 — staff NPE + particle burn fixed; idle-cost library candidates parked |
 | 17b | dashboard-collapse → DONE as **no-change-needed** (Worker A probe: card + dial render correct in both themes at 600/1280; the Q2 collapse was the shooter race already fixed by cc12b82) | — | — | evidence: build/screens/dashboard_{light,dark}_w{600,1280}.png |
 | 18 | — | Q7 (61598d3+ac86256) | Q6 part 1 + ui-README fix (be7a129+c025bae → 102a275) | Q7 merged locally b93244f — light glass verified on main; **Q6 part 2 GO** |
+| 19 | — | — | Q6 part 2 (final acceptance) | **RUN COMPLETE**: 80/80 matrix zero failures, all screens PASS, final gates green → single push to origin |
