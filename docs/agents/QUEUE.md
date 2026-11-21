@@ -241,6 +241,17 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
   toggles stay disabled UI; pixel-evidence tests with transparent-snapshot + pulse lessons
   recorded; controls tests 241)
 
+- [ ] Q7 | lane:Q | deps:— | files: m3fx-controls/.../glass/**, chart/M3ActivityCalendar.java (+ tests)
+  goal: Library fixes found by Q2 (Worker A): (1) `M3GlassPane` renders opaque pink/magenta
+  pills in LIGHT mode covering the content it should veil (live-workout HUD, login carousel
+  zone, availability cards) — the glass tinting is dark-first; make the tint theme-driven and
+  subtle per mode; (2) `M3ActivityCalendar` footer paragraph is unmeasured and overlaps at
+  card widths below ~600px ("0 dayssLonges…tal days" garble) — measure/ellipsize/stack the
+  footer segments.
+  done-when: light-mode glass no longer occludes content (light screenshots of the three
+  screens), calendar footer clean at 420px width, tests added, suite green.
+  claimed-by: — | status: READY
+
 - [ ] B7 | lane:B | deps:A3 | files: m3fx-controls/.../internal/MotionUtil.java, internal/SpringAnimation.java, internal/StateLayer.java
   goal: Honor `MotionTokens.isReducedMotion()` in the controls internals: `MotionUtil.enter/exit/
   splash/shake/pressScale` degrade to ≤150 ms fades; `SpringAnimation` snaps to target; state
@@ -494,3 +505,4 @@ Legend — lane A = m3fx-core, lane B = m3fx-controls, lane C = gym app UI, lane
 | 12 | C9 (bcfb32f+769c98b+ce47801, pooled to A) | — | — | merged locally ce47801 |
 | 13 | C10 (53b1e67) | Q1 (0b8409f) | C8 (in flight) | identity+Q3 (da68830) merged; C10 merged locally 94f7582 — **lane C complete except C8** |
 | 14 | Q2 (in flight) | Q4 (in flight) | C8 (d76c2b4) | **LANE C COMPLETE (C0-C10)**; C8 merged after spec-note renumber resolution |
+| 15 | Q2 (94c8863: StatCard NPE fix + shooter capture fix) | — | — | Q2 merged; findings queued: Q7 (glass tint + calendar footer), app residuals (speed-dial overlap, payment dark hint, availability title clip, null-isEmpty binding noise) |
